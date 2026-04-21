@@ -30,12 +30,29 @@ namespace TIA_Copilot_CLI
         {
             Console.OutputEncoding = Encoding.UTF8;
             Console.InputEncoding = Encoding.UTF8;
-
+            /*
             AiEngine.InitializePaths();
 
             if (!File.Exists(AiEngine.PYTHON_EXE_PATH) || !File.Exists(AiEngine.PYTHON_SCRIPT_PATH))
             {
                 PrintIcon("!", "LỖI CẤU HÌNH: Không tìm thấy thư mục AI_Backend!", ConsoleColor.Red);
+                return;
+            }
+            */
+            AiEngine.InitializePaths();
+
+            // 2. MÃ DEBUG: In ra màn hình xem nó nhận diện đường dẫn thế nào
+            Console.WriteLine("=== DEBUG ĐƯỜNG DẪN ===");
+            Console.WriteLine("App C# dang chay tai: " + AppDomain.CurrentDomain.BaseDirectory);
+            Console.WriteLine("Tim thay Python tai  : " + AiEngine.PYTHON_EXE_PATH);
+            Console.WriteLine("=======================\n");
+
+            // 3. LOGIC MỚI: Chỉ kiểm tra file EXE, KHÔNG kiểm tra file SCRIPT nữa
+            if (string.IsNullOrEmpty(AiEngine.PYTHON_EXE_PATH) || !File.Exists(AiEngine.PYTHON_EXE_PATH))
+            {
+                PrintIcon("!", "LỖI CẤU HÌNH: Không tìm thấy file ai_engine.exe hoặc python.exe!", ConsoleColor.Red);
+                Console.WriteLine("Nhan Enter de thoat...");
+                Console.ReadLine();
                 return;
             }
 

@@ -32,10 +32,6 @@
     <Reference Include="Siemens.Engineering.Hmi">
       <HintPath>C:\Program Files\Siemens\Automation\Portal V20\PublicAPI\V20\Siemens.Engineering.Hmi.dll</HintPath>
     </Reference>
-
-    <Reference Include="SIMATICAutomationToolAPI">
-      <HintPath>Libs\SIMATICAutomationToolAPI.dll</HintPath>
-    </Reference>
   </ItemGroup>
 
   <ItemGroup>    
@@ -44,7 +40,10 @@
     </None>
     <None Update="review_assets\**\*">
     <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-  </None>   
+  </None>
+  <None Update="cwc_assets\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>   
   </ItemGroup>
 
 

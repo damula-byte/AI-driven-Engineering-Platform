@@ -1,11 +1,20 @@
 from pathlib import Path
 import sqlite3
+import sys
 from langchain_community.chat_message_histories import SQLChatMessageHistory
 from langchain_core.messages import HumanMessage, AIMessage
 
-BASE_DIR = Path(__file__).resolve().parent
-REAL_DB_FILE = BASE_DIR.parent / "Translator_CLI" / "chat_memory.db"
+if getattr(sys, 'frozen', False):
+    BASE_DIR = Path(sys.executable).resolve().parent
+else:
+    BASE_DIR = Path(__file__).resolve().parent
+try:
+    REAL_DB_FILE = BASE_DIR.parent / "Translator_CLI" / "chat_memory.db"
+    REAL_DB_FILE.parent.mkdir(parents=True, exist_ok=True)
+except Exception:
+    REAL_DB_FILE = BASE_DIR / "chat_memory.db"
 DB_PATH = f"sqlite:///{REAL_DB_FILE.as_posix()}"
+# ---------------------------------
 
 def get_session_history(session_id):
     """Lấy object lịch sử của LangChain"""

@@ -1239,8 +1239,8 @@ private static JObject BuildPhysicalItem(
             props["Width"] = 100u; props["Height"] = 40u;
             props["Text"] = item.Label ?? itemName;
             var scripts = new JObject();
-            if (item.KeydownWrite != null) scripts["KeyDown"] = $"Tags(\"{item.KeydownWrite.Tag}\").Write({item.KeydownWrite.Value});";
-            if (item.KeyupWrite != null) scripts["KeyUp"] = $"Tags(\"{item.KeyupWrite.Tag}\").Write({item.KeyupWrite.Value});";
+            if (item.KeydownWrite != null) scripts["Down"] = $"Tags(\"{item.KeydownWrite.Tag}\").Write({item.KeydownWrite.Value});";
+            if (item.KeyupWrite != null) scripts["Up"] = $"Tags(\"{item.KeyupWrite.Tag}\").Write({item.KeyupWrite.Value});";
             props["Scripts"] = scripts;
             break;
 
