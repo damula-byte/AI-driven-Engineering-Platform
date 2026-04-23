@@ -74,7 +74,7 @@ namespace TIA_Copilot_CLI
             Console.Clear();
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("==========================================================");
-            Console.WriteLine($" Chào mừng đến với {appName} Interactive Shell!");
+            Console.WriteLine($"Welcome to {appName} CLI, {userName}!");
             Console.WriteLine(" Gõ lệnh, bấm phím [ESC] để thoát, hoặc gõ 'help' để xem.");
             Console.WriteLine("==========================================================\n");
             Console.ResetColor();
@@ -131,21 +131,27 @@ namespace TIA_Copilot_CLI
                         switch (chatAction)
                         {
                             case "session":
-                                // TÍNH NĂNG 1 & 2: Giao diện Menu quản lý Session
+                                Stopwatch menu = new Stopwatch();
+                                menu.Start();
                                 await CommandHandler.HandleSessionMenuAsync();
-                                //PrintIcon("i", "Tính năng 'session' đang được thi công...", ConsoleColor.Cyan);
+                                menu.Stop();
+                                LogPerformance("Session Menu", menu.ElapsedMilliseconds);
                                 break;
 
                             case "status":
-                                // TÍNH NĂNG 4: Báo cáo Radar
+                                Stopwatch status = new Stopwatch();
+                                status.Start();
                                 await CommandHandler.HandleCheckStatusAsync(sessionId);
-                                //PrintIcon("i", "Tính năng 'status' đang được thi công...", ConsoleColor.Cyan);
+                                status.Stop();
+                                LogPerformance("Check Status", status.ElapsedMilliseconds);
                                 break;
 
                             case "check-data":
-                                // TÍNH NĂNG 3: Xuất file và mở Notepad (Ta sẽ code phần này ở hiệp sau)
-                                //PrintIcon("i", "Tính năng 'check-data' đang được thi công...", ConsoleColor.Cyan);
+                                Stopwatch checkdata = new Stopwatch();
+                                checkdata.Start();
                                 await CommandHandler.HandleCheckDataAsync(sessionId);
+                                checkdata.Stop();
+                                LogPerformance("Check Data", checkdata.ElapsedMilliseconds);
                                 break;
 
 
@@ -155,6 +161,15 @@ namespace TIA_Copilot_CLI
                             case "scada":
                             case "cwc":
                                 string targetType = CommandHandler.GetBlockType(chatAction);
+                                string targetName = "";
+                                
+                                if (targetType == "ORGANIZATION_BLOCK") targetName = "OB";
+                                else if (targetType == "FUNCTION_BLOCK") targetName = "FB";
+                                else if (targetType == "FUNCTION") targetName = "FC";
+                                else if (targetType == "HMI_SCREEN") targetName = "SCADA";
+                                else if (targetType == "CWC_SCREEN") targetName = "CWC";
+                                else targetName = chatAction.ToUpper();
+
                                 string query = args.Length > 2 ? args[2] : "";
                                 if (args.Length > 3) sessionId = args[3];
 
@@ -163,14 +178,23 @@ namespace TIA_Copilot_CLI
                                     Console.WriteLine("LỖI: Bạn phải truyền câu lệnh yêu cầu (query).");
                                     return;
                                 }
-
+                                Stopwatch chat = new Stopwatch();
+                                chat.Start();
                                 await CommandHandler.HandleChatAsync(targetType, query, sessionId);
+                                chat.Stop();
+                                LogPerformance($"Chat {targetName}", chat.ElapsedMilliseconds);
                                 break;
 
                             case "load-tags":
                                 string tagFile = GetPathOrOpenDialog(args, 2, "Excel Files (*.xlsx;*.xls)|*.xlsx;*.xls|CSV Files (*.csv)|*.csv|All Files (*.*)|*.*");
                                 if (!string.IsNullOrEmpty(tagFile))
+                                {
+                                    Stopwatch loadtags = new Stopwatch();
+                                    loadtags.Start();
                                     await CommandHandler.HandleLoadTagsAsync(tagFile);
+                                    loadtags.Stop();
+                                    LogPerformance("Load Tags", loadtags.ElapsedMilliseconds);
+                                }
                                 else PrintIcon("×", "No selected file to load.", ConsoleColor.Yellow);
 
                                 break;
@@ -179,28 +203,50 @@ namespace TIA_Copilot_CLI
                                 string specFile = GetPathOrOpenDialog(args, 2, "Spec Files (*.docx;*.md;*.txt)|*.docx;*.md;*.txt|All Files (*.*)|*.*");
                                 if (args.Length > 3) sessionId = args[3];
                                 if (!string.IsNullOrEmpty(specFile))
+                                {
+                                    Stopwatch loadspec = new Stopwatch();
+                                    loadspec.Start();
                                     await CommandHandler.HandleLoadSpecAsync(specFile, sessionId);
+                                    loadspec.Stop();
+                                    LogPerformance("Load Spec", loadspec.ElapsedMilliseconds);
+                                }
                                 break;
 
                             case "clear-data":
                                 if (args.Length > 2) sessionId = args[2];
+                                Stopwatch clear = new Stopwatch();
+                                clear.Start();
                                 await CommandHandler.HandleClearDataAsync(sessionId);
+                                clear.Stop();
+                                LogPerformance("Clear Data", clear.ElapsedMilliseconds);
                                 break;
 
                             case "view":
                                 string reviewFile = GetPathOrOpenDialog(args, 2, "Supported Files (*.scl;.zip;*.json;*.csv)|*.scl;.zip;*.json;*.csv| FB/FC/OB (*.scl)|*.scl|Custom Web Control (*.zip)|*.zip|Scada Screen (*.json)|*.json|PLC-HMI tags (*.csv)|*.csv|All Files (*.*)|*.*");
+                                Stopwatch viewNormal = new Stopwatch();
+                                Stopwatch viewZip = new Stopwatch();
                                 if (!string.IsNullOrEmpty(reviewFile))
                                 {
                                     if (reviewFile.EndsWith(".scl", StringComparison.OrdinalIgnoreCase) || reviewFile.EndsWith(".json", StringComparison.OrdinalIgnoreCase) || reviewFile.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                        viewNormal.Start();
                                         ReviewWindow.OpenReviewer(reviewFile);
+                                        viewNormal.Stop();
+                                        LogPerformance("View File", viewNormal.ElapsedMilliseconds);
+                                    }   
                                     else if (reviewFile.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                        viewZip.Start();
                                         ReviewWindow.OpenCwcPreview(reviewFile);
+                                        viewZip.Stop();
+                                        LogPerformance("View File", viewZip.ElapsedMilliseconds);
+                                    }
                                 }
                                 else
                                 {
                                     PrintIcon("×", "No selected file to load.", ConsoleColor.Yellow);
                                 }
-                                break; 
+                                break;
 
 
                             default:
@@ -209,7 +255,12 @@ namespace TIA_Copilot_CLI
                         }
                         break;
                     case "help":
+                        Stopwatch help = new Stopwatch();
+                        help.Start();
                         PrintHelp();
+                        help.Stop();
+                        LogPerformance("Help", help.ElapsedMilliseconds);
+
                         break;
                     default:
                         PrintIcon("?", $"Không tìm thấy lệnh '{command}'. Gõ 'help' để xem.", ConsoleColor.Yellow);
@@ -233,6 +284,9 @@ namespace TIA_Copilot_CLI
             {
                 // --- NHÓM 1: PROJECT & CONNECTION ---
                 case "connect":
+                    Stopwatch connect = new Stopwatch();
+                    connect.Start();
+
                     PrintIcon("i", "Đang kết nối TIA Portal...", ConsoleColor.Cyan);
                     if (_tiaEngine.ConnectToTIA())
                     {
@@ -242,10 +296,15 @@ namespace TIA_Copilot_CLI
                         PrintIcon("√", $"Đã kết nối: {_currentProjectName}", ConsoleColor.Green);
                     }
                     else PrintIcon("×", "Không thấy TIA Portal đang chạy.", ConsoleColor.Red);
+                    
+                    connect.Stop();
+                    LogPerformance("ConnectTIA", connect.ElapsedMilliseconds);
                     break;
 
                 case "open":
                     string openPath = GetPathOrOpenDialog(args, 2, "TIA Project (*.ap*)|*.ap*");
+                    Stopwatch OpenTIA = new Stopwatch();
+                    OpenTIA.Start();
                     if (!string.IsNullOrEmpty(openPath))
                     {
                         PrintIcon("i", $"Mở dự án: {Path.GetFileName(openPath)}...", ConsoleColor.Cyan);
@@ -257,9 +316,13 @@ namespace TIA_Copilot_CLI
                             PrintIcon("√", $"Đã mở: {_currentProjectName}", ConsoleColor.Green);
                         }
                     }
+                    OpenTIA.Stop();
+                    LogPerformance("OpenTIA", OpenTIA.ElapsedMilliseconds);
                     break;
 
-                case "create": // BỔ SUNG
+                case "create":
+                    Stopwatch createTIA = new Stopwatch();
+                    createTIA.Start();
                     if (args.Length < 4) { PrintIcon("!", "Cú pháp: tia create <Thư mục> <Tên>", ConsoleColor.Yellow); break; }
                     if (_tiaEngine.CreateTIAproject(args[2], args[3], true))
                     {
@@ -268,22 +331,30 @@ namespace TIA_Copilot_CLI
                         Console.WriteLine($"   [Path]: {_currentProjectPath}");
                         PrintIcon("√", $"Đã tạo dự án: {args[3]}", ConsoleColor.Green);
                     }
+                    createTIA.Stop();
+                    LogPerformance("CreateTIA", createTIA.ElapsedMilliseconds);
                     break;
 
                 case "save":
+                    Stopwatch saveTIA = new Stopwatch();
+                    saveTIA.Start();
                     PrintIcon("i", "Đang lưu project...", ConsoleColor.Cyan);
                     _tiaEngine.SaveProject();
                     PrintIcon("√", "Lưu thành công.", ConsoleColor.Green);
+                    saveTIA.Stop();
+                    LogPerformance("SaveTIA", saveTIA.ElapsedMilliseconds);
                     break;
 
                 case "close":
                     _tiaEngine.CloseTIA();
                     _currentProjectName = "None";
-                    PrintIcon("√", "Đã đóng TIA.", ConsoleColor.DarkGray);
+                    PrintIcon("√", "Đã đóng TIA.", ConsoleColor.Green);
                     break;
 
                 // --- NHÓM 2: DEVICE & CONFIG ---
                 case "device":
+                    Stopwatch createDev = new Stopwatch();
+                    createDev.Start();
                     if (args.Length >= 5)
                     {
                         _tiaEngine.CreateDev(args[2], args[4], args[3], "");
@@ -296,10 +367,17 @@ namespace TIA_Copilot_CLI
 
                         HandleCreateDeviceWizard();
                     }
+                    createDev.Stop();
+                    LogPerformance("CreateDevice", createDev.ElapsedMilliseconds);
+
                     break;
 
                 case "choose":
+                    Stopwatch chooseDev = new Stopwatch();
+                    chooseDev.Start();
                     HandleChooseDevice(args);
+                    chooseDev.Stop();
+                    LogPerformance("ChooseDevice", chooseDev.ElapsedMilliseconds);
                     break;
 
                 case "hmi-conn":
@@ -329,40 +407,64 @@ namespace TIA_Copilot_CLI
                 case "fb":
                 case "fc":
                 case "ob":
+                    string blockType = "";
+                    if (action == "fb") blockType = "FB";
+                    else if (action == "fc") blockType = "FC";
+                    else if (action == "ob") blockType = "OB";
+
+                    Stopwatch ImportLogicPLC = new Stopwatch();
+                    ImportLogicPLC.Start();
                     string sclPath = GetPathOrOpenDialog(args, 2, "SCL Files (*.scl)|*.scl");
                     TiaImportLogic(action.ToUpper(), sclPath);
+                    ImportLogicPLC.Stop();
+                    LogPerformance($"Import {blockType} file", ImportLogicPLC.ElapsedMilliseconds);
                     break;
 
                 case "tag-plc":
+                    Stopwatch ImportPlcTags = new Stopwatch();
+                    ImportPlcTags.Start();
                     string pTagPath = GetPathOrOpenDialog(args, 2, "CSV Tags (*.csv)|*.csv");
                     if (!string.IsNullOrEmpty(pTagPath)) _tiaEngine.ImportPlcTagsFromCsv(_currentDeviceName, pTagPath);
+                    ImportPlcTags.Stop();
+                    LogPerformance("ImportPlcTags", ImportPlcTags.ElapsedMilliseconds);
                     break;
 
                 case "tag-hmi":
+                    Stopwatch ImportHmiTags = new Stopwatch();
+                    ImportHmiTags.Start();
                     string hTagPath = GetPathOrOpenDialog(args, 2, "CSV Tags (*.csv)|*.csv");
                     if (!string.IsNullOrEmpty(hTagPath)) _tiaEngine.ImportHmiTagsFromCsv(_currentDeviceName, hTagPath);
+                    ImportHmiTags.Stop();
+                    LogPerformance("ImportHmiTags", ImportHmiTags.ElapsedMilliseconds);
                     break;
 
                 // --- NHÓM 4: SCADA & GRAPHICS ---
-                case "cwc-deploy":                   
-                    _tiaEngine.GetProjectPath(); 
+                case "cwc-deploy":
+                    Stopwatch deployCwc = new Stopwatch();
+                    deployCwc.Start();
+
+                    _tiaEngine.GetProjectPath();
                     string importPath = GetPathOrOpenDialog(args, 2, "All files (*.*)|*.*|Zip files (*.zip)|*.zip|Widget files (*.vwdgt)|*.vwdgt");
                     if (!string.IsNullOrEmpty(importPath))
                     {
                         PrintIcon("i", $"Đang Import vào CustomControls: {Path.GetFileName(importPath)}...", ConsoleColor.Cyan);
-                        
+
                         // 3. Thực hiện copy vật lý vào UserFiles/CustomControls
                         _tiaEngine.AddFileToUserFilesFolder(importPath);
-                        
+
                         PrintIcon("√", "Đã Import vật lý thành công.", ConsoleColor.Green);
                     }
                     else
                     {
                         PrintIcon("!", "Không có file nào được chọn để Import.", ConsoleColor.Yellow);
                     }
+                    deployCwc.Stop();
+                    LogPerformance("CWC Deploy", deployCwc.ElapsedMilliseconds);
                     break;
 
                 case "draw":
+                    Stopwatch drawSCADA = new Stopwatch();
+                    drawSCADA.Start();
                     string jPath = GetPathOrOpenDialog(args, 2, "JSON SCADA (*.json)|*.json");
                     if (!string.IsNullOrEmpty(jPath))
                     {
@@ -374,6 +476,8 @@ namespace TIA_Copilot_CLI
                         }
                         catch (Exception ex) { PrintIcon("X", $"Lỗi vẽ: {ex.Message}", ConsoleColor.Red); }
                     }
+                    drawSCADA.Stop();
+                    LogPerformance("DrawSCADA", drawSCADA.ElapsedMilliseconds);
                     break;
 
                 case "img": // BỔ SUNG
@@ -513,12 +617,12 @@ namespace TIA_Copilot_CLI
             string selectedPath = "";
             Thread t = new Thread(() =>
             {
-                using (OpenFileDialog ofd = new OpenFileDialog 
-                { 
-                    Filter = filter, 
+                using (OpenFileDialog ofd = new OpenFileDialog
+                {
+                    Filter = filter,
                     Title = "Chọn file dữ liệu",
                     InitialDirectory = OutputPaths.GetGeneratedDir()
-                    })
+                })
                     if (ofd.ShowDialog(new Form { TopMost = true }) == DialogResult.OK) selectedPath = ofd.FileName;
             });
             t.SetApartmentState(ApartmentState.STA); t.Start(); t.Join();
@@ -841,6 +945,13 @@ namespace TIA_Copilot_CLI
                 PrintIcon("√", $"Đã tạo xong thiết bị '{name}'!", ConsoleColor.Green);
             }
             catch (Exception ex) { PrintIcon("×", $"Lỗi: {ex.Message}", ConsoleColor.Red); }
+        }
+        public static void LogPerformance(string actionName, long timeMs)
+        {
+
+            string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "performance_metrics.log");
+            string logEntry = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss},{actionName},{timeMs/1000.0}\n";
+            File.AppendAllText(logPath, logEntry);
         }
     }
 }

@@ -65,7 +65,7 @@ def get_output_schema(target_block_type="AUTO"):
           "global_tags": [
             { "name": "TAG_StartBtn_01", "type": "BOOL", "comment": "Input" },
             { "name": "TAG_MotorSpeed_01", "type": "REAL", "comment": "Output" },
-            { "name": "TAG_SystemFlag", "type": "BOOL", "comment": "Memory" }
+            { "name": "TAG_SystemFlag", "type": "BOOL", "comment": "Memory" } 
           ]
         }
         """
