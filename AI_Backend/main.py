@@ -20,8 +20,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 import chromadb
 import google.generativeai as genai
       
-
-os.environ["GOOGLE_API_KEY"] = app_secrets.GEMINI_API_KEY
+CURRENT_KEY =   app_secrets.get_next_api_key()
+os.environ["GOOGLE_API_KEY"] = CURRENT_KEY
 
 def get_system_prompt_part1():
     try:
@@ -572,29 +572,32 @@ def main():
         
         llm = ChatGoogleGenerativeAI(
             model="gemini-2.5-flash",
-            #model="gemini-2.5-flash",
-            #model="gemini-3.1-flash-lite-preview",
             temperature=0.1,
             convert_system_message_to_human=True,
         )
-        
-        # Cấu hình API Key cho thư viện gốc
-        genai.configure(api_key=app_secrets.GEMINI_API_KEY)
-        
-        # Khởi tạo object model chuẩn của Google (Chỉ dùng để đếm token)
-        token_model = genai.GenerativeModel("gemini-2.5-flash")
-        
-        # Gọi hàm đếm token trực tiếp (Nếu sai key hoặc rớt mạng, nó sẽ báo lỗi thẳng về C#)
-        token_count = token_model.count_tokens(full_prompt).total_tokens
 
         # 2. Gọi AI sinh code (Dùng Langchain)
         response = llm.invoke(full_prompt)
         final_json_str = clean_json_response(response.content)
         
+        input_tokens = 0
+        output_tokens = 0
+        total_tokens = 0
+        key_display = f"...{CURRENT_KEY[-10:]}"
+        
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+            usage = response.usage_metadata
+            input_tokens = usage.get("input_tokens", 0)
+            output_tokens = usage.get("output_tokens", 0)
+            total_tokens = usage.get("total_tokens", 0)
+
         # 3. Bóc JSON ra, nhét token_count vào
         try:
             data_dict = json.loads(final_json_str)
-            data_dict["token_usage"] = token_count
+            data_dict["input_tokens"] = input_tokens
+            data_dict["output_tokens"] = output_tokens
+            data_dict["token_usage"] = total_tokens
+            data_dict["active_key"] = key_display
             final_json_str = json.dumps(data_dict, ensure_ascii=False, indent=2)
         except Exception as e:
             final_json_str = json.dumps({"error": f"Lỗi chèn Token: {str(e)}", "raw_output": final_json_str})

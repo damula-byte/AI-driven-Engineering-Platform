@@ -158,6 +158,7 @@ namespace TIA_Copilot_CLI
                             case "fb":
                             case "fc":
                             case "ob":
+                            case "db":
                             case "scada":
                             case "cwc":
                                 string targetType = CommandHandler.GetBlockType(chatAction);

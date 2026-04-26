@@ -24,6 +24,7 @@ namespace TIA_Copilot_CLI
             if (up == "OB" || up == "ORGANIZATION_BLOCK") return "ORGANIZATION_BLOCK";
             if (up == "FB" || up == "FUNCTION_BLOCK") return "FUNCTION_BLOCK";
             if (up == "FC" || up == "FUNCTION") return "FUNCTION";
+            if (up == "DB" || up == "DATA_BLOCK") return "DATA_BLOCK";
             if (up == "SCADA" || up == "HMI") return "HMI_SCREEN";
             if (up == "CWC") return "CWC_SCREEN";
             return "AUTO";
@@ -190,7 +191,14 @@ namespace TIA_Copilot_CLI
 
             try
             {
+                int startIdx = jsonResponse.IndexOf('{');
+                int endIdx = jsonResponse.LastIndexOf('}');
+                if (startIdx != -1 && endIdx != -1 && endIdx >= startIdx)
+                {
+                    jsonResponse = jsonResponse.Substring(startIdx, endIdx - startIdx + 1);
+                }
                 dynamic obj = JsonConvert.DeserializeObject(jsonResponse);
+                
                 if (obj.status == "success")
                 {
                     Console.ForegroundColor = ConsoleColor.Green;
@@ -336,7 +344,7 @@ namespace TIA_Copilot_CLI
                 Console.WriteLine("            CHAT SESSION MENU (CHAT & CONTEXT)");
                 Console.WriteLine("==========================================================");
                 Console.ResetColor();
-                
+
 
                 Console.WriteLine($"\n Current session: [{Program._currentSessionId.ToUpper()}]\n");
 
@@ -478,11 +486,18 @@ namespace TIA_Copilot_CLI
                 var backendTask = AiEngine.CallPythonBackendAsync("", sessionId, "check_spec");
                 string jsonResponse = await RunWithSpinner(backendTask, $"Đang gom dữ liệu từ Vector DB cho Session [{sessionId.ToUpper()}]...", 300);
 
+                int startIdx = jsonResponse.IndexOf('{');
+                int endIdx = jsonResponse.LastIndexOf('}');
+                if (startIdx != -1 && endIdx != -1 && endIdx >= startIdx)
+                {
+                    jsonResponse = jsonResponse.Substring(startIdx, endIdx - startIdx + 1);
+                }
                 dynamic obj = JsonConvert.DeserializeObject(jsonResponse);
+
                 if (obj.status == "success")
                 {
                     string msg = obj.message.ToString();
-                    
+
                     // BỘ LỌC THÔNG MINH ĐÃ SỬA
                     if (msg.StartsWith("No current"))
                     {
@@ -521,7 +536,7 @@ namespace TIA_Copilot_CLI
                 ProcessStartInfo psi = new ProcessStartInfo
                 {
                     FileName = exportPath,
-                    UseShellExecute = true 
+                    UseShellExecute = true
                 };
                 Process.Start(psi);
             }
@@ -629,7 +644,16 @@ namespace TIA_Copilot_CLI
                     if (responseObj.ContainsKey("token_usage"))
                     {
                         Console.ForegroundColor = ConsoleColor.Yellow;
-                        Console.WriteLine($"\n [TOKEN MONITOR] Prompt's token amount: {responseObj["token_usage"]} tokens");
+                        string inTokens = responseObj.ContainsKey("input_tokens") ? responseObj["input_tokens"].ToString() : "?";
+                        string outTokens = responseObj.ContainsKey("output_tokens") ? responseObj["output_tokens"].ToString() : "?";
+
+                        Console.WriteLine($"\n [TOKEN MONITOR] Total: {responseObj["token_usage"]} (Input: {inTokens} | Output: {outTokens})");
+                        Console.ResetColor();
+                    }
+                    if (responseObj.ContainsKey("active_key"))
+                    {
+                        Console.ForegroundColor = ConsoleColor.Cyan;
+                        Console.WriteLine($" [API MONITOR] Active Key: {responseObj["active_key"]}");
                         Console.ResetColor();
                     }
 
@@ -718,7 +742,7 @@ namespace TIA_Copilot_CLI
                                         {
                                             cellTexts.Add(cell.InnerText.Trim());
                                         }
-                                        sb.AppendLine(string.Join(" | ", cellTexts)); 
+                                        sb.AppendLine(string.Join(" | ", cellTexts));
                                     }
                                     sb.AppendLine("[END TABLE]\n");
                                 }
@@ -731,7 +755,7 @@ namespace TIA_Copilot_CLI
             {
                 return $"[ERROR] C# không thể đọc file Word: {ex.Message}";
             }
-            
+
             return sb.ToString();
         }
 

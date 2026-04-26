@@ -29,5 +29,6 @@
             { "name": "TAG_StartBtn_01", "type": "BOOL", "address": "%I0.0" , "comment": "Input" },
             { "name": "TAG_MotorSpeed_01", "type": "REAL", "address": "%Q0.0", "comment": "Output" },
             { "name": "TAG_SystemFlag", "type": "BOOL", "address": "%M0.0", "comment": "Memory" }
-          ]
+          ],
+  "global_timers": ["T10s", "T5s"]
 }

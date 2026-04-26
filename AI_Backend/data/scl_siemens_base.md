@@ -38,6 +38,7 @@ BEGIN
    #stat_MyTimer(IN := #i_Start, PT := T#5s); 
    #stat_MyTrigger(CLK := #i_Sensor);
 ```
+
 ## STRATEGY: TIMERS/COUNTERS IN STATE MACHINES (CASE)
 **CRITICAL RULE:** DO NOT call the same Timer (TON/TOF) or Counter (CTU/CTD) instance multiple times inside different CASE steps or IF branches. 
 You MUST call the instance EXACTLY ONCE outside the CASE statement. Control its execution by assigning conditional logic to its inputs (e.g., `IN := (#stat_Step = 3);`).
@@ -363,7 +364,7 @@ FUNCTION_BLOCK "AUTO_GENERATE_FB_NAME"
    VAR_TEMP
       // [Prefix temp_]: Intermediate calculations
    END_VAR
-   VAR CONSTANT
+   VAR CONSTANT // Do not add '_' between 'VAR' and 'CONSTANT'
       // [Prefix const_]: Fixed constants
    END_VAR
 BEGIN
@@ -427,6 +428,37 @@ BEGIN
 END_ORGANIZATION_BLOCK
 ```
 
+## STRATEGY: GLOBAL DATA_BLOCK (DB) TEMPLATE
+When the requested target block type is `DATA_BLOCK` (DB), you must generate a Data Block. There are two explicit variations:
+
+**1. Standard Global DB:**
+Used to store global parameters, settings, or multi-purpose variables.
+- Set the JSON `"type"` to `"DATA_BLOCK"`.
+- Declare all variables inside the `"interface"` array. You MUST set their `"direction"` to `"VAR"`.
+- Set initial values (if any) inside the `"body_code"` (e.g., `MotorSpeed := 100.0;`). Do not write logic here, only assignments.
+- CRITICAL RULE: Do NOT use the `#` prefix for variables inside a DB.
+Example SCL output for Standard Global DB:
+```scl
+DATA_BLOCK "Data_block_1"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+NON_RETAIN
+   VAR 
+      a : Bool; //// Declare variable here
+      c : Int; // Declare variable here
+   END_VAR
+BEGIN
+   c := 5; // Insert start value for variable here 
+END_DATA_BLOCK
+```
+**2. Global Timer DB (IEC_TIMER):**
+Used when the user explicitly requests to create standalone global timers.
+- Set the JSON `"type"` to `"DATA_BLOCK"`.
+- You MUST set the JSON `"description"` field EXACTLY to `"IEC_TIMER"`. (This is a signal for the compiler).
+- Leave `"interface"` empty `[]`.
+- Leave `"body_code"` empty `""`.
+If the user requests multiple timers (e.g., "create T1s and T2s"), output the FIRST timer as the main block, and list the REST of the timers in the `"global_timers"` array.
+
 ## STRATEGY: DATA_BLOCK (INSTANCE DB) TEMPLATE
 Required when using FBs in an OB. You must generate a Data Block for every FB instance.
 
@@ -482,3 +514,51 @@ They CANNOT exist in the global tag table and MUST NEVER appear in `"global_tags
   { "name": "TAG_PartCounter",  "type": "CTU",    "comment": "Memory" }
 ]
 ```
+
+## STRATEGY: GLOBAL TIMERS AND DECLARATION (IEC_TIMER)
+While timers are typically declared as Multi-Instances inside an FB's `VAR` section, they can also be declared globally as System Data Blocks (IEC_TIMER). This is required when working inside Functions (FCs) or Organization Blocks (OBs), use where static memory is not available, or when a timer's state must be accessed system-wide.
+
+**1. Global Timer DB Declaration**
+To create a Global Timer, you MUST output a standalone `DATA_BLOCK` with the type `IEC_TIMER`.
+
+```scl
+DATA_BLOCK "T10s"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 1.0
+NON_RETAIN
+IEC_TIMER
+BEGIN
+END_DATA_BLOCK
+```
+
+**2. Global Timer Usage Syntax**
+When calling a Global Timer in your body_code, you MUST wrap the DB name in double quotes, followed by a dot (.), and the specific timer operation (TON, TOF, TONR, or TP).
+CRITICAL RULE: DO NOT use the # prefix for the Global DB name.
+
+```scl
+// TON (On-Delay Timer)
+"T10s".TON(IN := #i_Condition,
+           PT := T#10s,
+           Q => #q_TimerDone,
+           ET => #temp_ElapsedTime);
+
+// TOF (Off-Delay Timer)
+"T10s".TOF(IN := #i_Condition,
+           PT := T#10s,
+           Q => #q_TimerDone,
+           ET => #temp_ElapsedTime);
+
+// TONR (Retentive On-Delay Timer)
+"T10s".TONR(IN := #i_Condition,
+            R := #i_ResetSignal,
+            PT := T#10s,
+            Q => #q_TimerDone,
+            ET => #temp_ElapsedTime);
+
+// TP (Pulse Generation Timer)
+"T10s".TP(IN := #i_Condition,
+          PT := T#10s,
+          Q => #q_PulseActive,
+          ET => #temp_ElapsedTime);
+```
+**JSON OUTPUT RULE**: If you instantiate any new Global Timers (IEC_TIMER) in your `body_code`, you MUST list their exact names (without quotes) in the "global_timers" JSON array. Example: "global_timers": ["T10s", "T_Delay"]. If none are used, return an empty array [].

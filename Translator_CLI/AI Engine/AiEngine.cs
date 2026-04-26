@@ -10,7 +10,7 @@ namespace TIA_Copilot_CLI
     public static class AiEngine
     {
         public static string PYTHON_EXE_PATH = "";
-        public static string PYTHON_SCRIPT_PATH = ""; 
+        public static string PYTHON_SCRIPT_PATH = "";
 
         public static void InitializePaths()
         {
@@ -33,33 +33,42 @@ namespace TIA_Copilot_CLI
 
             if (backendFolder != null)
             {
-                // ƯU TIÊN 1: MÔI TRƯỜNG DEPLOY (Tìm file exe đã đóng gói)
-                // PyInstaller thường xuất file ra thư mục dist\ai_engine\ai_engine.exe
+#if DEBUG
+                // ==========================================
+                // MÔI TRƯỜNG DEV: ÉP BUỘC DÙNG PYTHON RAW
+                // ==========================================
+                PYTHON_EXE_PATH = Path.Combine(backendFolder, "env", "python.exe");
+                if (!File.Exists(PYTHON_EXE_PATH))
+                {
+                    PYTHON_EXE_PATH = Path.Combine(backendFolder, "env", "Scripts", "python.exe");
+                }
+                PYTHON_SCRIPT_PATH = Path.Combine(backendFolder, "main.py");
+
+                Console.ForegroundColor = ConsoleColor.Magenta;
+                Console.WriteLine($"[SYSTEM] Chạy chế độ DEBUG: Gọi trực tiếp mã nguồn {PYTHON_SCRIPT_PATH}");
+                Console.ResetColor();
+#else
+                // ==========================================
+                // MÔI TRƯỜNG DEPLOY: ÉP BUỘC DÙNG FILE EXE
+                // ==========================================
                 string distExePath = Path.Combine(backendFolder, "dist", "ai_engine", "ai_engine.exe");
-                // Hoặc thư mục release cuối cùng nếu bạn đã copy ra ngoài
                 string releaseExePath = Path.Combine(backendFolder, "ai_engine.exe");
 
                 if (File.Exists(releaseExePath))
                 {
                     PYTHON_EXE_PATH = releaseExePath;
-                    PYTHON_SCRIPT_PATH = ""; // Không cần truyền script nữa
+                    PYTHON_SCRIPT_PATH = ""; // Cực kỳ quan trọng: Để trống để C# biết không xài script
                 }
                 else if (File.Exists(distExePath))
                 {
                     PYTHON_EXE_PATH = distExePath;
-                    PYTHON_SCRIPT_PATH = ""; // Không cần truyền script nữa
+                    PYTHON_SCRIPT_PATH = ""; 
                 }
-                // ƯU TIÊN 2: MÔI TRƯỜNG DEV (Fallback về python.exe và main.py)
                 else
                 {
-                    PYTHON_EXE_PATH = Path.Combine(backendFolder, "env", "python.exe");
-                    if (!File.Exists(PYTHON_EXE_PATH))
-                    {
-                        PYTHON_EXE_PATH = Path.Combine(backendFolder, "env", "Scripts", "python.exe");
-                    }
-                    // Nếu dùng conda, bạn có thể phải trỏ thẳng tới python.exe của conda ở đây
-                    PYTHON_SCRIPT_PATH = Path.Combine(backendFolder, "main.py");
+                    throw new FileNotFoundException("Không tìm thấy file ai_engine.exe để chạy Deploy!");
                 }
+#endif
             }
         }
 
@@ -69,7 +78,7 @@ namespace TIA_Copilot_CLI
             {
                 ProcessStartInfo start = new ProcessStartInfo();
                 start.FileName = PYTHON_EXE_PATH;
-                
+
                 // [QUAN TRỌNG]: Đổi logic gán Argument
                 // Nếu chạy bản Dev (có path tới main.py) -> truyền argument
                 // Nếu chạy bản Deploy (file exe) -> để trống argument
@@ -116,7 +125,7 @@ namespace TIA_Copilot_CLI
                     // 2. TUYỆT KỸ PHÁ DEADLOCK
                     var outputTask = process.StandardOutput.ReadToEndAsync();
                     var errorTask = process.StandardError.ReadToEndAsync();
-                    
+
                     await Task.WhenAll(outputTask, errorTask);
 
                     // 3. [KHẮC PHỤC DOUBLE READ]
