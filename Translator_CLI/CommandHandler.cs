@@ -32,12 +32,12 @@ namespace TIA_Copilot_CLI
 
         public static async Task HandleLoadTagsAsync(string tagFilePath)
         {
-            Console.WriteLine($"\n🚀 [START] Bắt đầu nạp I/O Tags từ: {tagFilePath}");
+            Console.WriteLine($"\n🚀 [START] Starting to load I/O Tags from: {tagFilePath}");
 
             if (string.IsNullOrEmpty(tagFilePath) || !File.Exists(tagFilePath))
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"[ERROR] Không tìm thấy file Tag. Vui lòng kiểm tra lại đường dẫn.");
+                Console.WriteLine($"[ERROR] Tag file not found. Please check the path again.");
                 Console.ResetColor();
                 return;
             }
@@ -53,7 +53,7 @@ namespace TIA_Copilot_CLI
                 // Ghi đè chuỗi Tag đã gọt sạch sẽ vào file txt ẩn
                 File.WriteAllText(TagCacheFile, userTagsContent);
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"[SUCCESS] Đã lưu Tags vào bộ nhớ Cache cục bộ thành công!");
+                    Console.WriteLine($"[SUCCESS] Successfully saved Tags to local cache!");
                 Console.ResetColor();
             }
         }
@@ -101,11 +101,11 @@ namespace TIA_Copilot_CLI
 
         public static async Task HandleLoadSpecAsync(string specPath, string sessionId)
         {
-            Console.WriteLine($"\n🚀 [START] Nạp Yêu cầu vận hành vào Vector DB...");
+            Console.WriteLine($"\n🚀 [START] Loading operational requirements into Vector DB...");
             if (!File.Exists(specPath))
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"[ERROR] Không tìm thấy file Spec: {specPath}");
+                Console.WriteLine($"[ERROR] Spec file not found: {specPath}");
                 Console.ResetColor();
                 return;
             }
@@ -135,7 +135,7 @@ namespace TIA_Copilot_CLI
 
             // Gửi toàn bộ text sạch sẽ sang Python để băm nhỏ và nạp vào ChromaDB
             var backendTask = AiEngine.CallPythonBackendAsync("", sessionId, "update_spec", "", specText);
-            string jsonResponse = await RunWithSpinner(backendTask, "Đang băm nhỏ file và nạp vào ChromaDB...");
+            string jsonResponse = await RunWithSpinner(backendTask, "Chunking and uploading to ChromaDB...");
 
             try
             {
@@ -143,30 +143,30 @@ namespace TIA_Copilot_CLI
                 if (obj.status == "success") { Console.ForegroundColor = ConsoleColor.Green; Console.WriteLine($"[SUCCESS] {obj.message}"); }
                 else { Console.ForegroundColor = ConsoleColor.Red; Console.WriteLine($"[ERROR] {obj.message}"); }
             }
-            catch { Console.WriteLine("[ERROR] Lỗi parse phản hồi từ Python Backend."); }
+            catch { Console.WriteLine("[ERROR] Error parsing response from Python Backend."); }
             Console.ResetColor();
         }
 
         public static async Task HandleClearDataAsync(string sessionId)
         {
-            // --- LỚP KHIÊN CẢNH BÁO ---
+            // --- WARNING SHIELD ---
             Console.WriteLine();
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($" [CẢNH BÁO MỨC ĐỘ CAO] Bạn sắp xóa toàn bộ tri thức (Spec & Tags) của project này!");
+            Console.WriteLine($" [HIGH LEVEL WARNING] You are about to delete all knowledge (Spec & Tags) of this project!");
 
             Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.Write("Hành động này KHÔNG THỂ hoàn tác. Bạn có chắc chắn muốn bóp cò? (y/n): ");
+            Console.Write("This action CANNOT be undone. Are you absolutely sure? (y/n): ");
             Console.ResetColor();
 
             string confirm = Console.ReadLine()?.Trim().ToLower();
             if (confirm != "y" && confirm != "yes")
             {
-                Program.PrintIcon("i", "Đã hủy thao tác dọn dẹp. Dữ liệu vẫn an toàn.", ConsoleColor.DarkGray);
+                Program.PrintIcon("i", "Cleanup cancelled. Data is still safe.", ConsoleColor.DarkGray);
                 return;
             }
 
-            // --- BẮT ĐẦU XÓA ---
-            Console.WriteLine($"\n🚀 [START] Tiến hành dọn dẹp hệ thống...");
+            // --- START DELETION ---
+            Console.WriteLine($"\n🚀 [START] Proceeding with system cleanup...");
 
             // Đấm 1: Xóa file Tag Cache
             if (File.Exists(TagCacheFile))
@@ -175,19 +175,19 @@ namespace TIA_Copilot_CLI
                 {
                     File.Delete(TagCacheFile);
                     Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine("[SUCCESS] Đã xóa toàn bộ I/O Tags khỏi Cache.");
+                    Console.WriteLine("[SUCCESS] Successfully deleted all I/O Tags from Cache.");
                 }
                 catch (Exception ex)
                 {
                     Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine($"[ERROR] Không thể xóa Tag Cache: {ex.Message}");
+                    Console.WriteLine($"[ERROR] Cannot delete Tag Cache: {ex.Message}");
                 }
                 Console.ResetColor();
             }
 
             // Đấm 2: Xóa Vector DB
             var backendTask = AiEngine.CallPythonBackendAsync("", sessionId, "clear_spec");
-            string jsonResponse = await RunWithSpinner(backendTask, "Đang dọn dẹp Vector DB...");
+            string jsonResponse = await RunWithSpinner(backendTask, "Cleaning up Vector DB...");
 
             try
             {
@@ -213,7 +213,7 @@ namespace TIA_Copilot_CLI
             catch
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("[ERROR] Lỗi parse phản hồi từ Python Backend.");
+                Console.WriteLine("[ERROR] Error parsing response from Python Backend.");
             }
 
             Console.ResetColor();
@@ -222,22 +222,22 @@ namespace TIA_Copilot_CLI
         public static async Task HandleCheckStatusAsync(string sessionId)
         {
             // 1. Quét I/O Tags (Bộ nhớ cục bộ C#)
-            string tagStatus = "❌ CHƯA NẠP (Trống)";
+            string tagStatus = "❌ NOT LOADED (Empty)";
             string tagFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tags_cache.txt");
 
             if (File.Exists(tagFilePath))
             {
                 FileInfo fi = new FileInfo(tagFilePath);
-                tagStatus = $"✅ ĐÃ NẠP | Size: {fi.Length / 1024} KB | Cập nhật: {fi.LastWriteTime:dd/MM/yyyy HH:mm}";
+                tagStatus = $"✅ LOADED | Size: {fi.Length / 1024} KB | Updated: {fi.LastWriteTime:dd/MM/yyyy HH:mm}";
             }
 
             // 2. Quét System Spec (Gọi sang Vector DB của Python)
-            string specStatus = "ĐANG TRUY VẤN...";
+            string specStatus = "QUERYING...";
             try
             {
                 // Gọi API backend với Spinner
                 var backendTask = AiEngine.CallPythonBackendAsync("", sessionId, "check_spec");
-                string jsonResponse = await RunWithSpinner(backendTask, $"Đang quét Radar Vector DB cho Session [{sessionId.ToUpper()}]...");
+                string jsonResponse = await RunWithSpinner(backendTask, $"Scanning vector DB for session [{sessionId.ToUpper()}]...");
 
                 dynamic obj = JsonConvert.DeserializeObject(jsonResponse);
                 if (obj.status == "success")
@@ -247,29 +247,29 @@ namespace TIA_Copilot_CLI
                     // BỘ LỌC THÔNG MINH: Đọc hiểu câu trả lời của Python
                     if (msg.StartsWith("No current"))
                     {
-                        specStatus = "❌ CHƯA NẠP (Trống)";
+                        specStatus = "❌ Empty (No Spec documents loaded into Vector DB)";
                     }
                     else
                     {
                         string briefMsg = msg.Split('\n')[0];
-                        specStatus = $"✅ ĐÃ NẠP | {briefMsg} | Trạng thái: Sẵn sàng";
+                        specStatus = $"✅ Loaded | {briefMsg} | Status: Ready";
                     }
                 }
                 else
                 {
-                    specStatus = $"❌ LỖI TỪ PYTHON: {obj.message}";
+                    specStatus = $"❌ ERROR FROM PYTHON: {obj.message}";
                 }
             }
             catch (Exception)
             {
-                specStatus = "❌ LỖI KẾT NỐI PYTHON BACKEND";
+                specStatus = "❌ ERROR CONNECTING TO PYTHON BACKEND";
             }
 
             // 3. DỌN SẠCH MÀN HÌNH (XÓA SPINNER) & VẼ UI DASHBOARD
             Console.Clear();
             Console.WriteLine("\n" + new string('=', 70));
             Console.ForegroundColor = ConsoleColor.Magenta;
-            Console.WriteLine($" 📊 TRẠNG THÁI DỮ LIỆU - SESSION: {sessionId.ToUpper()}");
+            Console.WriteLine($" 📊 DATA STATUS - SESSION: {sessionId.ToUpper()}");
             Console.ResetColor();
             Console.WriteLine(new string('=', 70));
 
@@ -398,7 +398,7 @@ namespace TIA_Copilot_CLI
                 // TÍNH NĂNG [S] & [H]: XÓA DỮ LIỆU CÓ SPINNER
                 else if (key == 'S' || key == 'H')
                 {
-                    string actionName = key == 'S' ? "TIÊU DIỆT SESSION" : "XÓA LỊCH SỬ CHAT";
+                    string actionName = key == 'S' ? "DELETE SESSION" : "DELETE CHAT HISTORY";
                     Console.WriteLine($"\n\n 👉 Choose [{actionName}].");
                     Console.Write(" >> Enter the session number you want to operate on (Press Enter to Cancel): ");
 
@@ -408,7 +408,7 @@ namespace TIA_Copilot_CLI
 
                         if (key == 'S' && targetSession == "default")
                         {
-                            Program.PrintIcon("×", "TỪ CHỐI: Không được tiêu diệt Session gốc 'default'.", ConsoleColor.Red);
+                            Program.PrintIcon("×", "CANCELLED: Cannot delete the default session.", ConsoleColor.Red);
                             await Task.Delay(1500);
                             continue;
                         }
@@ -461,8 +461,8 @@ namespace TIA_Copilot_CLI
             // Dùng StringBuilder để đúc một file text hoàn chỉnh
             StringBuilder dumpData = new StringBuilder();
             dumpData.AppendLine("==========================================================");
-            dumpData.AppendLine($" TIA COPILOT - DỮ LIỆU BỐI CẢNH (SESSION: {sessionId.ToUpper()})");
-            dumpData.AppendLine($" Thời gian trích xuất: {DateTime.Now:dd/MM/yyyy HH:mm:ss}");
+            dumpData.AppendLine($" TIA COPILOT - CONTEXT DATABASE (SESSION: {sessionId.ToUpper()})");
+            dumpData.AppendLine($" EXPORTED DATE: {DateTime.Now:dd/MM/yyyy HH:mm:ss}");
             dumpData.AppendLine("==========================================================\n");
 
             // --- 1. LẤY I/O TAGS CACHE (LOCAL C#) ---
@@ -475,7 +475,7 @@ namespace TIA_Copilot_CLI
             }
             else
             {
-                dumpData.AppendLine("(Trống - Chưa nạp I/O Tags nào)");
+                dumpData.AppendLine("(Empty - No I/O Tags loaded)");
             }
             dumpData.AppendLine("\n");
 
@@ -484,7 +484,7 @@ namespace TIA_Copilot_CLI
             try
             {
                 var backendTask = AiEngine.CallPythonBackendAsync("", sessionId, "check_spec");
-                string jsonResponse = await RunWithSpinner(backendTask, $"Đang gom dữ liệu từ Vector DB cho Session [{sessionId.ToUpper()}]...", 300);
+                string jsonResponse = await RunWithSpinner(backendTask, $" Gathering data from Vector DB for Session [{sessionId.ToUpper()}]...", 300);
 
                 int startIdx = jsonResponse.IndexOf('{');
                 int endIdx = jsonResponse.LastIndexOf('}');
@@ -501,7 +501,7 @@ namespace TIA_Copilot_CLI
                     // BỘ LỌC THÔNG MINH ĐÃ SỬA
                     if (msg.StartsWith("No current"))
                     {
-                        dumpData.AppendLine("(Trống - Hệ thống chưa nạp tài liệu Spec nào)");
+                        dumpData.AppendLine("(Empty - System has not loaded any Spec documents)");
                     }
                     else
                     {
@@ -510,12 +510,12 @@ namespace TIA_Copilot_CLI
                 }
                 else
                 {
-                    dumpData.AppendLine($"[LỖI TỪ PYTHON]: {obj.message}");
+                    dumpData.AppendLine($"[ERROR FROM PYTHON]: {obj.message}");
                 }
             }
             catch (Exception ex)
             {
-                dumpData.AppendLine($"[LỖI KẾT NỐI PYTHON BACKEND]: {ex.Message}");
+                dumpData.AppendLine($"[CONNECTION ERROR WITH PYTHON BACKEND]: {ex.Message}");
             }
 
             // --- 3. XUẤT FILE VÀ GỌI NOTEPAD ---
@@ -527,10 +527,10 @@ namespace TIA_Copilot_CLI
                 File.WriteAllText(exportPath, dumpData.ToString(), Encoding.UTF8);
 
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"\n[√] Đã trích xuất thành công ra file: {exportFileName}");
+                Console.WriteLine($"\n[√] Successfully exported to file: {exportFileName}");
                 Console.ResetColor();
                 Console.ForegroundColor = ConsoleColor.DarkGray;
-                Console.WriteLine($" Đường dẫn: {exportPath}\n");
+                Console.WriteLine($" Path: {exportPath}\n");
                 Console.ResetColor();
 
                 ProcessStartInfo psi = new ProcessStartInfo
@@ -592,7 +592,7 @@ namespace TIA_Copilot_CLI
                     string fakeJson = Newtonsoft.Json.JsonConvert.SerializeObject(new
                     {
                         status = "error",
-                        message = $"TIMEOUT CRASH: {ex.Message} Hãy kiểm tra lại Server Python!"
+                        message = $"TIMEOUT CRASH: {ex.Message} Please check the Python Server!"
                     });
                     return (T)(object)fakeJson;
                 }
@@ -605,7 +605,7 @@ namespace TIA_Copilot_CLI
                     string fakeJson = Newtonsoft.Json.JsonConvert.SerializeObject(new
                     {
                         status = "error",
-                        message = $"LỖI KẾT NỐI: {ex.Message}"
+                        message = $"CONNECTION ERROR: {ex.Message}"
                     });
                     return (T)(object)fakeJson;
                 }
@@ -753,7 +753,7 @@ namespace TIA_Copilot_CLI
             }
             catch (Exception ex)
             {
-                return $"[ERROR] C# không thể đọc file Word: {ex.Message}";
+                return $"[ERROR] Cannot read Word file: {ex.Message}";
             }
 
             return sb.ToString();

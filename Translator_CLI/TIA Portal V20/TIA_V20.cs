@@ -138,15 +138,15 @@ namespace Middleware_console
         {
             if (_project != null)
             {
-                try 
-                { 
-                    string projectFilePath = _project.Path.FullName; 
+                try
+                {
+                    string projectFilePath = _project.Path.FullName;
                     string projectDirectory = Path.GetDirectoryName(projectFilePath);
 
                     if (Directory.Exists(projectDirectory))
                     {
                         var subDirs = Directory.GetDirectories(projectDirectory);
-                        
+
                         // 1. Tìm folder gốc UserFiles
                         string rootUserFiles = subDirs.FirstOrDefault(d => Path.GetFileName(d).Equals("UserFiles", StringComparison.OrdinalIgnoreCase));
 
@@ -159,7 +159,7 @@ namespace Middleware_console
                             if (!Directory.Exists(_userFilesPath))
                             {
                                 Directory.CreateDirectory(_userFilesPath);
-                                Console.WriteLine("[i] Đã tạo thư mục: UserFiles/CustomControls");
+                                Console.WriteLine("[i] Created folder: UserFiles/CustomControls");
                             }
                         }
 
@@ -167,7 +167,7 @@ namespace Middleware_console
                         return $"Path: {projectFilePath}\nFolders: {string.Join(", ", dirNames)}";
                     }
                     return projectFilePath;
-                } 
+                }
                 catch (Exception ex) { return "Error: " + ex.Message; }
             }
             return "Unknown";
@@ -180,13 +180,13 @@ namespace Middleware_console
             {
                 if (string.IsNullOrEmpty(_userFilesPath))
                 {
-                    Console.WriteLine("[-] Lỗi: Chưa xác định được đường dẫn CustomControls. Hãy chạy GetProjectPath trước.");
+                    Console.WriteLine("[-] Error: CustomControls path not determined. Run GetProjectPath first.");
                     return;
                 }
 
                 if (!File.Exists(sourceFilePath))
                 {
-                    Console.WriteLine("[-] Lỗi: File nguồn không tồn tại.");
+                    Console.WriteLine("[-] Error: Source file does not exist.");
                     return;
                 }
 
@@ -196,11 +196,11 @@ namespace Middleware_console
 
                 File.Copy(sourceFilePath, destinationPath, true);
 
-                Console.WriteLine($"[SUCCESS] Đã add file '{fileName}' vào UserFiles/CustomControls.");
+                Console.WriteLine($"[SUCCESS] Added file '{fileName}' to UserFiles/CustomControls.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[-] Lỗi thao tác file: {ex.Message}");
+                Console.WriteLine($"[-] File operation error: {ex.Message}");
             }
         }
         #endregion
@@ -357,6 +357,7 @@ namespace Middleware_console
                         {
                             if (item == null) continue;
 
+                            // Check if this Item contains Software (WinCC Unified / RT Professional)
                             // Kiểm tra xem Item này có chứa Software (WinCC Unified / RT Professional) không
                             var swContainer = item.GetService<SoftwareContainer>();
 
@@ -385,6 +386,7 @@ namespace Middleware_console
                         // Bỏ qua các thành phần rack/rail
                         if (item.Name.StartsWith("Rail") || item.Name.StartsWith("Rack")) continue;
 
+                        // If item name differs from station name and not a system keyword, it's the CPU
                         // Nếu tên item khác tên trạm và không phải từ khóa hệ thống, đó là CPU
                         if (item.Name != device.Name && !item.Name.ToLower().Contains("station"))
                         {
@@ -397,6 +399,7 @@ namespace Middleware_console
             }
             catch
             {
+                // If any error occurs during scanning, return the most basic name to avoid crash
                 // Nếu có bất kỳ lỗi phát sinh trong quá trình quét, trả về tên cơ bản nhất để không làm sập ứng dụng
                 return device.Name;
             }
@@ -449,47 +452,53 @@ namespace Middleware_console
         // Đảm bảo các hàm này nằm TRONG class TIA_V20
         public string CompileSpecific(string rawDeviceName, bool compileHW, bool compileSW, bool rebuildAll = false)
         {
-            if (_project == null) return "Lớp 0: Chưa kết nối Project.";
+            if (_project == null) return "Layer 0: Project not connected.";
 
+            // 1. SPLIT NAME GET OUTER LAYER (STATION)
             // 1. TÁCH TÊN LẤY LỚP NGOÀI (STATION)
             // Ví dụ: "PC-System_3|HMI_RT_3" -> lấy "PC-System_3"
             string targetStationName = rawDeviceName.Contains("|")
                                     ? rawDeviceName.Split('|')[0]
                                     : rawDeviceName;
 
+            // 2. FIND DEVICE BY PARENT STATION NAME
             // 2. TÌM THIẾT BỊ THEO TÊN TRẠM CHA
             Device device = FindDeviceRecursive(_project, targetStationName);
-            if (device == null) return $"Lớp 1: Không tìm thấy thiết bị '{targetStationName}'.";
+            if (device == null) return $"Layer 1: Device not found '{targetStationName}'.";
 
             StringBuilder sb = new StringBuilder();
-            sb.AppendLine($"--- Đang kiểm tra thiết bị: {targetStationName} ---");
+            sb.AppendLine($"--- Checking device: {targetStationName} ---");
 
+            // 3. SCAN HW LAYER (HARDWARE) - Usually compiled at Device level
             // 3. DÒ LỚP PHẦN CỨNG (HW) - Thường biên dịch ở cấp Device
             if (compileHW)
             {
-                sb.AppendLine("> Đang dò lớp HW...");
+                sb.AppendLine("> Scanning HW layer...");
                 object hwTarget = FindCompilableInDevice(device);
                 if (hwTarget != null)
                     sb.AppendLine(InternalInvoke(hwTarget, "HW", rebuildAll));
                 else
-                    sb.AppendLine("[!] Lớp HW: Thiết bị này không có thực thể biên dịch phần cứng.");
+                    sb.AppendLine("[!] HW Layer: Device has no compilable hardware entity.");
             }
 
+            // 4. SCAN SW LAYER (SOFTWARE)
             // 4. DÒ LỚP PHẦN MỀM (SW)
             if (compileSW)
             {
-                sb.AppendLine("> Đang dò lớp SW...");
+                sb.AppendLine("> Scanning SW layer...");
                 // Hàm FindSoftwareInDevice sẽ tự động quét vào các DeviceItems của 'device'
+                // Function FindSoftwareInDevice will auto scan into DeviceItems of 'device'
                 // để tìm HmiSoftware hoặc PlcSoftware.
                 object swTarget = FindSoftwareInDevice(device);
                 if (swTarget != null)
                     sb.AppendLine(InternalInvoke(swTarget, "SW", rebuildAll));
                 else
-                    sb.AppendLine("[!] Lớp SW: Không tìm thấy khối phần mềm (Software) có thể biên dịch.");
+                    sb.AppendLine("[!] SW Layer: No compilable software block found.");
             }
 
             return sb.ToString();
         }
+        // --- HELPER FUNCTION SCAN EACH LAYER ---
         // --- HÀM BỔ TRỢ DÒ TỪNG LỚP ---
 
         private object FindCompilableInDevice(Device device)
@@ -518,6 +527,7 @@ namespace Middleware_console
         {
             if (obj == null) return false;
             var provider = obj as IServiceProvider;
+            // Check if object provides ICompilable service
             // Kiểm tra xem đối tượng có cung cấp dịch vụ ICompilable không
             return provider?.GetService(typeof(ICompilable)) != null;
         }
@@ -548,10 +558,12 @@ namespace Middleware_console
                     // THỰC THI: Gọi thông qua Interface Mapping
                     var result = method.Invoke(service, new object[] { optionValue });
 
+                    // Get State and print error if any
                     // Lấy State và in lỗi nếu có
                     return FormatCompileResult(result, label);
                 }
 
+                // If still not found, try calling Compile() without parameters (Changes only)
                 // Nếu vẫn không thấy, thử gọi hàm Compile() không tham số (Changes only)
                 var simpleMethod = interfaceType.GetMethod("Compile", Type.EmptyTypes);
                 if (simpleMethod != null)
@@ -560,7 +572,7 @@ namespace Middleware_console
                     return FormatCompileResult(result, label);
                 }
 
-                return $"{label}: Lỗi ánh xạ Interface (V20 Method Hidden).";
+                return $"{label}: Interface mapping error (V20 Method Hidden).";
             }
             catch (Exception ex)
             {
@@ -573,6 +585,7 @@ namespace Middleware_console
         {
             if (result == null) return $"{label}: \u001b[31mResult object is null\u001b[0m";
 
+            // Wait a bit for TIA Portal to dump data into Messages (Fix lost message when Rebuild)
             // Đợi 1 chút để TIA Portal đổ dữ liệu Messages vào (Fix lỗi mất tin nhắn khi Rebuild)
             System.Threading.Thread.Sleep(200);
 
@@ -598,7 +611,7 @@ namespace Middleware_console
                     PrintMessagesRecursive(m, sb, 1);
                 }
                 if (!hasMessages && state == "Error")
-                    sb.AppendLine("   \u001b[33mℹ [!] Lỗi hệ thống nhưng không có tin nhắn chi tiết (Kiểm tra Log TIA).\u001b[0m");
+                    sb.AppendLine("   \u001b[33mℹ [!] System error but no detailed message (Check TIA Log).\u001b[0m");
             }
 
             return sb.ToString();
@@ -623,6 +636,7 @@ namespace Middleware_console
                 string colorCode = "";
                 string icon = "";
 
+                // Define ANSI colors
                 // Định nghĩa màu ANSI
                 switch (type)
                 {
@@ -646,7 +660,7 @@ namespace Middleware_console
 
                 string resetCode = "\u001b[0m";
 
-                // Format dòng tin nhắn: [Icon] Path: Description (Có màu)
+                // Format message: [Icon] Path: Description (With color)
                 sb.AppendLine($"{indent}{colorCode}{icon} {path}{resetCode}: {desc}");
             }
 
@@ -671,21 +685,24 @@ namespace Middleware_console
         // Thêm tham số selectedDevice vào hàm
         public void GenerateScadaProject(ScadaProjectModel projectData, string selectedDeviceFromCli = null)
         {
-            if (_project == null) throw new Exception("Chưa kết nối hoặc mở dự án TIA Portal.");
+            if (_project == null) throw new Exception("Project not connected or opened in TIA Portal.");
 
+            // STEP 0: PRIORITIZE NAME FROM CLI
             // BƯỚC 0: ƯU TIÊN LẤY TÊN TỪ CLI
             string rawDeviceName = !string.IsNullOrEmpty(selectedDeviceFromCli)
                                 ? selectedDeviceFromCli
                                 : projectData.DeviceName;
 
+            // LOGIC SPLIT NAME: Get FIRST part (Index 0) to draw at Station/Device level
             // LOGIC TÁCH TÊN: Lấy phần ĐẦU (Index 0) để vẽ lên cấp Station/Device
             // Ví dụ: "PC-System_3|HMI_RT_3" -> lấy "PC-System_3"
             string targetForDrawing = rawDeviceName.Contains("|")
                                     ? rawDeviceName.Split('|')[0]
                                     : rawDeviceName;
 
-            Console.WriteLine($"\n>>> ĐANG KHỞI TẠO DỰ ÁN SCADA TRÊN THIẾT BỊ (STATION): {targetForDrawing} <<<");
+            Console.WriteLine($"\n>>> INITIALIZING SCADA PROJECT ON DEVICE (STATION): {targetForDrawing} <<<");
 
+            // STEP 1: DRAW ALL SCREENS
             // BƯỚC 1: VẼ TOÀN BỘ MÀN HÌNH
             foreach (var screen in projectData.Screens)
             {
@@ -693,28 +710,30 @@ namespace Middleware_console
                 {
                     // Truyền targetForDrawing (PC-System_3) vào hàm vẽ
                     GenerateScadaScreenFromData(targetForDrawing, screen);
-                    Console.WriteLine($"[SUCCESS] Đã vẽ xong màn hình: {screen.ScreenName}");
+                    Console.WriteLine($"[SUCCESS] Finished drawing screen: {screen.ScreenName}");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[!] Lỗi khi vẽ màn hình {screen.ScreenName}: {ex.Message}");
+                    Console.WriteLine($"[!] Error drawing screen {screen.ScreenName}: {ex.Message}");
                 }
             }
 
+            // STEP 2: SAVE PROJECT
             // BƯỚC 2: LƯU DỰ ÁN
             try { _project.Save(); } catch { }
 
+            // STEP 3: SPECIFY START SCREEN
             // BƯỚC 3: CHỈ ĐỊNH MÀN HÌNH CHÍNH
             string startScreenName = !string.IsNullOrEmpty(projectData.StartScreenName)
                                     ? projectData.StartScreenName
                                     : (projectData.Screens.FirstOrDefault()?.ScreenName ?? "Main_Process");
 
-            Console.WriteLine($"[i] Đang cấu hình màn hình khởi động: {startScreenName}...");
+            Console.WriteLine($"[i] Configuring start screen: {startScreenName}...");
 
             // Gán StartScreen cũng dùng tên Trạm cha
             SetStartScreen(targetForDrawing, startScreenName);
 
-            Console.WriteLine("\n>>> TẤT CẢ MÀN HÌNH ĐÃ ĐƯỢC VẼ VÀ CẤU HÌNH THÀNH CÔNG! <<<");
+            Console.WriteLine("\n>>> ALL SCREENS DRAWN AND CONFIGURED SUCCESSFULLY! <<<");
         }
 
         private void SetStartScreen(string deviceName, string screenName)
@@ -730,36 +749,38 @@ namespace Middleware_console
                     if (swContainer != null && swContainer.Software is HmiSoftware hmiSw)
                     {
                         // VỚI UNIFIED: StartScreen nằm trong RuntimeSettings -> General
-                        try 
+                        try
                         {
                             // 1. Truy cập vào RuntimeSettings
                             var rtSettings = hmiSw.RuntimeSettings;
-                            
+
                             // 2. Với Unified, thuộc tính này thường nằm ở mục "General"
                             // Tên chính xác của Attribute thường là "StartScreen" hoặc "DefaultStartScreen"
                             rtSettings.SetAttribute("StartScreen", screenName);
-                            
-                            Console.WriteLine($"[SUCCESS] Runtime Settings: Đã gán '{screenName}' làm màn hình khởi động.");
+
+                            Console.WriteLine($"[SUCCESS] Runtime Settings: Assigned '{screenName}' as start screen.");
                             _project.Save();
                             return;
                         }
                         catch (Exception exInner)
                         {
                             // Fallback: Một số bản V20 yêu cầu gán qua tên đầy đủ trong cấu trúc Folder
-                            try {
+                            try
+                            {
                                 dynamic dynRt = hmiSw.RuntimeSettings;
                                 dynRt.General.StartScreen = screenName;
-                                Console.WriteLine($"[SUCCESS] Runtime General: Đã gán '{screenName}' thành công.");
+                                Console.WriteLine($"[SUCCESS] Runtime General: Successfully assigned '{screenName}'.");
                                 return;
                             }
-                            catch {
-                                Console.WriteLine($"[-] Không tìm thấy thuộc tính StartScreen trong Runtime Settings: {exInner.Message}");
+                            catch
+                            {
+                                Console.WriteLine($"[-] StartScreen attribute not found in Runtime Settings: {exInner.Message}");
                             }
                         }
                     }
                 }
             }
-            catch (Exception ex) { Console.WriteLine($"[-] Lỗi gán StartScreen tổng quát: {ex.Message}"); }
+            catch (Exception ex) { Console.WriteLine($"[-] Generic StartScreen assignment error: {ex.Message}"); }
         }
 
 
@@ -767,7 +788,7 @@ namespace Middleware_console
         {
             // 1. TÌM TRẠM CHA (Syrup_scada)
             Device device = FindDeviceRecursive(_project, deviceName);
-            if (device == null) throw new Exception($"Không tìm thấy thiết bị: {deviceName}");
+            if (device == null) throw new Exception($"Device not found: {deviceName}");
 
             // 2. TÌM HMI SOFTWARE CHUẨN UNIFIED
             HmiSoftware hmiSoftware = null;
@@ -781,7 +802,7 @@ namespace Middleware_console
                 }
             }
 
-            if (hmiSoftware == null) throw new Exception("Trạm không chứa thành phần WinCC Unified.");
+            if (hmiSoftware == null) throw new Exception("Station does not contain WinCC Unified component.");
 
             // 3. TRUY CẬP SCREENS (Trong Unified dùng hmiSoftware.Screens)
             var screens = hmiSoftware.Screens;
@@ -791,7 +812,7 @@ namespace Middleware_console
             if (existing != null) existing.Delete();
 
             // 5. TẠO MÀN HÌNH MỚI
-            Console.WriteLine($"   -> Đang tạo màn hình Unified: {screenData.ScreenName}");
+            Console.WriteLine($"   -> Creating Unified screen: {screenData.ScreenName}");
             var res = screens.Create(screenData.ScreenName);
 
             // 6. GÁN THUỘC TÍNH (Unified V20 yêu cầu uint)
@@ -828,7 +849,7 @@ namespace Middleware_console
             // 1. Dictionary dùng chung để lưu "xác" vật thể phục vụ nạp Tag ở GĐ 2
             var createdObjects = new Dictionary<string, dynamic>();
 
-            Console.WriteLine("\n>> [GIAI ĐOẠN 1] Dựng hình & Gán tọa độ thực...");
+            Console.WriteLine("\n>> [STAGE #1] Creating shape and assign attributes...");
 
             foreach (var item in items)
             {
@@ -853,16 +874,16 @@ namespace Middleware_console
                         {
                             typeId = "HmiText";
                         }
-                        else if (typeId.Contains("HmiToggleSwitch")) 
+                        else if (typeId.Contains("HmiToggleSwitch"))
                         {
                             // LUÔN LUÔN tạo bằng cái tên gốc này
-                            typeId = "HmiToggleSwitch"; 
+                            typeId = "HmiToggleSwitch";
                         }
-                        else if (!typeId.StartsWith("Hmi")) 
+                        else if (!typeId.StartsWith("Hmi"))
                         {
                             typeId = "Hmi" + typeId;
                         }
-                       
+
 
                         // Gọi lệnh Create
                         try
@@ -1008,69 +1029,74 @@ namespace Middleware_console
                                 try { newItemPart.SetAttribute("Text", itemText); } catch { }
                             }
                             else if (typeId == "HmiToggleSwitch")
-{
-    try 
-    {
-        // Lấy tên Tag từ JSON (Ưu tiên BindTag, nếu không có thì lấy trong Properties)
-        string targetTag = !string.IsNullOrEmpty(item.BindTag) 
-                           ? item.BindTag 
-                           : (item.Properties.ContainsKey("TagColor") ? item.Properties["TagColor"].ToString() : "");
+                            {
+                                try
+                                {
+                                    // Lấy tên Tag từ JSON (Ưu tiên BindTag, nếu không có thì lấy trong Properties)
+                                    string targetTag = !string.IsNullOrEmpty(item.BindTag)
+                                                       ? item.BindTag
+                                                       : (item.Properties.ContainsKey("TagColor") ? item.Properties["TagColor"].ToString() : "");
 
-        if (string.IsNullOrEmpty(targetTag))
-        {
-            Console.WriteLine($"      [!] Cảnh báo: {item.Name} không có BindTag trong JSON.");
-        }
+                                    if (string.IsNullOrEmpty(targetTag))
+                                    {
+                                        Console.WriteLine($"      [!] Cảnh báo: {item.Name} không có BindTag trong JSON.");
+                                    }
 
-        // 1. Ép Style
-        try { newItem.SetAttribute("StyleItem", item.Type); } catch { }
+                                    // 1. Ép Style
+                                    try { newItem.SetAttribute("StyleItem", item.Type); } catch { }
 
-        // 2. Tọa độ & Kích thước (Dùng Convert để an toàn)
-        newItem.SetAttribute("Left", Convert.ToInt32(item.Properties["Left"]));
-        newItem.SetAttribute("Top", Convert.ToInt32(item.Properties["Top"]));
-        newItem.SetAttribute("Width", Convert.ToUInt32(item.Properties["Width"]));
-        newItem.SetAttribute("Height", Convert.ToUInt32(item.Properties["Height"]));
+                                    // 2. Tọa độ & Kích thước (Dùng Convert để an toàn)
+                                    newItem.SetAttribute("Left", Convert.ToInt32(item.Properties["Left"]));
+                                    newItem.SetAttribute("Top", Convert.ToInt32(item.Properties["Top"]));
+                                    newItem.SetAttribute("Width", Convert.ToUInt32(item.Properties["Width"]));
+                                    newItem.SetAttribute("Height", Convert.ToUInt32(item.Properties["Height"]));
 
-        // 3. Thiết lập trạng thái ban đầu
-        if (item.Properties.ContainsKey("SwitchState")) {
-            bool val = Convert.ToBoolean(item.Properties["SwitchState"]);
-            try { newItem.SetAttribute("SwitchState", val); } 
-            catch { try { newItem.SetAttribute("ProcessValue", val); } catch { } }
-        }
+                                    // 3. Thiết lập trạng thái ban đầu
+                                    if (item.Properties.ContainsKey("SwitchState"))
+                                    {
+                                        bool val = Convert.ToBoolean(item.Properties["SwitchState"]);
+                                        try { newItem.SetAttribute("SwitchState", val); }
+                                        catch { try { newItem.SetAttribute("ProcessValue", val); } catch { } }
+                                    }
 
-        // 4. GẮN EVENT "STATUS CHANGED" (Đọc động targetTag)
-        if (!string.IsNullOrEmpty(targetTag))
-        {
-            try {
-                // Thay "k1" bằng biến targetTag
-                string jsCode = $@"Tags(""{targetTag}"").Write(item.IsAlternateState);";
-                
-                var eventData = new System.Dynamic.ExpandoObject() as IDictionary<string, object>;
-                eventData.Add("StateChanged", jsCode); 
+                                    // 4. GẮN EVENT "STATUS CHANGED" (Đọc động targetTag)
+                                    if (!string.IsNullOrEmpty(targetTag))
+                                    {
+                                        try
+                                        {
+                                            // Thay "k1" bằng biến targetTag
+                                            string jsCode = $@"Tags(""{targetTag}"").Write(item.IsAlternateState);";
 
-                ProcessStatusScripts(newItem, item.Name, eventData);
-            } 
-            catch (Exception ex) { 
-                Console.WriteLine($"      [!] Lỗi gắn Event cho {item.Name}: {ex.Message}"); 
-            }
+                                            var eventData = new System.Dynamic.ExpandoObject() as IDictionary<string, object>;
+                                            eventData.Add("StateChanged", jsCode);
 
-            // 5. GẮN DYNAMIZATION ĐỔI MÀU (BackColor - Đọc động targetTag)
-            try {
-                string colorOn = (item.Type == "HmiToggleSwitchInverted") ? "255, 0, 0" : "0, 200, 80";
-                
-                // Thay "k1" bằng biến targetTag
-                string colorScript = $@"var v = Tags(""{targetTag}"").Read();
+                                            ProcessStatusScripts(newItem, item.Name, eventData);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            Console.WriteLine($"      [!] Error assigning event to {item.Name}: {ex.Message}");
+                                        }
+
+                                        // 5. GẮN DYNAMIZATION ĐỔI MÀU (BackColor - Đọc động targetTag)
+                                        try
+                                        {
+                                            string colorOn = (item.Type == "HmiToggleSwitchInverted") ? "255, 0, 0" : "0, 200, 80";
+
+                                            // Thay "k1" bằng biến targetTag
+                                            string colorScript = $@"var v = Tags(""{targetTag}"").Read();
     return v ? HMIRuntime.Math.RGB({colorOn}) : HMIRuntime.Math.RGB(242, 244, 255);";
-                
-                BindTagToBasicWithStates(newItem, targetTag, "BackColor", colorScript);
-            } catch { }
-        }
 
-        Console.WriteLine($"      [SUCCESS] Đã dựng & gán Logic cho {item.Name} với Tag: {targetTag}");
-    }
-    catch (Exception ex) { Console.WriteLine($"      [!] Lỗi gán thuộc tính {item.Name}: {ex.Message}"); }
-}
-                            
-                            else if (typeId == "HmiText" || lowerType.Contains("button")) 
+                                            BindTagToBasicWithStates(newItem, targetTag, "BackColor", colorScript);
+                                        }
+                                        catch { }
+                                    }
+
+                                    Console.WriteLine($"      [SUCCESS] Created {item.Name} with Tag: {targetTag}");
+                                }
+                                catch (Exception ex) { Console.WriteLine($"      [!] Error assigning attributes to {item.Name}: {ex.Message}"); }
+                            }
+
+                            else if (typeId == "HmiText" || lowerType.Contains("button"))
                             {
                                 try
                                 {
@@ -1169,7 +1195,7 @@ namespace Middleware_console
                                 }
                                 catch (Exception ex)
                                 {
-                                    Console.WriteLine($"      [!] Lỗi tổng quát tại {item.Name}: {ex.Message}");
+                                    Console.WriteLine($"      [!] Generic error at {item.Name}: {ex.Message}");
                                 }
                             }
                         }
@@ -1182,7 +1208,7 @@ namespace Middleware_console
                         {
                             ProcessButtonScripts(newItem, item.Name, item.Properties["Scripts"]);
                         }
-                        Console.WriteLine($"      [OK] Đã dựng xác: {item.Name}");
+                        Console.WriteLine($"      [OK] Created successfully: {item.Name}");
                     }
                 }
                 catch (Exception ex)
@@ -1195,22 +1221,22 @@ namespace Middleware_console
                         realError = realError.InnerException;
                     }
 
-                    Console.WriteLine($"\n[!] LỖI CHI TIẾT TẠI {item.Name}:");
-                    Console.WriteLine($"    -> Thông báo: {realError.Message}");
-                    
+                    Console.WriteLine($"\n[!] Error at {item.Name}:");
+                    Console.WriteLine($"    -> Notification: {realError.Message}");
+
                     // Nếu là lỗi phân quyền hoặc không tìm thấy khuôn mẫu
                     if (realError.Message.Contains("TypeIdentifier"))
                     {
-                        Console.WriteLine("    [Gợi ý] TypeIdentifier không hợp lệ. Hãy kiểm tra SubType trong JSON.");
+                        Console.WriteLine("    [!] TypeIdentifier is not valid. Check SubType in JSON.");
                     }
                     else if (realError.Message.Contains("Access denied"))
                     {
-                        Console.WriteLine("    [Gợi ý] TIA Portal chặn quyền tạo đối tượng. Hãy chạy CLI với quyền Admin.");
+                        Console.WriteLine("    [!] TIA Portal block access denied. Check access permissions of Administrator.");
                     }
                 }
             }
 
-            Console.WriteLine("\n>> [GIAI ĐOẠN 2] Nạp linh hồn THẬT...");
+            Console.WriteLine("\n>> [STAGE #2] Binding Tags...");
 
             foreach (var item in items)
             {
@@ -1221,23 +1247,50 @@ namespace Middleware_console
                 // Trích xuất Tag
                 string tag = item.Properties.ContainsKey("Tag") ? item.Properties["Tag"].ToString() :
                             item.Properties.ContainsKey("StatusTag") ? item.Properties["StatusTag"].ToString() :
+                            item.Properties.ContainsKey("ProcessValue") ? item.Properties["ProcessValue"].ToString() :
                             item.Properties.ContainsKey("LevelTag") ? item.Properties["LevelTag"].ToString() : "";
 
                 if (string.IsNullOrEmpty(tag)) continue;
 
                 // --- PHÂN LUỒNG NẠP TAG ---
 
+                if (realType.Contains("IoField") || item.Type.Contains("IOField"))
+                {
+                    try
+                    {
+                        // CÁCH SỬA 1: Ép về kiểu Int32 (số nguyên) thay vì Double
+                        // Siemens V20 thường chấp nhận Int32 làm giá trị khởi tạo cho ProcessValue
+                        try
+                        {
+                            dynItem.SetAttribute("ProcessValue", (int)0);
+                        }
+                        catch
+                        {
+                            // Nếu Int32 vẫn lỗi, hãy thử gán chuỗi rỗng
+                            try { dynItem.SetAttribute("ProcessValue", ""); } catch { }
+                        }
+
+                        // Gọi hàm Bind Tag (Linh hồn)
+                        BindTagToBasic(dynItem, tag, "ProcessValue");
+                        Console.WriteLine($"      => [FIXED IO] {item.Name} -> {tag}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"      [!] Error loading tag IO Field {item.Name}: {ex.Message}");
+                    }
+                }
+
                 // 1. NHÓM HÌNH KHỐI (Rectangle, Circle, EllipseSegment, CircularArc)
                 if (realType.Contains("Rectangle") || realType.Contains("Circle") || realType.Contains("EllipseSegment"))
                 {
                     string customScript = item.Properties.ContainsKey("ColorScript") ? item.Properties["ColorScript"].ToString() : "";
                     BindTagToBasicWithStates(dynItem, tag, "BackColor", customScript);
-                    Console.WriteLine($"      => [THẬT BACK] {item.Name} -> {tag}");
+                    Console.WriteLine($"      => [BINDED] {item.Name} -> {tag}");
                 }
                 else if (realType.Contains("CircularArc"))
                 {
                     BindTagToBasic(dynItem, tag, "LineColor");
-                    Console.WriteLine($"      => [THẬT LINE] {item.Name} -> {tag}");
+                    Console.WriteLine($"      => [BINDED] {item.Name} -> {tag}");
                 }
 
                 // 2. NHÓM WIDGET (Thư viện)
@@ -1248,11 +1301,11 @@ namespace Middleware_console
                         foreach (dynamic m in dynItem.Interface)
                         {
                             // 1. Tick chọn DisplayFillLevel (True)
-                        if (m.PropertyName == "DisplayFillLevel")
+                            if (m.PropertyName == "DisplayFillLevel")
                             {
                                 // Nếu trong JSON có định nghĩa thì lấy giá trị đó, nếu không có thì mặc định là true
-                                bool displayLevel = item.Properties.ContainsKey("DisplayFillLevel") 
-                                                    ? Convert.ToBoolean(item.Properties["DisplayFillLevel"]) 
+                                bool displayLevel = item.Properties.ContainsKey("DisplayFillLevel")
+                                                    ? Convert.ToBoolean(item.Properties["DisplayFillLevel"])
                                                     : true;
                                 m.Value = displayLevel;
                             }
@@ -1260,8 +1313,8 @@ namespace Middleware_console
                             else if (m.PropertyName == "DisplayFillMode")
                             {
                                 // Nếu trong JSON có định nghĩa thì lấy, không thì mặc định là 0 (hoặc 1 tùy ý bạn)
-                                int fillMode = item.Properties.ContainsKey("DisplayFillMode") 
-                                                ? Convert.ToInt32(item.Properties["DisplayFillMode"]) 
+                                int fillMode = item.Properties.ContainsKey("DisplayFillMode")
+                                                ? Convert.ToInt32(item.Properties["DisplayFillMode"])
                                                 : 0;
                                 m.Value = fillMode;
                             }
@@ -1273,7 +1326,7 @@ namespace Middleware_console
                             }
                         }
                     }
-                    
+
                     string targetProp = item.Type.Contains("Tank") ? "FillLevelColor" : "BasicColor";
                     string customScript = item.Properties.ContainsKey("ColorScript") ? item.Properties["ColorScript"].ToString() : "";
                     foreach (dynamic m in dynItem.Interface)
@@ -1282,7 +1335,7 @@ namespace Middleware_console
                         {
                             if (item.Type.Contains("Motor")) BindScriptToWidget(m, tag, customScript);
                             else BindTagToWidget(m, tag);
-                            Console.WriteLine($"      => [THẬT WIDGET] {item.Name} -> {tag}");
+                            Console.WriteLine($"      => [BINDED WIDGET] {item.Name} -> {tag}");
                             break;
                         }
                     }
@@ -1295,24 +1348,24 @@ namespace Middleware_console
                         realType.Contains("RadioButton"))
                 {
                     BindTagToBasic(dynItem, tag, "ProcessValue");
-                    Console.WriteLine($"      => [THẬT ELEMENT] {item.Name} ({realType}) -> {tag}");
+                    Console.WriteLine($"      => [BINDED ELEMENT] {item.Name} ({realType}) -> {tag}");
                 }
 
                 // 4. NHÓM VĂN BẢN (TextBox)
                 else if (realType.Contains("TextBox"))
                 {
                     BindTagToBasic(dynItem, tag, "Text");
-                    Console.WriteLine($"      => [THẬT TEXT] {item.Name} -> {tag}");
+                    Console.WriteLine($"      => [BINDED TEXT] {item.Name} -> {tag}");
                 }
                 else if (realType.Contains("Text") || realType.Equals("HmiText"))
                 {
                     // Với HmiText, thuộc tính cần Bind Tag thường là "Text" 
                     // Nhưng lưu ý: Bind Tag vào Text của Unified đôi khi cần trỏ sâu vào Resource
                     BindTagToBasic(dynItem, tag, "Text");
-                    Console.WriteLine($"      => [THẬT TEXT] {item.Name} -> {tag}");
+                    Console.WriteLine($"      => [BINDED TEXT] {item.Name} -> {tag}");
                 }
             }
-            Console.WriteLine("[SUCCESS] Vẽ và nạp linh hồn hoàn tất!");
+            Console.WriteLine("[SUCCESS] DRAWING AND BINDING TAGS COMPLETE!");
         }
         private IEngineeringObject CreateBaseItem(dynamic composition, string typeName, string name)
         {
@@ -1326,7 +1379,7 @@ namespace Middleware_console
 
             if (targetType == null)
             {
-                Console.WriteLine($"[!] Không tìm thấy Type: {typeName}");
+                Console.WriteLine($"[!] Type not found: {typeName}");
                 return null;
             }
 
@@ -1342,7 +1395,7 @@ namespace Middleware_console
                 {
                     var tagDyn = method.MakeGenericMethod(tagType).Invoke(item.Dynamizations, new object[] { propName });
                     ((dynamic)tagDyn).Tag = tagName;
-                    Console.WriteLine($"      => [THẬT] Basic Tag: {tagName}");
+                    Console.WriteLine($"      => [BINDED] Basic Tag: {tagName}");
                 }
             }
             catch { }
@@ -1359,8 +1412,10 @@ namespace Middleware_console
             if (enumType == null) return;
 
             // QUAN TRỌNG: Duyệt qua các thuộc tính của đối tượng JSON
-            foreach (var scriptEntry in scriptsJson) {
-                try {
+            foreach (var scriptEntry in scriptsJson)
+            {
+                try
+                {
                     // Nếu dùng Newtonsoft.Json, scriptEntry sẽ có Name và Value
                     string evName = scriptEntry.Name;
                     string jsCode = scriptEntry.Value.ToString();
@@ -1369,22 +1424,27 @@ namespace Middleware_console
                     dynamic handler = null;
 
                     // Tìm hoặc tạo Handler
-                    foreach (dynamic h in dynItem.EventHandlers) {
+                    foreach (dynamic h in dynItem.EventHandlers)
+                    {
                         if (h.EventType.ToString() == evName) { handler = h; break; }
                     }
 
-                    if (handler == null) {
+                    if (handler == null)
+                    {
                         var method = dynItem.EventHandlers.GetType().GetMethod("Create", new Type[] { enumType });
                         handler = method.Invoke(dynItem.EventHandlers, new object[] { evEnum });
                     }
 
-                    if (handler != null && handler.Script != null) {
+                    if (handler != null && handler.Script != null)
+                    {
                         handler.Script.ScriptCode = jsCode;
                         Console.WriteLine($"      [SCRIPT OK] {itemName} {evName} -> Code Loaded");
                     }
-                } catch (Exception ex) {
+                }
+                catch (Exception ex)
+                {
                     // Log này sẽ báo cho Otis biết nếu evName không khớp với Enum KeyDown/KeyUp
-                    Console.WriteLine($"      [!] Bỏ qua Script không hợp lệ: {ex.Message}");
+                    Console.WriteLine($"      [!] Skipping Invalid Script: {ex.Message}");
                 }
             }
         }
@@ -1396,36 +1456,42 @@ namespace Middleware_console
             var eventHandlers = dynItem.EventHandlers;
             // FIX CS1977: Ép kiểu GetMethods() về MethodInfo[]
             var methods = (System.Reflection.MethodInfo[])eventHandlers.GetType().GetMethods();
-            
-            var createMethod = methods.FirstOrDefault(m => 
-                m.Name == "Create" && 
+
+            var createMethod = methods.FirstOrDefault(m =>
+                m.Name == "Create" &&
                 m.GetParameters().Length == 1);
 
             if (createMethod == null) return;
-            
+
             Type enumType = createMethod.GetParameters()[0].ParameterType;
 
-            foreach (var scriptEntry in (IDictionary<string, object>)scriptsJson) 
+            foreach (var scriptEntry in (IDictionary<string, object>)scriptsJson)
             {
-                try {
+                try
+                {
                     string evName = scriptEntry.Key;
                     string jsCode = scriptEntry.Value.ToString();
 
                     object evEnum;
-                    try {
+                    try
+                    {
                         evEnum = Enum.Parse(enumType, evName);
-                    } catch {
+                    }
+                    catch
+                    {
                         evEnum = Enum.Parse(enumType, evName.Replace(" ", ""));
                     }
 
                     dynamic handler = null;
                     // FIX CS1977: Ép kiểu eventHandlers về IEnumerable<dynamic>
                     var handlersList = (System.Collections.IEnumerable)eventHandlers;
-                    foreach (dynamic h in handlersList) {
+                    foreach (dynamic h in handlersList)
+                    {
                         if (h.EventType.Equals(evEnum)) { handler = h; break; }
                     }
 
-                    if (handler == null) {
+                    if (handler == null)
+                    {
                         handler = createMethod.Invoke(eventHandlers, new object[] { evEnum });
                     }
 
@@ -1434,8 +1500,10 @@ namespace Middleware_console
                         handler.Script.ScriptCode = jsCode;
                         Console.WriteLine($"      [SCRIPT OK] {itemName} [{evName}] -> Loaded");
                     }
-                } catch (Exception ex) {
-                    Console.WriteLine($"      [!] Bỏ qua Event [{scriptEntry.Key}]: {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"      [!] Skipping Invalid Event [{scriptEntry.Key}]: {ex.Message}");
                 }
             }
         }
@@ -1513,7 +1581,7 @@ namespace Middleware_console
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"      [!] Lỗi nạp Script tại {item.Name}: {ex.Message}");
+                Console.WriteLine($"      [!] Error loading script at {item.Name}: {ex.Message}");
             }
         }
 
@@ -1552,7 +1620,7 @@ namespace Middleware_console
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"      [!] Lỗi Widget Script: {ex.Message}");
+                Console.WriteLine($"      [!] Widget script error: {ex.Message}");
             }
         }
         public void BindTagToWidget(dynamic member, string tagName)
@@ -1578,7 +1646,7 @@ namespace Middleware_console
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"      [!] Lỗi Widget Tag: {ex.Message}");
+                Console.WriteLine($"      [!] Widget tag error: {ex.Message}");
             }
         }
 
@@ -1692,11 +1760,11 @@ namespace Middleware_console
         #region 7. WinCC Unified: Connection & Tag Import
         public string CreateUnifiedConnectionCombined(string hmiName, string hmiIp, string plcIp)
         {
-            if (_project == null) return "Project chưa mở.";
+            if (_project == null) return "Project not opened.";
             try
             {
                 Device hmiDevice = FindDeviceRecursive(_project, hmiName);
-                if (hmiDevice == null) return $"[ERROR] Không tìm thấy thiết bị: {hmiName}";
+                if (hmiDevice == null) return $"[ERROR] Device not found: {hmiName}";
 
                 // 1. Lấy HmiSoftware chuẩn Unified
                 HmiSoftware hmiSoftware = null;
@@ -1710,7 +1778,7 @@ namespace Middleware_console
                     }
                 }
 
-                if (hmiSoftware == null) return "[ERROR] Không tìm thấy vùng HMI Software.";
+                if (hmiSoftware == null) return "[ERROR] HMI Software area not found.";
 
                 // 2. LOGIC TỰ TĂNG TÊN CONNECTION
                 var connections = hmiSoftware.Connections;
@@ -1761,7 +1829,7 @@ namespace Middleware_console
             {
                 if (!System.IO.File.Exists(csvPath))
                 {
-                    Console.WriteLine($"[ERROR] Không tìm thấy file CSV tại: {csvPath}");
+                    Console.WriteLine($"[ERROR] CSV file not found at: {csvPath}");
                     return;
                 }
 
@@ -1774,7 +1842,7 @@ namespace Middleware_console
                 Device pcStation = FindDeviceRecursive(_project, hmiName);
                 if (pcStation == null)
                 {
-                    Console.WriteLine($"[ERROR] Không tìm thấy thiết bị: {stationName}");
+                    Console.WriteLine($"[ERROR] Device not found: {stationName}");
                     return;
                 }
 
@@ -1796,7 +1864,7 @@ namespace Middleware_console
 
                 if (software == null)
                 {
-                    Console.WriteLine($"[ERROR] Không tìm thấy vùng chứa HMI Tags (HmiSoftware) trong {runtimeName}.");
+                    Console.WriteLine($"[ERROR] HMI Tags container (HmiSoftware) not found in {runtimeName}.");
                     return;
                 }
 
@@ -1807,7 +1875,7 @@ namespace Middleware_console
                 string[] lines = System.IO.File.ReadAllLines(csvPath);
                 int successCount = 0;
 
-                Console.WriteLine($"\n[i] Bắt đầu nạp Tags vào {runtimeName}...");
+                Console.WriteLine($"\n[i] Starting tag import to {runtimeName}...");
 
                 for (int i = 1; i < lines.Length; i++)
                 {
@@ -1855,11 +1923,11 @@ namespace Middleware_console
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"   [X] Lỗi tại dòng {i + 1} ({tagName}): {ex.Message}");
+                        Console.WriteLine($"   [X] Error at line {i + 1} ({tagName}): {ex.Message}");
                     }
                 }
 
-                Console.WriteLine($"\n[SUCCESS] Hoàn thành! Đã nạp thành công {successCount}/{lines.Length - 1} tags.");
+                Console.WriteLine($"\n[SUCCESS] Complete! Successfully loaded {successCount}/{lines.Length - 1} tags.");
             }
             catch (Exception ex)
             {
@@ -1875,7 +1943,7 @@ namespace Middleware_console
             {
                 if (!System.IO.File.Exists(csvPath))
                 {
-                    Console.WriteLine($"[ERROR] Không tìm thấy file: {csvPath}"); return;
+                    Console.WriteLine($"[ERROR] File not found: {csvPath}"); return;
                 }
 
                 Device plcDevice = FindDeviceRecursive(_project, plcName);
@@ -1921,14 +1989,14 @@ namespace Middleware_console
                         }
 
                         successCount++;
-                        Console.WriteLine($"[INFO] Line {i + 1}: Đã nạp {tagName} vào bảng {tablePath}");
+                        Console.WriteLine($"[INFO] Line {i + 1}: Loaded {tagName} to table {tablePath}");
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[ERROR] Dòng {i + 1} ({tagName}): {ex.Message}");
+                        Console.WriteLine($"[ERROR] Line {i + 1} ({tagName}): {ex.Message}");
                     }
                 }
-                Console.WriteLine($"[SUCCESS] Hoàn thành! Đã nạp {successCount} tags vào PLC {plcName}.");
+                Console.WriteLine($"[SUCCESS] Complete! Loaded {successCount} tags to PLC {plcName}.");
             }
             catch (Exception ex) { Console.WriteLine($"[ERROR] Fatal: {ex.Message}"); }
         }
@@ -1936,7 +2004,7 @@ namespace Middleware_console
 
         public string EnableLoggingForTag(string hmiName, string tagName, string dataLogName)
         {
-            if (_project == null) return "[ERROR] Project chưa mở.";
+            if (_project == null) return "[ERROR] Project not opened.";
 
             try
             {
@@ -1946,7 +2014,7 @@ namespace Middleware_console
                 // 1. Tìm Tag cần Log trong Default tag table
                 var table = software.TagTables.Find("Default tag table");
                 var hmiTag = table.Tags.Find(tagName);
-                if (hmiTag == null) return $"[ERROR] Không tìm thấy Tag: {tagName}";
+                if (hmiTag == null) return $"[ERROR] Tag not found: {tagName}";
 
                 // 2. Truy cập danh sách LoggingTags của Tag đó
                 var loggingTags = hmiTag.LoggingTags;
@@ -1968,11 +2036,11 @@ namespace Middleware_console
                 // Nếu muốn làm mượt dữ liệu (Smoothing)
                 newLoggingTag.SetAttribute("SmoothingMode", 0); // 0 = NoSmoothing
 
-                return $"[SUCCESS] Đã kích hoạt Data Log cho Tag '{tagName}' vào bảng '{dataLogName}'";
+                return $"[SUCCESS] Enabled Data Log for tag '{tagName}' in table '{dataLogName}'";
             }
             catch (Exception ex)
             {
-                return $"[ERROR] Lỗi Logging: {ex.Message}";
+                return $"[ERROR] Logging error: {ex.Message}";
             }
         }
 
@@ -2026,7 +2094,7 @@ namespace Middleware_console
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"      [!] Không thể nạp ảnh: {ex.Message}");
+                Console.WriteLine($"      [!] Cannot load image: {ex.Message}");
             }
             return false;
         }
@@ -2045,23 +2113,23 @@ namespace Middleware_console
         #region 9. Download, Online & Diagnostic Operations
         public string DownloadToPLC(string deviceName, string targetIpAddress, string pgPcInterfaceName)
         {
-            if (_project == null) return "Error: Project chưa được load.";
+            if (_project == null) return "Error: Project not loaded.";
 
             try
             {
                 // 1. Tìm thiết bị và khởi tạo các Service
                 Device device = FindDeviceRecursive(_project, deviceName);
-                if (device == null) return $"Error: Không tìm thấy thiết bị '{deviceName}'";
+                if (device == null) return $"Error: Device not found '{deviceName}'";
 
                 var plcItem = GetCpuItem(device);
                 var downloadProvider = plcItem?.GetService<Siemens.Engineering.Download.DownloadProvider>();
                 var onlineProvider = plcItem?.GetService<Siemens.Engineering.Online.OnlineProvider>();
 
-                if (downloadProvider == null) return "Error: DownloadProvider không khả dụng.";
+                if (downloadProvider == null) return "Error: DownloadProvider not available.";
 
                 // 2. KIỂM TRA THÔNG TUYẾN (PING)
                 // Đảm bảo card mạng ảo Siemens PLCSIM đã nhận diện được PLC
-                Console.WriteLine($"[i] Đang kiểm tra Ping tới {targetIpAddress}...");
+                Console.WriteLine($"[i] Checking Ping to {targetIpAddress}...");
                 using (System.Net.NetworkInformation.Ping ping = new System.Net.NetworkInformation.Ping())
                 {
                     try
@@ -2069,13 +2137,13 @@ namespace Middleware_console
                         var reply = ping.Send(targetIpAddress, 2000);
                         if (reply.Status != System.Net.NetworkInformation.IPStatus.Success)
                         {
-                            return $"FAILED: Không thể Ping thấy PLC tại {targetIpAddress}. Hãy kiểm tra PLCSIM Advanced hoặc Card mạng số {pgPcInterfaceName}!";
+                            return $"FAILED: Cannot reach PLC at {targetIpAddress}. Check PLCSIM Advanced or network adapter {pgPcInterfaceName}!";
                         }
                         Console.WriteLine($"[√] Ping thành công! (Thời gian phản hồi: {reply.RoundtripTime}ms)");
                     }
                     catch (Exception ex)
                     {
-                        return $"FAILED: Lỗi hệ thống khi Ping: {ex.Message}";
+                        return $"FAILED: System error when Pinging: {ex.Message}";
                     }
                 }
 
@@ -2095,7 +2163,7 @@ namespace Middleware_console
                 // 4. CẤU HÌNH INTERFACE
                 var mode = downloadProvider.Configuration.Modes.Find("PN/IE");
                 var pcInterface = mode.PcInterfaces.Find(pgPcInterfaceName, 1);
-                if (pcInterface == null) return "FAILED: Không tìm thấy Card mạng phù hợp.";
+                if (pcInterface == null) return "FAILED: No suitable network card found.";
 
                 var targetConf = pcInterface.TargetInterfaces[0];
 
@@ -2103,7 +2171,7 @@ namespace Middleware_console
                 downloadProvider.Configuration.ApplyConfiguration(targetConf);
 
                 // 5. THỰC THI NẠP (DOWNLOAD)
-                Console.WriteLine("[i] Đang bắt đầu quá trình nạp chương trình...");
+                Console.WriteLine("[i] Starting program download process...");
                 var result = downloadProvider.Download(
                     targetConf,
                     (preConf) => // Xử lý các bảng thông báo trước khi nạp (Stop Modules, Overwrite...)
@@ -2112,7 +2180,7 @@ namespace Middleware_console
                         try
                         {
                             string configName = preConf.GetType().Name;
-                            Console.WriteLine($"   => Đang xử lý bảng: {configName}");
+                            Console.WriteLine($"   => Processing table: {configName}");
 
                             var prop = preConf.GetType().GetProperty("CurrentSelection");
                             if (prop != null)
@@ -2148,7 +2216,7 @@ namespace Middleware_console
                                     if (name.Contains("Start"))
                                     {
                                         prop.SetValue(postConf, Enum.Parse(enumType, name));
-                                        Console.WriteLine("   [√] PLC đang khởi động lại (RUN)...");
+                                        Console.WriteLine("   [√] PLC is restarting (RUN)...");
                                         break;
                                     }
                                 }
@@ -2162,7 +2230,7 @@ namespace Middleware_console
                 // 6. TRẢ KẾT QUẢ
                 if (result.State == Siemens.Engineering.Download.DownloadResultState.Success)
                 {
-                    return "SUCCESS: Chương trình đã nạp hoàn tất và PLC đã RUN!";
+                    return "SUCCESS: Program loaded and PLC is running!";
                 }
                 else
                 {

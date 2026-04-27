@@ -45,7 +45,7 @@ namespace TIA_Copilot_CLI
                 PYTHON_SCRIPT_PATH = Path.Combine(backendFolder, "main.py");
 
                 Console.ForegroundColor = ConsoleColor.Magenta;
-                Console.WriteLine($"[SYSTEM] Chạy chế độ DEBUG: Gọi trực tiếp mã nguồn {PYTHON_SCRIPT_PATH}");
+                Console.WriteLine($"[SYSTEM] Running DEBUG mode: Calling source code directly {PYTHON_SCRIPT_PATH}");
                 Console.ResetColor();
 #else
                 // ==========================================
@@ -66,7 +66,7 @@ namespace TIA_Copilot_CLI
                 }
                 else
                 {
-                    throw new FileNotFoundException("Không tìm thấy file ai_engine.exe để chạy Deploy!");
+                    throw new FileNotFoundException("Cannot find ai_engine.exe file to run Deploy!");
                 }
 #endif
             }

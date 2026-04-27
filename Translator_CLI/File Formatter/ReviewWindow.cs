@@ -98,7 +98,7 @@ namespace TIA_Copilot_CLI
             if (File.Exists(htmlPath))
                 webView.CoreWebView2.Navigate(htmlPath);
             else
-                MessageBox.Show($"Không tìm thấy file giao diện tại: {htmlPath}", "Lỗi hệ thống",
+                MessageBox.Show($"Cannot find UI file at: {htmlPath}", "System Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
@@ -176,7 +176,7 @@ namespace TIA_Copilot_CLI
         {
             if (!e.IsSuccess) return;
 
-            string modeBtnText = _cwcIsDesignMode ? "📐 Đang ở Design (Chuyển sang Runtime)" : "▶️ Đang ở Runtime (Chuyển sang Design)";
+            string modeBtnText = _cwcIsDesignMode ? "📐 In Design Mode (Switch to Runtime)" : "▶️ In Runtime Mode (Switch to Design)";
             string modeBtnColor = _cwcIsDesignMode ? "#e67e22" : "#27ae60";
             string currentModeLabel = _cwcIsDesignMode ? "DESIGN" : "RUNTIME";
 
@@ -395,7 +395,7 @@ namespace TIA_Copilot_CLI
             ReviewMode mode = (ext == ".json") ? ReviewMode.Json : ReviewMode.Scl;
 
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"[VIEWER] Đang mở Editor cho file: {Path.GetFileName(filePath)}");
+            Console.WriteLine($"[VIEWER] Opening file: {Path.GetFileName(filePath)}");
             Console.ResetColor();
 
             Thread staThread = new Thread(() =>

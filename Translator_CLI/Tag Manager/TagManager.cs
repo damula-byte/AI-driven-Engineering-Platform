@@ -40,7 +40,7 @@ namespace TIA_Copilot_CLI
                 if (nameIdx == -1 || dataTypeIdx == -1)
                 {
                     Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("[LỖI] File CSV không đúng chuẩn. Phải có ít nhất cột 'Name' và 'Data Type'.");
+                    Console.WriteLine("[ERROR] CSV file is not in correct format. Must have at least 'Name' and 'Data Type' columns.");
                     Console.ResetColor();
                     return "";
                 }
@@ -77,7 +77,7 @@ namespace TIA_Copilot_CLI
                 }
 
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"\n[USER TAGS] Đã nạp thành công {tagCount} Tags từ file I/O List (CSV)!");
+                Console.WriteLine($"\n[USER TAGS] Successfully loaded {tagCount} Tags from I/O List file (CSV)!");
                 Console.ResetColor();
 
                 return tagListBuilder.ToString();
@@ -85,7 +85,7 @@ namespace TIA_Copilot_CLI
             catch (Exception ex)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"[LỖI] khi đọc file Tag: {ex.Message}");
+                Console.WriteLine($"[ERROR] while reading Tag file: {ex.Message}");
                 Console.ResetColor();
                 return "";
             }
@@ -131,7 +131,7 @@ namespace TIA_Copilot_CLI
                     if (nameCol == -1 || dataTypeCol == -1)
                     {
                         Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine("[LỖI] File Excel không đúng chuẩn. Phải có ít nhất cột 'Name' và 'Data Type' ở dòng đầu tiên.");
+                        Console.WriteLine("[ERROR] Excel file is not in correct format. Must have at least 'Name' and 'Data Type' columns in first row.");
                         Console.ResetColor();
                         return "";
                     }
@@ -161,7 +161,7 @@ namespace TIA_Copilot_CLI
                 }
 
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"\n[USER TAGS] Đã nạp thành công {tagCount} Tags từ file Excel!");
+                Console.WriteLine($"\n[USER TAGS] Successfully loaded {tagCount} Tags from Excel file!");
                 Console.ResetColor();
 
                 return tagListBuilder.ToString();
@@ -169,8 +169,8 @@ namespace TIA_Copilot_CLI
             catch (Exception ex)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"[LỖI] khi đọc file Excel: {ex.Message}");
-                Console.WriteLine("Lưu ý: Hãy chắc chắn file Excel đang không bị mở bởi ứng dụng khác!");
+                Console.WriteLine($"[ERROR] while reading Excel file: {ex.Message}");
+                Console.WriteLine("Note: Make sure the Excel file is not currently open in another application!");
                 Console.ResetColor();
                 return "";
             }

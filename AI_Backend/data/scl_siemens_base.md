@@ -39,6 +39,25 @@ BEGIN
    #stat_MyTrigger(CLK := #i_Sensor);
 ```
 
+## STRATEGY: RUNTIME ACCUMULATION LOGIC (EQUIPMENT LIFETIME)
+**CRITICAL RULE:** To accumulate total equipment runtime across multiple start/stop cycles, DO NOT use a standard `TON` timer (because its `ET` resets to zero when `IN` is false). DO NOT use complex 1-second pulse triggers. 
+You MUST use a **`TONR` (Retentive Timer)** and assign its `ET` (Elapsed Time) output to the runtime display variable.
+
+Example of Correct Accumulated Runtime:
+```scl
+VAR
+   stat_Runtimer : TONR;
+END_VAR
+BEGIN
+   // TONR keeps the accumulated time even when i_MotorRunning goes FALSE.
+   #stat_Runtimer(IN := #i_MotorRunning,
+                  R := #i_ResetRuntime,
+                  PT := T#24d); // Maximum limit for TIME datatype
+                  
+   // Assign Elapsed Time (ET) directly to output
+   #q_AccumulatedTime := #stat_Runtimer.ET;
+```
+
 ## STRATEGY: TIMERS/COUNTERS IN STATE MACHINES (CASE)
 **CRITICAL RULE:** DO NOT call the same Timer (TON/TOF) or Counter (CTU/CTD) instance multiple times inside different CASE steps or IF branches. 
 You MUST call the instance EXACTLY ONCE outside the CASE statement. Control its execution by assigning conditional logic to its inputs (e.g., `IN := (#stat_Step = 3);`).
@@ -418,6 +437,7 @@ ORGANIZATION_BLOCK "AUTO_GENERATED_OB_NAME"
       // [Prefix temp_]: Intermediate logic flags
    END_VAR
 BEGIN
+   // DO NOT DECLARE TAGS IN THIS BEGIN BLOCK
    // Example: Wiring FB_MainConveyorControl to physical tags
    // We use "Inst_FB_MainConveyorControl" WITHOUT the '#' prefix.
    "Inst_FB_MainConveyorControl"(i_RunCmd := "Tag_StartBtn", 

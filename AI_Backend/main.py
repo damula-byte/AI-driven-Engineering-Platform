@@ -5,20 +5,13 @@ import logging
 import warnings
 import memory 
 import app_secrets
+import re
 
 os.environ["CHROMA_TELEMETRY_IMPL"] = "none"
 warnings.filterwarnings("ignore")
 logging.getLogger("chromadb").setLevel(logging.ERROR)
 logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
 logging.getLogger("langchain").setLevel(logging.ERROR)
-
-        # --- IMPORT LANGCHAIN & CHROMA ---
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_huggingface import HuggingFaceEmbeddings 
-from langchain_community.vectorstores import Chroma
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-import chromadb
-import google.generativeai as genai
       
 CURRENT_KEY =   app_secrets.get_next_api_key()
 os.environ["GOOGLE_API_KEY"] = CURRENT_KEY
@@ -66,7 +59,8 @@ def get_output_schema(target_block_type="AUTO"):
             { "name": "TAG_StartBtn_01", "type": "BOOL", "comment": "Input" },
             { "name": "TAG_MotorSpeed_01", "type": "REAL", "comment": "Output" },
             { "name": "TAG_SystemFlag", "type": "BOOL", "comment": "Memory" } 
-          ]
+          ],
+            "global_timers": []
         }
         """
     try:
@@ -80,7 +74,7 @@ def send_response(data_dict):
     output_bytes = (json.dumps(data_dict, ensure_ascii=False) + "\n").encode('utf-8')
     sys.stdout.buffer.write(output_bytes)
     sys.stdout.buffer.flush()
-    os._exit(0)
+    sys.exit(0)
 
 def clean_json_response(text):
     cleaned = text.strip()
@@ -132,6 +126,11 @@ def main():
 
         # --- BƯỚC 2: XỬ LÝ LỆNH UPDATE SPEC ---
         if command_type == "update_spec":
+            from langchain_huggingface import HuggingFaceEmbeddings 
+            from langchain_community.vectorstores import Chroma
+            from langchain_text_splitters import RecursiveCharacterTextSplitter
+            import chromadb
+
             try:
                 persistent_client = chromadb.PersistentClient(path=app_secrets.CHROMA_DB_PATH)
                 try:
@@ -158,6 +157,7 @@ def main():
             except Exception as e:
                 send_response({"status": "error", "message": f"Error loading Spec: {str(e)}"})
         if command_type == "check_spec":
+            import chromadb
             try:
                 persistent_client = chromadb.PersistentClient(path=app_secrets.CHROMA_DB_PATH)
                 try:
@@ -196,6 +196,11 @@ def main():
         # endregion
         
         # region DUAL-PATH RAG RETRIEVAL — branches on target_block_type
+        from langchain_huggingface import HuggingFaceEmbeddings 
+        from langchain_community.vectorstores import Chroma
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        import chromadb
+
         embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
         kb_context = ""
         spec_context = ""
@@ -207,7 +212,7 @@ def main():
             # EVENT    covers event/method patterns
             # UI       covers visual element patterns (gauge, button, chart, table)
             # LIFECYCLE covers WebCC API lifecycle patterns
-            cwc_search_kwargs = {"k": 5}
+            cwc_search_kwargs = {"k": 10}
 
             query_upper = user_query.upper()
             cwc_filter = {}
@@ -273,7 +278,7 @@ def main():
                 embedding_function=embeddings,
                 collection_name="iec_standard_kb"
             )
-            search_kwargs = {"k": 4}
+            search_kwargs = {"k": 8} # baseknowledge chunk size is 300-500 tokens, so 8 chunks ~ 3000-4000 tokens context window for standards — keep it tight for code gen precision
             filter_dict = {}
 
             if target_block_type in ["FB", "FC"]:
@@ -295,7 +300,7 @@ def main():
                 embedding_function=embeddings,
                 collection_name="current_project_spec"
             )
-            spec_retriever = spec_db.as_retriever(search_kwargs={"k": 2})
+            spec_retriever = spec_db.as_retriever(search_kwargs={"k": 5})
             spec_docs = spec_retriever.invoke(user_query)
             if spec_docs:
                 spec_context = "\n\n".join([d.page_content for d in spec_docs])
@@ -562,6 +567,10 @@ def main():
            ONLY use plain data types: BOOL, INT, REAL, DINT, WORD, DWORD, BYTE, STRING, TIME.
            Timers and triggers exist ONLY inside FB VAR sections, accessed via Instance DB in OB body_code.
         8. **GLOBAL TAG COMMENT:** Inside the "global_tags" array, you MUST add a "comment" field for each tag. Evaluate how the tag is wired in the OB: if it's wired to an input, label it "Input"; if to an output, label it "Output"; otherwise label it "Memory".
+        9. **GLOBAL TIMERS (IEC_TIMER) - CRITICAL:** If the User Spec explicitly requests a Global Timer (IEC_TIMER) instead of a local static timer, you MUST use the global DB syntax (e.g., `"T10S".TON(IN:=..., PT:=...);`). 
+           Do NOT declare this timer in the "interface" (VAR). 
+           You MUST list its exact name in the `"global_timers"` JSON array (e.g., `"global_timers": ["T10S"]`).
+           If no global timers are requested, return `"global_timers": []`.
         
         ### USER REQUEST:
         {user_query}
@@ -574,12 +583,18 @@ def main():
             model="gemini-2.5-flash",
             temperature=0.1,
             convert_system_message_to_human=True,
+            model_kwargs={"response_mime_type": "application/json"},
         )
 
         # 2. Gọi AI sinh code (Dùng Langchain)
         response = llm.invoke(full_prompt)
         final_json_str = clean_json_response(response.content)
         
+        final_json_str = re.sub(r'\}\s*,\s*"global_tags"', r', "global_tags"', final_json_str)
+        final_json_str = re.sub(r'\}\s*"global_tags"', r', "global_tags"', final_json_str)
+        final_json_str = re.sub(r'\}\s*,\s*"global_timers"', r', "global_timers"', final_json_str)
+        final_json_str = re.sub(r'\}\s*"global_timers"', r', "global_timers"', final_json_str)
+
         input_tokens = 0
         output_tokens = 0
         total_tokens = 0
@@ -600,20 +615,21 @@ def main():
             data_dict["active_key"] = key_display
             final_json_str = json.dumps(data_dict, ensure_ascii=False, indent=2)
         except Exception as e:
-            final_json_str = json.dumps({"error": f"Lỗi chèn Token: {str(e)}", "raw_output": final_json_str})
+            final_json_str = json.dumps({"error": f"Error loading Token: {str(e)}", "raw_output": final_json_str})
 
         # 4. Lưu lịch sử và in kết quả
         memory.save_turn(session_id, user_query, final_json_str)
         output_bytes = (final_json_str + "\n").encode('utf-8')
         sys.stdout.buffer.write(output_bytes)
         sys.stdout.buffer.flush()
-        os._exit(0)
+        sys.exit(0)
 
     except Exception as e:
         error_res = {"status": "error", "message": str(e)}
         err_bytes = (json.dumps(error_res, ensure_ascii=False) + "\n").encode('utf-8')
         sys.stdout.buffer.write(err_bytes)
         sys.stdout.buffer.flush()
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
