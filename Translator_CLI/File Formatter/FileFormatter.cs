@@ -72,7 +72,7 @@ namespace TIA_Copilot_CLI
                             }
                             sb.AppendLine("   END_VAR");
                         }
-
+                        
                         sb.AppendLine();
                         sb.AppendLine("BEGIN");
                         // In giá trị khởi tạo (nếu có)
@@ -202,7 +202,7 @@ namespace TIA_Copilot_CLI
                 Console.ForegroundColor = ConsoleColor.Cyan;
                 Console.WriteLine($"\n[SUCCESS] Exported successfully: {fileName}");
                 Console.ResetColor();
-
+                
                 // Extract global tags if it's an OB
                 if (data.Type != null && data.Type.ToUpper() == "ORGANIZATION_BLOCK" && data.GlobalTags.Count > 0)
                 {
@@ -656,17 +656,6 @@ namespace TIA_Copilot_CLI
                 int buttonSlot = 0;
                 int indicatorSlot = 0;
                 int dataCtlSlot = 0;
-                int tankSlot = 0;
-                int valveSlot = 0;
-                int motor_pump_Slot = 0;
-                int pipeSlot = 0;
-                int rectangleSlot = 0;
-                int circleSlot = 0;
-                int iofieldSlot = 0;
-                int clockSlot = 0;
-                int touchAreaSlot = 0;
-                int barSlot = 0;
-                int hmitextSlot = 0;
 
                 var itemsJson = new JArray();
 
@@ -676,18 +665,7 @@ namespace TIA_Copilot_CLI
                         item,
                         ref buttonSlot,
                         ref indicatorSlot,
-                        ref dataCtlSlot,
-                        ref tankSlot,
-                        ref valveSlot,
-                        ref motor_pump_Slot,
-                        ref pipeSlot,
-                        ref rectangleSlot,
-                        ref circleSlot,
-                        ref iofieldSlot,
-                        ref clockSlot,
-                        ref touchAreaSlot,
-                        ref barSlot,
-                        ref hmitextSlot
+                        ref dataCtlSlot
                     );
 
                     if (physicalItem != null)
@@ -1044,19 +1022,7 @@ namespace TIA_Copilot_CLI
             HmiItemData item,
             ref int buttonSlot,
             ref int indicatorSlot,
-            ref int dataCtlSlot,
-            ref int tankSlot,
-            ref int valveSlot,
-            ref int motor_pump_Slot,
-            ref int pipeSlot,
-            ref int rectangleSlot,
-            ref int circleSlot,
-            ref int iofieldSlot,
-            ref int clockSlot,
-            ref int touchAreaSlot,
-            ref int barSlot,
-            ref int hmitextSlot
-            )
+            ref int dataCtlSlot)
         {
             var props = new JObject();
             string type = item.Type ?? "";
@@ -1178,21 +1144,7 @@ namespace TIA_Copilot_CLI
                     props["DisplayFillMode"] = item.Properties.ContainsKey("DisplayFillMode")
                                        ? Newtonsoft.Json.Linq.JToken.FromObject(item.Properties["DisplayFillMode"])
                                        : 0;
-                    if (itemName.Contains("_01") || itemName.Contains("_02"))
-                    {
-                        // 1. Nhận diện người quen -> Đưa vào vị trí Cluster đã Hardcode
-                        props["Left"] = baseLeftTankX;
-                        props["Top"] = clusterOffsetTankY + 5;
-                    }
-                    else
-                    {
-                        // 2. Tank lạ do AI tự đẻ -> Dàn hàng ngang tự động
-                        // Mỗi cái bồn rộng 290px, nên ta cho cách nhau 350px để tạo khoảng trống
-                        props["Left"] = FALLBACK_X + (tankSlot * 350);
-                        props["Top"] = 50; // Neo ở sát mép trên
 
-                        tankSlot++; // Tăng biến đếm để bồn lạ tiếp theo tự lùi ra xa
-                    }
                     break;
 
                 case "Valve":
@@ -1212,54 +1164,24 @@ namespace TIA_Copilot_CLI
                     props["Height"] = 140u;
                     props["StatusTag"] = item.BindTag ?? "";
                     AddColorScript(props, item);
-                    if (itemName.Contains("Valve_01") || itemName.Contains("Valve_1"))
-                    {
-                        // Nhận diện Van 1 -> Gắn tọa độ Hardcode
-                        props["Left"] = 1536;
-                        props["Top"] = 98;
-                    }
-                    else if (itemName.Contains("Valve_02") || itemName.Contains("Valve_2"))
-                    {
-                        // Nhận diện Van 2 -> Gắn tọa độ Hardcode
-                        props["Left"] = 1536;
-                        props["Top"] = 320;
-                    }
-                    else
-                    {
-                        // Van lạ do AI tự đẻ -> Dàn hàng ngang tự động ở khu vực dự phòng
-                        // Bề ngang van là 200, cho cách nhau 220px để có khoảng thở
-                        props["Left"] = FALLBACK_X + (valveSlot * 220);
-
-                        // Đẩy xuống góc dưới màn hình (Ví dụ Y = 600) để không đè lên Tank/Motor ở trên
-                        props["Top"] = 600;
-
-                        valveSlot++; // Tăng biến đếm cho cái van lạ tiếp theo
-                    }
                     break;
                 case "Motor":
-                case "Pump":
-                    // 1. Phân loại đường dẫn thư viện
-                    props["LibraryPath"] = (type == "Pump") ? "IndustryGraphicLibrary/Pumps" : "IndustryGraphicLibrary/Motors";
-                    props["SubType"] = item.SubType ?? ((type == "Pump") ? "ClassicPump" : "Motor2");
-                    props["Width"] = 134u;
-                    props["Height"] = 137u;
+                    props["LibraryPath"] = "IndustryGraphicLibrary/Motors";
+                    props["SubType"] = item.SubType ?? "Motor2";
+                    props["Left"] = baseLeftMotorX + 90;
+                    props["Top"] = clusterOffsetmotorY + 60;
+                    props["Width"] = 134u; props["Height"] = 137u;
                     props["StatusTag"] = item.BindTag ?? "";
                     AddColorScript(props, item);
-
-                    // 2. Lưới bảo vệ
-                    if (itemName.Contains("M1") || itemName.Contains("M2") || itemName.Contains("M3") || itemName.Contains("M4"))
-                    {
-                        // Nhận diện M1->M4 -> Dùng tọa độ Cluster đã Hardcode
-                        props["Left"] = baseLeftMotorX + 90;
-                        props["Top"] = clusterOffsetmotorY + 60;
-                    }
-                    else
-                    {
-                        // Đồ lạ do AI đẻ ra -> Dàn hàng ngang ở khu dự phòng
-                        props["Left"] = FALLBACK_X + (motor_pump_Slot * 160); // Bơm rộng 134, cách nhau 160px
-                        props["Top"] = 750; // Neo ở vị trí an toàn phía dưới
-                        motor_pump_Slot++;
-                    }
+                    break;
+                case "Pump":
+                    props["LibraryPath"] = "IndustryGraphicLibrary/Pumps";
+                    props["SubType"] = item.SubType ?? "ClassicPump";
+                    props["Left"] = baseLeftMotorX + 90;
+                    props["Top"] = clusterOffsetmotorY + 60;
+                    props["Width"] = 134u; props["Height"] = 137u;
+                    props["StatusTag"] = item.BindTag ?? "";
+                    AddColorScript(props, item);
                     break;
 
                 case "Pipe": // Dùng chữ thường cho đồng bộ searchType
@@ -1267,49 +1189,22 @@ namespace TIA_Copilot_CLI
                     string pipeSubType = item.SubType ?? "PipeHorizontal";
                     props["SubType"] = pipeSubType;
 
-                    // ==========================================
-                    // LỌC: Kiểm tra xem ống này có nằm trong danh sách đã Hardcode tọa độ không
-                    // ==========================================
-                    bool isKnownPipe = itemName.Contains("Pipe_1") || itemName.Contains("Pipe_2") ||
-                                       itemName.Contains("Pipe_3") || itemName.Contains("Pipe_4") ||
-                                       itemName.Contains("Pipe_5") || itemName.Contains("Pipe_6") ||
-                                       itemName.Contains("Pipe_7");
 
-                    if (isKnownPipe)
+                    if (pipeSubType == "PipeVertical")
                     {
-                        if (pipeSubType == "PipeVertical")
-                        {
-                            props["Left"] = baseLeftMotorX + 147;
-                            props["Top"] = clusterOffsetmotorY - 250;
-                            props["Width"] = 15u;
-                            props["Height"] = 315u;
-                        }
-                        else if (pipeSubType == "PipeHorizontal")
-                        {
-                            props["Left"] = clusterOffsetPipeX + 240;
-                            props["Top"] = clusterOffsetPipeY + 112;
-                            props["Width"] = (itemName.Contains("Pipe_5") ? 70u : 90u);
-                            props["Height"] = 35u;
-                        }
+
+                        props["Left"] = baseLeftMotorX + 147;
+                        props["Top"] = clusterOffsetmotorY - 250;
+                        props["Width"] = 15u;
+                        props["Height"] = 315u;
                     }
-                    else
+                    else if (pipeSubType == "PipeHorizontal")
                     {
-                        // [THÊM MỚI] Dàn trận cho các ống nước lạ do AI tự đẻ ra
-                        if (pipeSubType == "PipeVertical")
-                        {
-                            props["Left"] = FALLBACK_X + (pipeSlot * 50); // Ống đứng dàn hàng ngang mỏng
-                            props["Top"] = 800; // Đẩy xuống khu vực an toàn
-                            props["Width"] = 15u;
-                            props["Height"] = 100u; // Chiều dài mặc định
-                        }
-                        else // PipeHorizontal
-                        {
-                            props["Left"] = FALLBACK_X + (pipeSlot * 120); // Ống ngang dàn hàng ngang rộng
-                            props["Top"] = 800;
-                            props["Width"] = 100u; // Chiều dài mặc định
-                            props["Height"] = 15u;
-                        }
-                        pipeSlot++; // Tăng biến đếm
+
+                        props["Left"] = clusterOffsetPipeX + 240;
+                        props["Top"] = clusterOffsetPipeY + 112;
+                        props["Width"] = (itemName.Contains("Pipe_5") ? 70u : 90u);
+                        props["Height"] = 35u;
                     }
 
                     props["BasicColor"] = "238, 238, 238";
@@ -1346,53 +1241,23 @@ namespace TIA_Copilot_CLI
                     }
                     else
                     {
-                        props["Left"] = FALLBACK_X + (rectangleSlot * 260); 
-                        props["Top"] = FALLBACK_Y; // Đẩy xuống khu vực an toàn (mặc định 700)
+                        props["Left"] = baseLeft;
+                        props["Top"] = FALLBACK_Y;
                         props["Width"] = 240u;
                         props["Height"] = 350u;
-                        rectangleSlot++; // Tăng biến đếm
                     }
 
-                    // Đảm bảo các khối Rectangle (nếu dùng làm cảm biến/đèn báo) vẫn nhận được Script đổi màu
-                    props["StatusTag"] = item.BindTag ?? "";
-                    AddColorScript(props, item);
-                    
                     break;
 
                 case "Circle":
                 case "CircularArc":
                 case "CircleSegment":
-                    // 1. Xác định kích thước đèn (Lỗi thì nhỏ, Chạy thì to)
-                    bool isFaultIndicator = itemName.ToLower().Contains("error") || 
-                                            itemName.ToLower().Contains("fault") || 
-                                            itemName.ToLower().Contains("bao_loi");
-                                            
-                    props["Radius"] = isFaultIndicator ? 12u : 40u;
-                    
+                    props["CenterX"] = baseLeft + 180;
+                    props["CenterY"] = FALLBACK_Y + (itemName.ToLower().Contains("error") || itemName.ToLower().Contains("fault") || itemName.ToLower().Contains("Bao_Loi") ? 140 : 100);
+                    props["Radius"] = (itemName.ToLower().Contains("error") || itemName.ToLower().Contains("fault") || itemName.ToLower().Contains("Bao_Loi") ? 12u : 40u);
                     if (type != "Circle") { props["AngleStart"] = 270; props["AngleRange"] = 90; }
                     props["Tag"] = item.BindTag ?? "";
                     AddColorScript(props, item);
-
-                    // ==========================================
-                    // 🛡️ LƯỚI BẢO VỆ CHỐNG DÍNH CHÙM CHO ĐÈN BÁO
-                    // ==========================================
-                    // Nếu đèn này thuộc về các cụm Bơm/Bồn đã biết tên
-                    if (itemName.Contains("M1") || itemName.Contains("M2") || itemName.Contains("M3") || itemName.Contains("M4") || 
-                        itemName.Contains("_01") || itemName.Contains("_02"))
-                    {
-                        // Gắn vào vị trí Cluster tương ứng
-                        props["CenterX"] = baseLeft + 180;
-                        props["CenterY"] = FALLBACK_Y + (isFaultIndicator ? 140 : 100);
-                    }
-                    else
-                    {
-                        // Đèn lạ AI tự đẻ -> Dàn hàng ngang ở khu vực dự phòng
-                        // Tâm X bắt đầu từ FALLBACK_X + 50, mỗi đèn cách nhau 100px
-                        props["CenterX"] = FALLBACK_X + 50 + (circleSlot * 100); 
-                        props["CenterY"] = 850; // Neo xuống đáy màn hình
-                        
-                        circleSlot++; // Tăng biến đếm (Đã có sẵn trong tham số hàm)
-                    }
                     break;
 
                 // --- BUTTONS ---
@@ -1434,8 +1299,7 @@ namespace TIA_Copilot_CLI
                     else
                     {
                         props["Left"] = baseLeft + 15;
-                        props["Top"] = FALLBACK_Y + internalY + (buttonSlot * 50);
-                        buttonSlot++;
+                        props["Top"] = FALLBACK_Y + internalY;
 
                     }
 
@@ -1449,22 +1313,8 @@ namespace TIA_Copilot_CLI
 
                 // --- I/O CONTROLS ---
                 case "IOField":
-                    bool isKnownIO = itemName.Contains("M1") || itemName.Contains("M2") || 
-                                     itemName.Contains("M3") || itemName.Contains("M4") || 
-                                     itemName.Contains("_01") || itemName.Contains("_02");
-
-                    if (isKnownIO)
-                    {
-                        props["Left"] = baseLeft + 30;
-                        props["Top"] = FALLBACK_Y + internalY;
-                    }
-                    else
-                    {
-                        // [THÊM MỚI] Dàn trận cho các IOField lạ do AI tự đẻ ra
-                        props["Left"] = FALLBACK_X + (iofieldSlot * 180); // Dàn hàng ngang
-                        props["Top"] = 950; // Đẩy xuống khu vực an toàn ở đáy màn hình
-                        iofieldSlot++; // Tận dụng luôn biến đếm có sẵn
-                    }
+                    props["Left"] = baseLeft + 30;
+                    props["Top"] = FALLBACK_Y + internalY;
                     props["Width"] = 160u; props["Height"] = 35u;
                     props["Format"] = item.Format ?? "{0}";
                     props["StatusTag"] = item.BindTag ?? "";
@@ -1472,63 +1322,22 @@ namespace TIA_Copilot_CLI
 
                 case "Bar":
                 case "Gauge":
-                    bool isKnownBarGauge = itemName.Contains("M1") || itemName.Contains("M2") || 
-                                           itemName.Contains("M3") || itemName.Contains("M4") || 
-                                           itemName.Contains("_01") || itemName.Contains("_02");
-
-                    if (isKnownBarGauge)
-                    {
-                        props["Left"] = baseLeft + 40;
-                        props["Top"] = FALLBACK_Y + 50;
-                    }
-                    else
-                    {
-                        props["Left"] = FALLBACK_X + (barSlot * 150); // Dàn hàng ngang, cách nhau 150px
-                        props["Top"] = 850; // Neo ở vị trí an toàn phía dưới
-                        barSlot++; // Tận dụng luôn biến đếm có sẵn
-                    }
+                    props["Left"] = baseLeft + 40;
+                    props["Top"] = FALLBACK_Y + 50;
                     props["Width"] = (type == "Bar" ? 50u : 120u);
                     props["Height"] = (type == "Bar" ? 180u : 120u);
                     props["Tag"] = item.BindTag ?? "";
                     break;
 
                 case "Clock":
-                    bool isKnownClock = itemName.Contains("M1") || itemName.Contains("M2") || 
-                                        itemName.Contains("M3") || itemName.Contains("M4") || 
-                                        itemName.Contains("_01") || itemName.Contains("_02");
-
-                    if (isKnownClock)
-                    {
-                        props["Left"] = baseLeft + 15;
-                        props["Top"] = FALLBACK_Y + internalY;
-                        props["Width"] = 160u; props["Height"] = 35u;
-                    }
-                    else
-                    {
-                        props["Left"] = FALLBACK_X + (clockSlot * 180); // Xếp hàng ngang
-                        props["Top"] = 900; // Neo an toàn ở dưới cùng
-                        props["Width"] = 160u; props["Height"] = 35u;
-                        clockSlot++; // Tận dụng biến có sẵn
-                    }
+                    props["Left"] = baseLeft + 15;
+                    props["Top"] = FALLBACK_Y + internalY;
+                    props["Width"] = 160u; props["Height"] = 35u;
                     break;
 
                 case "TouchArea":
-                    bool isKnownTouch = itemName.Contains("M1") || itemName.Contains("M2") || 
-                                        itemName.Contains("M3") || itemName.Contains("M4") || 
-                                        itemName.Contains("_01") || itemName.Contains("_02");
-
-                    if (isKnownTouch)
-                    {
-                        props["Left"] = baseLeft; props["Top"] = FALLBACK_Y;
-                        props["Width"] = 240u; props["Height"] = 350u;
-                    }
-                    else
-                    {
-                        props["Left"] = FALLBACK_X + (dataCtlSlot * 260); // Cách nhau 260px
-                        props["Top"] = 650; // Neo ở vùng giữa-dưới màn hình
-                        props["Width"] = 240u; props["Height"] = 350u;
-                        dataCtlSlot++; // Tận dụng biến có sẵn
-                    }
+                    props["Left"] = baseLeft; props["Top"] = FALLBACK_Y;
+                    props["Width"] = 240u; props["Height"] = 350u;
                     break;
 
                 case "CheckBoxGroup":
@@ -1572,6 +1381,7 @@ namespace TIA_Copilot_CLI
 
                 // --- STATIC DISPLAYS ---
                 case "HmiText":
+                    // Nếu là Header (dựa vào hint hoặc tên), đặt ở vị trí mặc định trên cùng
                     if (itemName.Contains("Header") || (item.Hint ?? "").ToLower().Contains("title"))
                     {
                         props["Left"] = 285;
@@ -1580,25 +1390,14 @@ namespace TIA_Copilot_CLI
                         props["Height"] = 150u;
                     }
                     else
-                        {
-                        bool isKnownText = itemName.Contains("M1") || itemName.Contains("M2") || 
-                                           itemName.Contains("M3") || itemName.Contains("M4") || 
-                                           itemName.Contains("_01") || itemName.Contains("_02");
-
-                        if (isKnownText)
-                        {
-                            props["Left"] = baseLeft;
-                            props["Top"] = 10;
-                        }
-                        else
-                        {
-                            props["Left"] = FALLBACK_X + (indicatorSlot * 220); // Dàn hàng ngang
-                            props["Top"] = 1000; // Neo ở sát đáy màn hình
-                            indicatorSlot++; // Tận dụng biến đếm có sẵn
-                        }
+                    {
+                        props["Left"] = baseLeft;
+                        props["Top"] = 10; // Mặc định cho các label nhỏ
                         props["Width"] = 200u;
                         props["Height"] = 50u;
                     }
+
+                    // Nạp nội dung và định dạng từ JSON
                     props["Text"] = item.Text ?? "Senior Design Project";
                     props["ForeColor"] = item.ForeColor ?? "255, 255, 255";
 
