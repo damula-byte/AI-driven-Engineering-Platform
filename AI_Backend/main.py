@@ -3,6 +3,8 @@ import json
 import os
 import logging
 import warnings
+
+from langchain_anthropic import ChatAnthropic
 import memory 
 import app_secrets
 import re
@@ -200,6 +202,7 @@ def main():
         from langchain_community.vectorstores import Chroma
         from langchain_google_genai import ChatGoogleGenerativeAI
         import chromadb
+        from langchain_anthropic import ChatAnthropic
 
         embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
         kb_context = ""

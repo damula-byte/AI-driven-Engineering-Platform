@@ -1150,12 +1150,12 @@ namespace TIA_Copilot_CLI
                 case "Valve":
                     props["LibraryPath"] = "IndustryGraphicLibrary/Valves";
                     props["SubType"] = item.SubType ?? "ControlValve"; // SubType mặc định cho Van
-                    if (itemName.Contains("Valve_01") || itemName.Contains("Valve_1"))
+                    if (itemName.Contains("Valve_01") || itemName.Contains("Valve_1") || itemName.Contains("Valve_Control_01"))
                     {
                         props["Left"] = 1536;
                         props["Top"] = 98;
                     }
-                    else if (itemName.Contains("Valve_02") || itemName.Contains("Valve_2"))
+                    else if (itemName.Contains("Valve_02") || itemName.Contains("Valve_2") || itemName.Contains("Valve_Control_02"))
                     {
                         props["Left"] = 1536;
                         props["Top"] = 320;
