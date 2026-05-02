@@ -1,6 +1,7 @@
 import sys
 import json
 import os
+import time
 import logging
 import warnings
 
@@ -188,127 +189,107 @@ def main():
 
                 if os.path.exists(db_directory):
                     shutil.rmtree(db_directory)
-                    msg = "Đã xóa toàn bộ Spec cũ. Database đã được làm sạch!"
+                    msg = "Deleted spec successful. Database has been cleared!"
                 else:
-                    msg = "Hệ thống đang trống, không có Spec nào để xóa."
+                    msg = "System is empty, no Spec to delete."
 
                 send_response({"status": "success", "message": msg})
             except Exception as e:
-                send_response({"status": "error", "message": f"Lỗi khi xóa Spec: {str(e)}"})
+                send_response({"status": "error", "message": f"Error deleting Spec: {str(e)}"})
         # endregion
         
-        # region DUAL-PATH RAG RETRIEVAL — branches on target_block_type
-        from langchain_huggingface import HuggingFaceEmbeddings 
-        from langchain_community.vectorstores import Chroma
+        # region DUAL-PATH RAG RETRIEVAL — parallel execution, direct ChromaDB client
+        # ─────────────────────────────────────────────────────────────────────
+        # SPEED RATIONALE:
+        #   Old approach: LangChain Chroma wrapper → sequential kb then spec retrieval
+        #   New approach: chromadb.PersistentClient directly + ThreadPoolExecutor
+        #
+        #   Gains:
+        #   1. Skip LangChain Chroma wrapper overhead (~0.3s per collection open)
+        #   2. kb_context and spec_context retrieved IN PARALLEL (concurrent I/O)
+        #   3. Embedding computed ONCE, reused for both queries
+        # ─────────────────────────────────────────────────────────────────────
+        from langchain_huggingface import HuggingFaceEmbeddings
         from langchain_google_genai import ChatGoogleGenerativeAI
         import chromadb
-        from langchain_anthropic import ChatAnthropic
+        from concurrent.futures import ThreadPoolExecutor, as_completed
 
         embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-        kb_context = ""
+        persistent_client = chromadb.PersistentClient(path=app_secrets.CHROMA_DB_PATH)
+
+        # Embed the query ONCE — reused for all collection queries
+        query_vector = embeddings.embed_query(user_query)
+
+        kb_context   = ""
         spec_context = ""
 
-        if target_block_type == "CWC_SCREEN":
-            # --- CWC PATH: retrieve from cwc_standard_kb ---
-            # Smart filter: match query keywords to chunk types
-            # PROPERTY covers property declaration rules
-            # EVENT    covers event/method patterns
-            # UI       covers visual element patterns (gauge, button, chart, table)
-            # LIFECYCLE covers WebCC API lifecycle patterns
-            cwc_search_kwargs = {"k": 10}
-
+        def _query_kb() -> str:
+            """Retrieve top-k chunks from the type-specific knowledge base."""
             query_upper = user_query.upper()
-            cwc_filter = {}
-            if any(w in query_upper for w in ["GAUGE", "CHART", "TABLE", "BUTTON", "INDICATOR", "BAR", "LED", "DISPLAY"]):
-                cwc_filter = {"type": {"$in": ["UI", "LIFECYCLE"]}}
-            elif any(w in query_upper for w in ["PROPERTY", "TAG", "BOOL", "NUMBER", "STRING", "REAL", "INT"]):
-                cwc_filter = {"type": {"$in": ["PROPERTY", "EVENT"]}}
-            elif any(w in query_upper for w in ["EVENT", "METHOD", "FIRE", "CLICK", "PRESS"]):
-                cwc_filter = {"type": {"$in": ["EVENT", "UI"]}}
-
-            if cwc_filter:
-                cwc_search_kwargs["filter"] = cwc_filter
-
             try:
-                cwc_kb_db = Chroma(
-                    persist_directory=app_secrets.CHROMA_DB_PATH,
-                    embedding_function=embeddings,
-                    collection_name="cwc_standard_kb"
+                if target_block_type == "CWC_SCREEN":
+                    collection = persistent_client.get_collection("cwc_standard_kb")
+                    k = 5
+                    where = None
+                    if any(w in query_upper for w in ["GAUGE","CHART","TABLE","BUTTON","INDICATOR","BAR","LED","DISPLAY"]):
+                        where = {"type": {"$in": ["UI", "LIFECYCLE"]}}
+                    elif any(w in query_upper for w in ["PROPERTY","TAG","BOOL","NUMBER","STRING","REAL","INT"]):
+                        where = {"type": {"$in": ["PROPERTY", "EVENT"]}}
+                    elif any(w in query_upper for w in ["EVENT","METHOD","FIRE","CLICK","PRESS"]):
+                        where = {"type": {"$in": ["EVENT", "UI"]}}
+
+                elif target_block_type == "HMI_SCREEN":
+                    collection = persistent_client.get_collection("hmi_standard_kb")
+                    k = 5
+                    where = None
+                    if any(w in query_upper for w in ["TANK","VALVE","MOTOR","PUMP","PIPE","SENSOR","INDICATOR"]):
+                        where = {"type": {"$in": ["WIDGET", "LAYOUT"]}}
+                    elif any(w in query_upper for w in ["TREND","ALARM","RECIPE","DIAGNOSIS","CHART"]):
+                        where = {"type": {"$in": ["CONTROL", "SCREEN"]}}
+                    elif any(w in query_upper for w in ["BUTTON","NAVIGATE","SCREEN","WINDOW"]):
+                        where = {"type": {"$in": ["SCREEN", "CONTROL", "LAYOUT"]}}
+
+                else:  # SCL — FB / FC / OB
+                    collection = persistent_client.get_collection("iec_standard_kb")
+                    k = 8
+                    where = None
+                    if target_block_type in ["FB", "FC", "DB", "FUNCTION_BLOCK", "FUNCTION", "DATA_BLOCK"]:
+                        where = {"type": {"$in": ["COMPONENT", "SYNTAX"]}}
+                    elif target_block_type in ["OB", "ORGANIZATION_BLOCK"]:
+                        where = {"type": {"$in": ["SYSTEM", "SYNTAX"]}}
+
+                results = collection.query(
+                    query_embeddings=[query_vector],
+                    n_results=k,
+                    where=where,            # None = no filter (all types searched)
+                    include=["documents"]
                 )
-                cwc_retriever = cwc_kb_db.as_retriever(search_kwargs=cwc_search_kwargs)
-                cwc_docs = cwc_retriever.invoke(user_query)
-                kb_context = "\n\n".join([d.page_content for d in cwc_docs])
+                docs = results.get("documents", [[]])[0]
+                return "\n\n".join(docs)
             except Exception:
-                kb_context = ""  # cwc_standard_kb not ingested yet — prompt still works without it
+                return ""  # KB not ingested yet — prompt still works without it
 
-        elif target_block_type == "HMI_SCREEN":
-            # --- HMI PATH: retrieve from hmi_standard_kb ---
-            # Smart filter: query drives which object categories to pull
-            # WIDGET covers library objects (Tank/Valve/Motor/Pipe/shapes)
-            # CONTROL covers I-O controls and data panels
-            # SCREEN covers navigation and screen structure
-            # LAYOUT covers general composition guidance
-            hmi_search_kwargs = {"k": 5}  # Pull more chunks — HMI queries are broad
-
-            query_upper = user_query.upper()
-            hmi_filter = {}
-            if any(w in query_upper for w in ["TANK", "VALVE", "MOTOR", "PUMP", "PIPE", "SENSOR", "INDICATOR"]):
-                hmi_filter = {"type": {"$in": ["WIDGET", "LAYOUT"]}}
-            elif any(w in query_upper for w in ["TREND", "ALARM", "RECIPE", "DIAGNOSIS", "CHART"]):
-                hmi_filter = {"type": {"$in": ["CONTROL", "SCREEN"]}}
-            elif any(w in query_upper for w in ["BUTTON", "NAVIGATE", "SCREEN", "WINDOW"]):
-                hmi_filter = {"type": {"$in": ["SCREEN", "CONTROL", "LAYOUT"]}}
-
-            if hmi_filter:
-                hmi_search_kwargs["filter"] = hmi_filter
-
+        def _query_spec() -> str:
+            """Retrieve top-5 chunks from the current project spec collection."""
             try:
-                hmi_kb_db = Chroma(
-                    persist_directory=app_secrets.CHROMA_DB_PATH,
-                    embedding_function=embeddings,
-                    collection_name="hmi_standard_kb"
+                spec_col = persistent_client.get_collection("current_project_spec")
+                results = spec_col.query(
+                    query_embeddings=[query_vector],
+                    n_results=5,
+                    include=["documents"]
                 )
-                hmi_retriever = hmi_kb_db.as_retriever(search_kwargs=hmi_search_kwargs)
-                hmi_docs = hmi_retriever.invoke(user_query)
-                kb_context = "\n\n".join([d.page_content for d in hmi_docs])
+                docs = results.get("documents", [[]])[0]
+                return "\n\n".join(docs)
             except Exception:
-                kb_context = ""  # hmi_standard_kb not ingested yet — prompt still works without it
+                return ""  # Spec not loaded — silently continue
 
-        else:
-            # --- SCL PATH: retrieve from iec_standard_kb (original logic, unchanged) ---
-            kb_db = Chroma(
-                persist_directory=app_secrets.CHROMA_DB_PATH,
-                embedding_function=embeddings,
-                collection_name="iec_standard_kb"
-            )
-            search_kwargs = {"k": 8} # baseknowledge chunk size is 300-500 tokens, so 8 chunks ~ 3000-4000 tokens context window for standards — keep it tight for code gen precision
-            filter_dict = {}
+        # Run both retrievals in parallel — saves ~0.5–1.5s on typical hardware
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            future_kb   = executor.submit(_query_kb)
+            future_spec = executor.submit(_query_spec)
+            kb_context   = future_kb.result()
+            spec_context = future_spec.result()
 
-            if target_block_type in ["FB", "FC"]:
-                filter_dict = {"type": {"$in": ["COMPONENT", "SYNTAX"]}}
-            elif target_block_type == "OB":
-                filter_dict = {"type": {"$in": ["SYSTEM", "SYNTAX"]}}
-
-            if filter_dict:
-                search_kwargs["filter"] = filter_dict
-
-            kb_retriever = kb_db.as_retriever(search_kwargs=search_kwargs)
-            kb_docs = kb_retriever.invoke(user_query)
-            kb_context = "\n\n".join([d.page_content for d in kb_docs])
-
-        # Spec context — shared by both paths (project operational rules)
-        try:
-            spec_db = Chroma(
-                persist_directory=app_secrets.CHROMA_DB_PATH,
-                embedding_function=embeddings,
-                collection_name="current_project_spec"
-            )
-            spec_retriever = spec_db.as_retriever(search_kwargs={"k": 5})
-            spec_docs = spec_retriever.invoke(user_query)
-            if spec_docs:
-                spec_context = "\n\n".join([d.page_content for d in spec_docs])
-        except Exception:
-            pass
         # endregion
         
         # region Prompt assembly — branches on target_block_type
@@ -589,8 +570,112 @@ def main():
             model_kwargs={"response_mime_type": "application/json"},
         )
 
+        # ── Cooldown guard ────────────────────────────────────────────────────
+        app_secrets.enforce_cooldown(min_seconds=5.0)
+
+        # ── Retry logic ───────────────────────────────────────────────────────
+        # Only 503 and RPM are safe to retry — neither charges RPD quota.
+        #
+        # Error type  | Retry? | Strategy
+        # ------------|--------|------------------------------------------
+        # 503         | YES    | Server overload — wait short, same key ok
+        # RPM         | YES    | Rate limit/min — wait ~60s, rotate key
+        # RPD         | NO     | Daily quota gone — rotate key, tell user
+        # AUTH        | NO     | Bad key — rotate key, tell user
+        # OTHER       | NO     | Unknown — surface immediately
+        #
+        # MAX_RETRIES = 3 means up to 4 total attempts (1 original + 3 retries).
+        # Each retry rotates to a fresh key from the pool.
+        # ─────────────────────────────────────────────────────────────────────
+        MAX_RETRIES = 3
+        response   = None
+        last_hint  = ""
+
+        for attempt in range(MAX_RETRIES + 1):  # 0, 1, 2, 3
+            try:
+                response = llm.invoke(full_prompt)
+                app_secrets.record_api_call()
+                break  # success — exit loop
+
+            except Exception as api_exc:
+                err_type = app_secrets.classify_api_error(api_exc)
+
+                # ── Errors that should NEVER be retried ───────────────────────
+                if err_type == "RPD":
+                    last_hint = (
+                        "Daily quota (RPD) exhausted on this key. "
+                        "Add more keys to list_keys_gemini or wait until tomorrow."
+                    )
+                    # Rotate key for NEXT session — useless for this call
+                    new_key = app_secrets.get_next_api_key()
+                    os.environ["GOOGLE_API_KEY"] = new_key
+                    break  # do not retry
+
+                if err_type == "AUTH":
+                    last_hint = (
+                        "API key rejected (401/403). "
+                        "Check your keys in app_secrets.py."
+                    )
+                    # Rotate key immediately — this key is invalid
+                    new_key = app_secrets.get_next_api_key()
+                    os.environ["GOOGLE_API_KEY"] = new_key
+                    break  # do not retry
+
+                if err_type == "OTHER":
+                    last_hint = str(api_exc)
+                    break  # unknown error — surface immediately
+
+                # ── Retryable errors: 503 and RPM ─────────────────────────────
+                if attempt == MAX_RETRIES:
+                    # Exhausted all retries
+                    if err_type == "503":
+                        last_hint = (
+                            f"Gemini servers still overloaded after {MAX_RETRIES} retries. "
+                            "Wait a minute and try again."
+                        )
+                    elif err_type == "RPM":
+                        last_hint = (
+                            f"Rate limit (RPM) still hit after {MAX_RETRIES} retries. "
+                            "Wait ~60 seconds and try again."
+                        )
+                    break
+
+                # Rotate key for next attempt
+                new_key = app_secrets.get_next_api_key()
+                os.environ["GOOGLE_API_KEY"] = new_key
+                llm = ChatGoogleGenerativeAI(
+                    model="gemini-2.5-flash",
+                    temperature=0.1,
+                    convert_system_message_to_human=True,
+                    google_api_key=new_key,
+                    model_kwargs={"response_mime_type": "application/json"},
+                )
+
+                if err_type == "503":
+                    wait = 5 * (attempt + 1)   # 5s, 10s, 15s
+                    print(
+                        f"[RETRY {attempt + 1}/{MAX_RETRIES}] 503 — server overload. "
+                        f"Rotated key. Waiting {wait}s...",
+                        file=sys.stderr, flush=True
+                    )
+                elif err_type == "RPM":
+                    wait = 60                  # RPM window is always ~60s
+                    print(
+                        f"[RETRY {attempt + 1}/{MAX_RETRIES}] RPM limit hit. "
+                        f"Rotated key. Waiting {wait}s...",
+                        file=sys.stderr, flush=True
+                    )
+
+                time.sleep(wait)
+
+        # Surface error to C# if all attempts failed
+        if response is None:
+            send_response({
+                "status":  "error",
+                "message": f"[API ERROR — {err_type}] {last_hint}"
+            })
+
         # 2. Gọi AI sinh code (Dùng Langchain)
-        response = llm.invoke(full_prompt)
         final_json_str = clean_json_response(response.content)
         
         final_json_str = re.sub(r'\}\s*,\s*"global_tags"', r', "global_tags"', final_json_str)

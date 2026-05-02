@@ -72,7 +72,7 @@ namespace TIA_Copilot_CLI
                             }
                             sb.AppendLine("   END_VAR");
                         }
-                        
+
                         sb.AppendLine();
                         sb.AppendLine("BEGIN");
                         // In giá trị khởi tạo (nếu có)
@@ -202,7 +202,7 @@ namespace TIA_Copilot_CLI
                 Console.ForegroundColor = ConsoleColor.Cyan;
                 Console.WriteLine($"\n[SUCCESS] Exported successfully: {fileName}");
                 Console.ResetColor();
-                
+
                 // Extract global tags if it's an OB
                 if (data.Type != null && data.Type.ToUpper() == "ORGANIZATION_BLOCK" && data.GlobalTags.Count > 0)
                 {
@@ -622,14 +622,15 @@ namespace TIA_Copilot_CLI
         // --- CONNECTION COUNTER ---
         // Increments by 1 each time a new HMI Tags CSV is exported.
         // Produces connection names: HMI_PLC_Conn_1, HMI_PLC_Conn_2, ...
+        
         private static int _connectionCounter = 0;
 
         // 
-        // private static readonly int SIDEBAR_X = 30;
-        // private static readonly int SIDEBAR_Y_START = 180;
-        // private static readonly int SIDEBAR_BTN_W = 120;
-        // private static readonly int SIDEBAR_BTN_H = 40;
-        // private static readonly int SIDEBAR_GAP = 10;
+        private static readonly int SIDEBAR_X = 30;
+        private static readonly int SIDEBAR_Y_START = 180;
+        private static readonly int SIDEBAR_BTN_W = 120;
+        private static readonly int SIDEBAR_BTN_H = 40;
+        private static readonly int SIDEBAR_GAP = 10;
 
         private static readonly int PROCESS_X = 300;
         private static readonly int PROCESS_Y = 100;
@@ -656,7 +657,11 @@ namespace TIA_Copilot_CLI
                 int buttonSlot = 0;
                 int indicatorSlot = 0;
                 int dataCtlSlot = 0;
-
+                int genericTankSlot = 0;
+                int genericMotorSlot = 0;
+                int genericValveSlot = 0;
+                int genericPipeSlot = 0;
+                int genericControlSlot = 0;
                 var itemsJson = new JArray();
 
                 foreach (var item in data.Items)
@@ -665,7 +670,12 @@ namespace TIA_Copilot_CLI
                         item,
                         ref buttonSlot,
                         ref indicatorSlot,
-                        ref dataCtlSlot
+                        ref dataCtlSlot,
+                        ref genericTankSlot,
+                        ref genericMotorSlot,
+                        ref genericValveSlot,
+                        ref genericPipeSlot,
+                        ref genericControlSlot
                     );
 
                     if (physicalItem != null)
@@ -1022,56 +1032,67 @@ namespace TIA_Copilot_CLI
             HmiItemData item,
             ref int buttonSlot,
             ref int indicatorSlot,
-            ref int dataCtlSlot)
+            ref int dataCtlSlot,
+            ref int genericTankSlot,
+            ref int genericMotorSlot,
+            ref int genericValveSlot,
+            ref int genericPipeSlot,
+            ref int genericControlSlot)
         {
             var props = new JObject();
             string type = item.Type ?? "";
             string itemName = item.Name ?? "";
-
+            if (Program.capstoneMode == true)
+            {
             // 1. TỰ ĐỘNG PHÂN CỤM (CLUSTER LOGIC)
-            int clusterOffsetX = 0;
-            int clusterOffsetmotorX = 0;
-            int clusterOffsetmotorY = 0;
+            int clusterOffsetX = 0; int clusterOffsetmotorX = 0; int clusterOffsetmotorY = 0;
             int clusterOffsetTankX = 0;
             int clusterOffsetTankY = 0;
             int clusterOffsetPipeX = 0;
             int clusterOffsetPipeY = 0;
+            int elseTankCounter = 0;
+            int tankSpacingX = 300;
+            int elseValveCounter = 0;
+            int vaelveSpacingX = 210;
+            int elseMotorCounter = 0;
+            int motorSpacingX = 150;
+            int elsePumpCounter = 0;
+            int pumpSpacingX = 150;
+            int elseCircleCounter = 0;
+            int circleSpacingX = 50;
+            int elseButtonCounter = 0;
+            int buttonSpacingX = 110;
+            int elseTextCounter = 0;
+            int textSpacingX = 120;
+            int elseGraphicCounter = 0;
+            int graphicSpacingX = 110;
+            int elseRectangleCounter = 0;
+            int rectangleSpacingX = 110;
             if (itemName.Contains("M1"))
             {
                 clusterOffsetX = 0;
-                clusterOffsetmotorX = 335;
+                clusterOffsetmotorX = 425;
                 clusterOffsetmotorY = 335;
             }
             else if (itemName.Contains("M2"))
             {
                 clusterOffsetX = 250;
-                clusterOffsetmotorX = 335;
+                clusterOffsetmotorX = 425;
                 clusterOffsetmotorY = 130;
             }
             else if (itemName.Contains("M3"))
             {
                 clusterOffsetX = 500;
-                clusterOffsetmotorX = 845;
+                clusterOffsetmotorX = 935;
                 clusterOffsetmotorY = 115;
             }
             else if (itemName.Contains("M4"))
             {
                 clusterOffsetX = 750;
-                clusterOffsetmotorX = 845;
+                clusterOffsetmotorX = 935;
                 clusterOffsetmotorY = 295;
             }
-            else if (itemName.Contains("_01"))
-            {
 
-                clusterOffsetTankX = 635;
-                clusterOffsetTankY = 125;
-            }
-            else if (itemName.Contains("_02"))
-            {
-
-                clusterOffsetTankX = 1145;
-                clusterOffsetTankY = 142;
-            }
             else if (itemName.Contains("Pipe_1"))
             {
 
@@ -1133,17 +1154,35 @@ namespace TIA_Copilot_CLI
                 case "Tank":
                     props["LibraryPath"] = "IndustryGraphicLibrary/Tanks";
                     props["SubType"] = item.SubType ?? "Tank";
-                    props["Left"] = baseLeftTankX;
-                    props["Top"] = clusterOffsetTankY + 5;
+                    if (itemName.Contains("_01") || itemName.Contains("Tank_01"))
+                    {
+
+                        props["Left"] = 655;
+                        props["Top"] = 130;
+                    }
+                    else if (itemName.Contains("_02") || itemName.Contains("Tank_02"))
+                    {
+
+                        props["Left"] = 1165;
+                        props["Top"] = 145;
+                    }
+                    else
+                    {
+                        props["Left"] = baseLeftTankX + (elseTankCounter * tankSpacingX);
+                        props["Top"] = clusterOffsetTankY + 5;
+                        elseTankCounter++;
+                    }
+
                     props["Width"] = 290u; props["Height"] = 520u;
                     props["LevelTag"] = item.BindTag ?? "";
-                    props["DisplayFillLevel"] = item.Properties.ContainsKey("DisplayFillLevel")
-                                        ? Newtonsoft.Json.Linq.JToken.FromObject(item.Properties["DisplayFillLevel"])
-                                        : true;
+                    // AddColorScript(props, item);
+                    // props["DisplayFillLevel"] = item.Properties.ContainsKey("DisplayFillLevel")
+                    //                     ? Newtonsoft.Json.Linq.JToken.FromObject(item.Properties["DisplayFillLevel"])
+                    //                     : true;
 
-                    props["DisplayFillMode"] = item.Properties.ContainsKey("DisplayFillMode")
-                                       ? Newtonsoft.Json.Linq.JToken.FromObject(item.Properties["DisplayFillMode"])
-                                       : 0;
+                    // props["DisplayFillMode"] = item.Properties.ContainsKey("DisplayFillMode")
+                    //                    ? Newtonsoft.Json.Linq.JToken.FromObject(item.Properties["DisplayFillMode"])
+                    //                    : 0;
 
                     break;
 
@@ -1160,6 +1199,12 @@ namespace TIA_Copilot_CLI
                         props["Left"] = 1536;
                         props["Top"] = 320;
                     }
+                    else
+                    {
+                        props["Left"] = elseValveCounter * vaelveSpacingX;
+                        props["Top"] = elseValveCounter * 150;
+                        elseValveCounter++;
+                    }
                     props["Width"] = 200u; // Van thường nhỏ gọn hơn Motor
                     props["Height"] = 140u;
                     props["StatusTag"] = item.BindTag ?? "";
@@ -1168,8 +1213,31 @@ namespace TIA_Copilot_CLI
                 case "Motor":
                     props["LibraryPath"] = "IndustryGraphicLibrary/Motors";
                     props["SubType"] = item.SubType ?? "Motor2";
-                    props["Left"] = baseLeftMotorX + 90;
-                    props["Top"] = clusterOffsetmotorY + 60;
+                    if (itemName.Contains("Motor_M1"))
+                    {
+                        props["Left"] = 445; props["Top"] = 395;
+                    }
+                    else if (itemName.Contains("Motor_M2"))
+                    {
+                        props["Left"] = 445; props["Top"] = 190;
+                    }
+                    else if (itemName.Contains("Motor_M3"))
+                    {
+                        props["Left"] = 955; props["Top"] = 175;
+                    }
+                    else if (itemName.Contains("Motor_M4"))
+                    {
+                        props["Left"] = 955; props["Top"] = 355;
+                    }
+                    else
+                    {
+                        // Tọa độ tăng dần cho các máy motor không nằm trong danh sách M1-M4
+                        props["Left"] = baseLeftMotorX + (elseMotorCounter * motorSpacingX);
+                        props["Top"] = clusterOffsetmotorY + 60;
+                        elseMotorCounter++;
+                    }
+                    // props["Left"] = baseLeftMotorX + 90;
+                    // props["Top"] = clusterOffsetmotorY + 60;
                     props["Width"] = 134u; props["Height"] = 137u;
                     props["StatusTag"] = item.BindTag ?? "";
                     AddColorScript(props, item);
@@ -1177,8 +1245,30 @@ namespace TIA_Copilot_CLI
                 case "Pump":
                     props["LibraryPath"] = "IndustryGraphicLibrary/Pumps";
                     props["SubType"] = item.SubType ?? "ClassicPump";
-                    props["Left"] = baseLeftMotorX + 90;
-                    props["Top"] = clusterOffsetmotorY + 60;
+                    if (itemName.Contains("Pump_M1"))
+                    {
+                        props["Left"] = 445; props["Top"] = 395;
+                    }
+                    else if (itemName.Contains("Pump_M2"))
+                    {
+                        props["Left"] = 445; props["Top"] = 190;
+                    }
+                    else if (itemName.Contains("Pump_M3"))
+                    {
+                        props["Left"] = 955; props["Top"] = 175;
+                    }
+                    else if (itemName.Contains("Pump_M4"))
+                    {
+                        props["Left"] = 955; props["Top"] = 355;
+                    }
+                    else
+                    {
+                        props["Left"] = baseLeftMotorX + (elsePumpCounter * pumpSpacingX);
+                        props["Top"] = clusterOffsetmotorY + 60;
+                        elsePumpCounter++;
+                    }
+                    // props["Left"] = baseLeftMotorX + 90;
+                    // props["Top"] = clusterOffsetmotorY + 60;
                     props["Width"] = 134u; props["Height"] = 137u;
                     props["StatusTag"] = item.BindTag ?? "";
                     AddColorScript(props, item);
@@ -1217,13 +1307,17 @@ namespace TIA_Copilot_CLI
                         props["Top"] = 180;
                         props["Width"] = 60u;
                         props["Height"] = 25u;
-                    }
+                        props["StatusTag"] = item.BindTag ?? "";
+                        AddColorScript(props, item);
+                        }
                     else if (itemName.Contains("Hi_2"))
                     {
                         props["Left"] = 1380;
                         props["Top"] = 190;
                         props["Width"] = 60u;
                         props["Height"] = 25u;
+                        props["StatusTag"] = item.BindTag ?? "";
+                        AddColorScript(props, item);
                     }
                     else if (itemName.Contains("Lo_1"))
                     {
@@ -1231,6 +1325,8 @@ namespace TIA_Copilot_CLI
                         props["Top"] = 370;
                         props["Width"] = 60u;
                         props["Height"] = 25u;
+                        props["StatusTag"] = item.BindTag ?? "";
+                        AddColorScript(props, item);
                     }
                     else if (itemName.Contains("Lo_2"))
                     {
@@ -1238,71 +1334,75 @@ namespace TIA_Copilot_CLI
                         props["Top"] = 380;
                         props["Width"] = 60u;
                         props["Height"] = 25u;
+                        props["StatusTag"] = item.BindTag ?? "";
+                        AddColorScript(props, item);
                     }
-                    else
+                    else if (itemName.Contains("Faceplate")||itemName.Contains("faceplate")|| itemName.Contains("Background") || itemName.Contains("background"))
                     {
                         props["Left"] = baseLeft;
                         props["Top"] = FALLBACK_Y;
                         props["Width"] = 240u;
-                        props["Height"] = 350u;
+                        props["Height"] = 350u;                        
                     }
-
+                    else 
+                    {
+                        props["Left"] = baseLeft+ + (elseRectangleCounter * rectangleSpacingX);
+                        props["Top"] = FALLBACK_Y;
+                        props["Width"] = 100u;
+                        props["Height"] = 50u;
+                        props["StatusTag"] = item.BindTag ?? "";
+                        AddColorScript(props, item);
+                        elseRectangleCounter++;
+                    }
                     break;
 
                 case "Circle":
                 case "CircularArc":
                 case "CircleSegment":
                     props["CenterX"] = baseLeft + 180;
-                    props["CenterY"] = FALLBACK_Y + (itemName.ToLower().Contains("error") || itemName.ToLower().Contains("fault") || itemName.ToLower().Contains("Bao_Loi") ? 140 : 100);
-                    props["Radius"] = (itemName.ToLower().Contains("error") || itemName.ToLower().Contains("fault") || itemName.ToLower().Contains("Bao_Loi") ? 12u : 40u);
+                    props["CenterY"] = FALLBACK_Y + (itemName.ToLower().Contains("error") || itemName.ToLower().Contains("fault") || itemName.ToLower().Contains("Bao_Loi") || itemName.ToLower().Contains("Den_Loi") ? 140 : 100);
+                    props["Radius"] = (itemName.ToLower().Contains("error") || itemName.ToLower().Contains("fault") || itemName.ToLower().Contains("Bao_Loi") || itemName.ToLower().Contains("Den_Loi")? 12u : 40u);
                     if (type != "Circle") { props["AngleStart"] = 270; props["AngleRange"] = 90; }
                     props["Tag"] = item.BindTag ?? "";
                     AddColorScript(props, item);
                     break;
 
                 // --- BUTTONS ---
-                case "Button":
-                    if (itemName.Contains("Start_Auto"))
-                    {
-                        props["Left"] = 30;
-                        props["Top"] = 370;
-                    }
-                    else if (itemName.Contains("Stop_Auto"))
-                    {
-                        props["Left"] = 160;
-                        props["Top"] = 370;
+                case "Button":                   
+                    if (itemName.Contains("Start_Auto")) { props["Left"] = 30; props["Top"] = 370; }
+                    else if (itemName.Contains("Stop_Auto")) { props["Left"] = 160; props["Top"] = 370; }
+                    else if (itemName.Contains("On_Valve_01")) { props["Left"] = 1755; props["Top"] = 100; }
+                    else if (itemName.Contains("Off_Valve_01")) { props["Left"] = 1755; props["Top"] = 150; }
+                    else if (itemName.Contains("On_Valve_02")) { props["Left"] = 1755; props["Top"] = 340; }
+                    else if (itemName.Contains("Off_Valve_02")) { props["Left"] = 1755; props["Top"] = 390; }
 
-                    }
-                    else if (itemName.Contains("On_Valve_01") || itemName.Contains("On_Valve_01_Btn"))
+                    // 2. NHÓM NÚT BẤM THEO CỤM BƠM (M1, M2, M3, M4)
+                    // Code sẽ tự động lấy baseLeft của cụm đó (M1=20, M2=270, M3=520, M4=770...)
+                    else if (itemName.Contains("M1") || itemName.Contains("M2") || itemName.Contains("M3") || itemName.Contains("M4"))
                     {
-                        props["Left"] = 1755;
-                        props["Top"] = 100;
-                    }
-                    else if (itemName.Contains("Off_Valve_01") || itemName.Contains("Off_Valve_01_Btn"))
-                    {
-                        props["Left"] = 1755;
-                        props["Top"] = 150;
+                        props["Left"] = baseLeft + 15; // Căn lề trái 15px so với mép Background cụm
 
-                    }
-                    else if (itemName.Contains("On_Valve_02") || itemName.Contains("On_Valve_02_Btn"))
-                    {
-                        props["Left"] = 1755;
-                        props["Top"] = 340;
-                    }
-                    else if (itemName.Contains("Off_Valve_02") || itemName.Contains("Off_Valve_02_Btn"))
-                    {
-                        props["Left"] = 1755;
-                        props["Top"] = 390;
+                        int btnInternalY = 0;
+                        string upperName = itemName.ToUpper();
 
+                        // Tính toán Top dựa trên chức năng (Khớp chính xác bảng tọa độ 80, 130, 180)
+                        if (upperName.Contains("START")) btnInternalY = 80;
+                        else if (upperName.Contains("STOP")) btnInternalY = 130;
+                        else if (upperName.Contains("RESET")) btnInternalY = 180;
+                        else if (upperName.Contains("MODE") || upperName.Contains("MANUAL")) btnInternalY = 230;
+                        else btnInternalY = 280; // Các nút chức năng khác trong cụm xếp xuống dưới
+
+                        props["Top"] = 700 + btnInternalY; // 700 là FALLBACK_Y mặc định của cụm bơm
                     }
 
+                    // 3. NHÓM NÚT BẤM TỰ DO (Else)
                     else
                     {
-                        props["Left"] = baseLeft + 15;
-                        props["Top"] = FALLBACK_Y + internalY;
-
+                        // Các nút không tên M1-M4 sẽ dàn hàng ngang ở dưới (Top 800) để không đè lên cụm
+                        props["Left"] = 100 + (elseButtonCounter * buttonSpacingX);
+                        props["Top"] = 800;
+                        elseButtonCounter++;
                     }
-
                     props["Width"] = 100u; props["Height"] = 40u;
                     props["Text"] = item.Label ?? itemName;
                     var scripts = new JObject();
@@ -1391,10 +1491,11 @@ namespace TIA_Copilot_CLI
                     }
                     else
                     {
-                        props["Left"] = baseLeft;
+                        props["Left"] = (elseTextCounter * textSpacingX);
                         props["Top"] = 10; // Mặc định cho các label nhỏ
                         props["Width"] = 200u;
                         props["Height"] = 50u;
+                        elseTextCounter++;
                     }
 
                     // Nạp nội dung và định dạng từ JSON
@@ -1419,10 +1520,11 @@ namespace TIA_Copilot_CLI
                     }
                     else
                     {
-                        props["Left"] = 0;
+                        props["Left"] = (elseGraphicCounter * graphicSpacingX);
                         props["Top"] = 0;
                         props["Width"] = 100u;
                         props["Height"] = 100u;
+                        elseGraphicCounter++;
                     }
 
                     // Thuộc tính quan trọng nhất để hiển thị hình ảnh
@@ -1434,10 +1536,263 @@ namespace TIA_Copilot_CLI
 
                 default:
                     return null;
+            }           
+            }
+             else
+        {    
+            switch (type)
+            {
+                case "Tank":
+                    props["LibraryPath"] = "IndustryGraphicLibrary/Tanks";
+                    props["SubType"] = item.SubType ?? "Tank";
+                    props["Left"] = PROCESS_X + 160 + (genericTankSlot * 220); 
+                    props["Top"] = PROCESS_Y + 35;
+                    props["Width"] = 160; 
+                    props["Height"] = 340;
+                    props["LevelTag"] = item.BindTag ?? "";
+                    props["DisplayFillLevel"] = item.Behaviors.Contains("fill_level");
+                    if (item.Behaviors.Contains("fill_level")) props["FillLevelColor"] = "255, 161, 0";
+                    genericTankSlot++;
+                    break;
+
+                case "Valve":
+                    props["LibraryPath"] = "IndustryGraphicLibrary/Valves";
+                    props["SubType"] = item.SubType ?? "ControlValve";
+                    props["Left"] = PROCESS_X + 40 + (genericValveSlot * 130);
+                    props["Top"] = PROCESS_Y - 25;
+                    props["Width"] = 110; 
+                    props["Height"] = 90;
+                    props["StatusTag"] = item.BindTag ?? "";
+                    AddColorScript(props, item);
+                    genericValveSlot++;
+                    break;
+
+                case "Motor":
+                    props["LibraryPath"] = "IndustryGraphicLibrary/Motors";
+                    props["SubType"] = item.SubType ?? "Motor2";
+                    props["Left"] = PROCESS_X - 70 + (genericMotorSlot * 170);
+                    props["Top"] = PROCESS_Y + 335;
+                    props["Width"] = 145; 
+                    props["Height"] = 105;
+                    props["StatusTag"] = item.BindTag ?? "";
+                    AddColorScript(props, item);
+                    genericMotorSlot++;
+                    break;
+
+                case "Pump":
+                    props["LibraryPath"] = "IndustryGraphicLibrary/Pumps";
+                    props["SubType"] = item.SubType ?? "ClassicPump";
+                    props["Left"] = PROCESS_X - 70 + (genericMotorSlot * 170);
+                    props["Top"] = PROCESS_Y + 335;
+                    props["Width"] = 145; 
+                    props["Height"] = 105;
+                    props["StatusTag"] = item.BindTag ?? "";
+                    AddColorScript(props, item);
+                    genericMotorSlot++; // Dùng chung slot với Motor để dàn hàng ngang đồng nhất
+                    break;
+
+                case "Pipe":
+                    props["LibraryPath"] = "IndustryGraphicLibrary/Pipes";
+                    props["SubType"] = item.SubType ?? "PipeHorizontal";
+                    props["Left"] = PROCESS_X - 45;
+                    props["Top"] = PROCESS_Y + (genericPipeSlot * 40);
+                    props["Width"] = (item.SubType == "PipeVertical") ? 15 : 245;
+                    props["Height"] = (item.SubType == "PipeVertical") ? 315 : 15;
+                    props["BasicColor"] = "238, 238, 238";
+                    props["StatusTag"] = item.BindTag ?? "";
+                    genericPipeSlot++;
+                    break;
+
+                case "Rectangle":
+                    props["Left"] = INDICATOR_X;
+                    props["Top"] = INDICATOR_Y_START + (indicatorSlot * 35);
+                    props["Width"] = 25;
+                    props["Height"] = 25;
+                    props["StatusTag"] = item.BindTag ?? "";
+                    AddColorScript(props, item);
+                    indicatorSlot++;
+                    break;
+
+                case "Circle":
+                    props["CenterX"] = INDICATOR_X + 12;
+                    props["CenterY"] = INDICATOR_Y_START + (indicatorSlot * 35) + 12;
+                    props["Radius"] = 12;
+                    props["Tag"] = item.BindTag ?? "";
+                    AddColorScript(props, item);
+                    indicatorSlot++;
+                    break;
+
+                case "CircularArc":
+                    props["CenterX"] = INDICATOR_X + 12;
+                    props["CenterY"] = INDICATOR_Y_START + (indicatorSlot * 35) + 12;
+                    props["Radius"] = 12;
+                    props["AngleStart"] = 270;
+                    props["AngleRange"] = 90;
+                    props["Tag"] = item.BindTag ?? "";
+                    indicatorSlot++;
+                    break;
+
+                case "CircleSegment":
+                    props["CenterX"] = INDICATOR_X + 12;
+                    props["CenterY"] = INDICATOR_Y_START + (indicatorSlot * 35) + 12;
+                    props["Radius"] = 12;
+                    props["AngleStart"] = 270;
+                    props["AngleRange"] = 90;
+                    props["Tag"] = item.BindTag ?? "";
+                    indicatorSlot++;
+                    break;
+
+                // case "Button":
+                //     int btnY = SIDEBAR_Y_START + buttonSlot * (SIDEBAR_BTN_H + SIDEBAR_GAP);
+                //     props["Left"] = SIDEBAR_X;
+                //     props["Top"] = btnY;
+                //     props["Width"] = SIDEBAR_BTN_W;
+                //     props["Height"] = SIDEBAR_BTN_H;
+                //     props["Text"] = item.Label ?? item.Name;
+                //     var scripts = new JObject();
+                //     if (!string.IsNullOrEmpty(item.NavigateTo))
+                //         scripts["KeyUp"] = $"HMIRuntime.UI.SysFct.ChangeScreen('{item.NavigateTo}', null);";
+                //     else {
+                //         if (item.KeydownWrite != null)
+                //             scripts["KeyDown"] = $"Tags(\"{item.KeydownWrite.Tag}\").Write({item.KeydownWrite.Value});";
+                //         if (item.KeyupWrite != null)
+                //             scripts["KeyUp"] = $"Tags(\"{item.KeyupWrite.Tag}\").Write({item.KeyupWrite.Value});";
+                //     }
+                //     props["Scripts"] = scripts;
+                //     buttonSlot++;
+                //     break;
+
+                // case "HmiToggleSwitch":
+                //     props["Left"] = SIDEBAR_X;
+                //     props["Top"] = SIDEBAR_Y_START + buttonSlot * (SIDEBAR_BTN_H + SIDEBAR_GAP);
+                //     props["Width"] = 80;
+                //     props["Height"] = 40;
+                //     props["BackColor"] = !string.IsNullOrEmpty(item.BackColor) ? item.BackColor : "242, 244, 255";
+                //     props["AlternateBackColor"] = !string.IsNullOrEmpty(item.AlternateBackColor) ? item.AlternateBackColor : "0, 200, 80";
+                //     props["TagColor"] = item.BindTag ?? "";
+                //     props["Events"] = new JObject { ["OnStateChanged"] = !string.IsNullOrEmpty(item.BindTag) ? $"Tags(\"{item.BindTag}\").Write(item.IsAlternateState);" : "" };
+                //     buttonSlot++;
+                //     break;
+
+                // case "IOField":
+                //     props["Left"] = SIDEBAR_X;
+                //     props["Top"] = 50 + (genericControlSlot * 50);
+                //     props["Width"] = 120;
+                //     props["Height"] = 40;
+                //     props["Format"] = item.Format ?? "{0}";
+                //     props["StatusTag"] = item.BindTag ?? "";
+                //     genericControlSlot++;
+                //     break;
+                // case "Clock":
+                //     props["Left"] = SIDEBAR_X;
+                //     props["Top"] = 20;
+                //     props["Width"] = 200;
+                //     props["Height"] = 50;
+                //     props["Format"] = item.Format ?? "{P, hh:mm:ss}";
+                //     props["ClockMode"] = item.ClockMode ?? "LocalTime";
+                //     break;
+
+                case "Button":
+                case "HmiToggleSwitch":
+                case "IOField":
+                case "Clock":
+                    // Dùng CHUNG buttonSlot để xếp hàng dọc từ trên xuống dưới
+                    int sidebarY = SIDEBAR_Y_START + (buttonSlot * (SIDEBAR_BTN_H + SIDEBAR_GAP));
+                    props["Left"] = SIDEBAR_X;
+                    props["Top"] = sidebarY;
+                    
+                    // Tùy chỉnh kích thước riêng cho từng loại nếu cần
+                    if (type == "IOField") {
+                        props["Width"] = 120;
+                        props["Height"] = 40;
+                    } else if (type == "HmiToggleSwitch") {
+                        props["Width"] = 80;
+                        props["Height"] = 40;
+                    } else {
+                        props["Width"] = SIDEBAR_BTN_W;
+                        props["Height"] = SIDEBAR_BTN_H;
+                    }
+
+                    buttonSlot++; // Tăng bộ đếm chung cho Sidebar
+                    break;
+
+                case "Gauge":
+                    props["Left"] = PROCESS_X + 150 + (genericTankSlot * 100);
+                    props["Top"] = PROCESS_Y - 50;
+                    props["Width"] = 150;
+                    props["Height"] = 150;
+                    props["Tag"] = item.BindTag ?? "";
+                    props["MinValue"] = item.MinValue ?? 0;
+                    props["MaxValue"] = item.MaxValue ?? 100;
+                    genericControlSlot++;
+                    break;
+
+                
+                case "TrendControl":
+                    props["Left"] = DATACTL_X + (dataCtlSlot * (DATACTL_W + DATACTL_GAP));
+                    props["Top"] = DATACTL_Y_START;
+                    props["Width"] = DATACTL_W;
+                    props["Height"] = DATACTL_H;
+                    props["TrendName"] = item.TrendTag ?? item.BindTag ?? "";
+                    props["ShowRuler"] = item.ShowRuler;
+                    dataCtlSlot++;
+                    break;
+                    case "TouchArea":                    
+                    props["Left"] = PROCESS_X + 160 + (genericControlSlot * 50); 
+                    props["Top"] = PROCESS_Y + 35;
+                    props["Width"] =160;
+                    props["Height"] = 340;
+                    props["ToolTipText"] = item.Tooltip ?? "";
+                    
+                    // Nếu có tag điều khiển vùng nhấn
+                    if (!string.IsNullOrEmpty(item.BindTag))
+                    {
+                        props["Tag"] = item.BindTag;
+                    }
+
+                    // Xử lý script sự kiện nếu có
+                    var touchScripts = new JObject();
+                    if (item.KeydownWrite != null)
+                        touchScripts["OnPressed"] = $"Tags(\"{item.KeydownWrite.Tag}\").Write({item.KeydownWrite.Value});";
+                    
+                    props["Scripts"] = touchScripts;
+                    
+                    genericControlSlot++; // Tăng slot để tránh trùng lắp các vùng nhấn
+                    break;
+
+                case "AlarmControl":
+                    props["Left"] = DATACTL_X + (dataCtlSlot * (DATACTL_W + DATACTL_GAP));
+                    props["Top"] = DATACTL_Y_START;
+                    props["Width"] = DATACTL_W;
+                    props["Height"] = DATACTL_H;
+                    dataCtlSlot++;
+                    break;
+                case "Bar":
+                    props["Left"] = PROCESS_X - 50;
+                    props["Top"] = PROCESS_Y + (genericPipeSlot * 20); // Tránh đè lên Pipe
+                    props["Width"] = 50;
+                    props["Height"] = 200;
+                    props["Tag"] = item.BindTag ?? "";
+                    props["MinValue"] = item.MinValue ?? 0;
+                    props["MaxValue"] = item.MaxValue ?? 100;
+                    genericPipeSlot++;
+                    break;
+                default:
+                    props["Left"] = 10 + (buttonSlot * 110);
+                    props["Top"] = 950;
+                    break;
             }
 
-            return new JObject { ["Name"] = itemName, ["Type"] = type, ["Properties"] = props };
+            
         }
+        return new JObject 
+        {
+                ["Name"] = item.Name,
+                ["Type"] = type,
+                ["Properties"] = props
+            };
+        }
+       
 
         /// <summary>
         /// Generates the WinCC ColorScript string for color_on_status behavior.

@@ -672,3 +672,4 @@ tags_cache.txt
 TIA_Copilot_Context_Dump.txt
 *.scl
 *_Tags.csv
+api_cooldown.json

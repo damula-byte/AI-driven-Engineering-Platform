@@ -14,7 +14,7 @@ using System.Collections.Generic;
 
 namespace TIA_Copilot_CLI
 {
-    class Program
+    public class Program
     {
         private static TIA_V20 _tiaEngine = new TIA_V20();
         private static string _currentProjectName = "None";
@@ -24,6 +24,7 @@ namespace TIA_Copilot_CLI
         private static string _currentIp = "0.0.0.0";
         private static string _lastGeneratedFilePath = "";
         public static string _currentSessionId = "default";
+        public static bool capstoneMode = false;
 
         [STAThread]
         static async Task Main(string[] args)
@@ -171,7 +172,7 @@ namespace TIA_Copilot_CLI
                                 else if (targetType == "CWC_SCREEN") targetName = "CWC";
                                 else targetName = chatAction.ToUpper();
 
-                                string query = args.Length > 2 ? args[2] : "";
+                                string query = args.Length > 2 ? args[2] : "";                                
                                 if (args.Length > 3) sessionId = args[3];
 
                                 if (string.IsNullOrEmpty(query))
@@ -181,6 +182,7 @@ namespace TIA_Copilot_CLI
                                 }
                                 Stopwatch chat = new Stopwatch();
                                 chat.Start();
+                                CheckCapstoneMode(query);
                                 await CommandHandler.HandleChatAsync(targetType, query, sessionId);
                                 chat.Stop();
                                 LogPerformance($"Chat {targetName}", chat.ElapsedMilliseconds);
@@ -954,5 +956,50 @@ namespace TIA_Copilot_CLI
             string logEntry = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss},{actionName},{timeMs/1000.0}\n";
             File.AppendAllText(logPath, logEntry);
         }
+        // public static void CheckCapstoneMode(string query)
+        // {
+        // if (query == @"Generate a screen with 1 HmiGraphicView named it: Logo_BachKhoa; then create 4 horizontal faceplates for Pump_M1, Pump_M2, Pump_M3 and Pump_M4. Strictly follow the COMPOUND CONTROL — DEVICE FACEPLATE strategy: Start by drawing a Rectangle Background Container for each Pump. Group Start/Stop/Reset buttons/ 1 IOField output displaying the pump's running time , 1 HmiToggleSwitch and 2 Indicators of running , fault (these indicators are created using Circle) inside the gray frame as per the layout rules. Next, create 4 pumps (Pump_M1, Pump_M2, Pump_M3 where is create using ClassicPump, and Pump_M4, where Pump_M4 is created using a HorizontalPumpLeft type pump) ;  4 button (On_Valve_01, Off_Valve_01, On_Valve_02, Off_Valve_02); 2 button (Start_Auto, Stop_Auto); 2 tank (Tank_01, Tank_02); 7 PipeHorizontal (Pipe_1, Pipe_2, Pipe_3 , Pipe_4, Pipe_5, Pipe_6, Pipe_7); 2 ControlValve; 4 sensor using rectangle (Hi_1, Lo_1, Hi_2, Lo_2); 1 HmiText with content Senior Project (and named this HmiText is Header)")
+        //                         {
+        //                             capstoneMode = true;
+        //                         }
+        //                         else capstoneMode = false;
+        // }
+        public static void CheckCapstoneMode(string query)
+{
+    if (string.IsNullOrWhiteSpace(query)) { capstoneMode = false; return; }
+
+    string q = query.ToUpper();
+
+    // 1. Định nghĩa bộ từ khóa nhận diện "Dấu vân tay" của đồ án
+    string[] mandatoryKeywords = { 
+        "COMPOUND CONTROL", 
+        "DEVICE FACEPLATE", 
+        "LOGO_BACHKHOA" 
+    };
+
+    string[] optionalKeywords = { 
+        "PUMP_M1", 
+        "PUMP_M4", 
+        "SENIOR PROJECT", 
+        "RECTANGLE BACKGROUND CONTAINER" 
+    };
+
+    // 2. Logic kiểm tra: 
+    // Bật chế độ đồ án nếu chứa TẤT CẢ các từ khóa bắt buộc
+    bool hasMandatory = mandatoryKeywords.All(k => q.Contains(k));
+    
+    // Và chứa ít nhất 2 từ khóa bổ trợ (để tăng độ tin cậy)
+    int optionalCount = optionalKeywords.Count(k => q.Contains(k));
+
+    if (hasMandatory && optionalCount >= 2)
+    {
+        capstoneMode = true;        
     }
+    else
+    {
+        capstoneMode = false;
+    }
+}
+    }
+    
 }

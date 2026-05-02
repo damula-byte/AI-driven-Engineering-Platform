@@ -68,16 +68,22 @@ Describe rules for generating Valve objects:
 - Naming convention
 METADATA_TYPE: WIDGET
 
-## STRATEGY: LIBRARY OBJECT — MOTOR / PUMP
+## STRATEGY: LIBRARY OBJECT — MOTOR 
 [PLACEHOLDER — TO BE IMPLEMENTED]
 Describe rules for generating Motor and Pump objects:
 - Motor subtypes:Motor,Motor1,Motor2,Motor3,Motor4,Motor5,Motor5Front,Motor6,Motor7,Motor7Front,Motor8,Motor8Front,Motor9Vertical,MotorBase,MotorVentilator,RailClip
+- Required fields: bind_tag (boolean status tag)
+- Supported behaviors: color_on_status
+- Naming convention
+METADATA_TYPE: WIDGET
+## STRATEGY: LIBRARY OBJECT — PUMP
+[PLACEHOLDER — TO BE IMPLEMENTED]
+Describe rules for generating Motor and Pump objects:
 - Pump subtypes: 90DegreePump,ClassicPump,CoolPump,DrivePump,EndsuctionCentrifugalPump,ExplosionProofPump,HeavyDutyPlasticCentrifugalPump,HorizontalPumpLeft,HorizontalSplitCasePump,MagneticDrivePump,Pump,Pump1,Pump2,SeallessPump,SelfprimingCentrifugalPump,Ventilator,VerticalPump,VerticalPump1,VerticalPumpDown,VerticalPumpUp.
 - Required fields: bind_tag (boolean status tag)
 - Supported behaviors: color_on_status
 - Naming convention
 METADATA_TYPE: WIDGET
-
 ## STRATEGY: LIBRARY OBJECT — PIPE
 [PLACEHOLDER — TO BE IMPLEMENTED]
 Describe rules for Pipe objects:

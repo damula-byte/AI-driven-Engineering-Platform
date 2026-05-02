@@ -592,11 +592,23 @@ namespace Middleware_console
             var stateProp = result.GetType().GetProperty("State");
             string state = stateProp?.GetValue(result)?.ToString() ?? "Unknown";
 
-            string stateColor = state == "Success" ? "\u001b[32m" : "\u001b[31m";
+            string stateColor;
+                if (state == "Success") 
+                {
+                    stateColor = "\u001b[32m"; // Green
+                }
+                else if (state == "Warning") 
+                {
+                    stateColor = "\u001b[33m"; // Yellow
+                }
+                else 
+                {
+                    stateColor = "\u001b[31m"; // Red (cho Error hoặc Unknown)
+                }
             string reset = "\u001b[0m";
 
             StringBuilder sb = new StringBuilder();
-            sb.AppendLine($"{label}: {stateColor}{state}{reset}");
+            sb.AppendLine($"{stateColor}{label}: {state}{reset}");
 
             // Lấy Messages một cách an toàn hơn
             var messagesProp = result.GetType().GetProperty("Messages");
@@ -1296,6 +1308,8 @@ namespace Middleware_console
                 // 2. NHÓM WIDGET (Thư viện)
                 else if (item.Properties.ContainsKey("LibraryPath"))
                 {
+                    string targetProp = item.Type.Contains("Tank") ? null: "BasicColor";
+                    string customScript = item.Properties.ContainsKey("ColorScript") ? item.Properties["ColorScript"].ToString() : "";
                     if (item.Type.Contains("Tank"))
                     {
                         foreach (dynamic m in dynItem.Interface)
@@ -1321,20 +1335,20 @@ namespace Middleware_console
                             // 3. Gán giá trị FillLevelValue chạy theo Tag (Level)
                             else if (m.PropertyName == "FillLevelValue")
                             {
-                                BindTagToWidget(m, tag); // tag ở đây chính là LevelTag bạn đã trích xuất ở trên
-                                Console.WriteLine($"      => [DYNAMIC TANK] {item.Name} -> DisplayLevel: ON, Mode: 0, Tag: {tag}");
+                                BindScriptToWidget(m, tag, customScript); // tag ở đây chính là LevelTag bạn đã trích xuất ở trên
+                                Console.WriteLine($"      => [DYNAMIC TANK] {item.Name}");
                             }
                         }
                     }
 
-                    string targetProp = item.Type.Contains("Tank") ? "FillLevelColor" : "BasicColor";
-                    string customScript = item.Properties.ContainsKey("ColorScript") ? item.Properties["ColorScript"].ToString() : "";
+                    
                     foreach (dynamic m in dynItem.Interface)
                     {
                         if (m.PropertyName == targetProp)
                         {
-                            if (item.Type.Contains("Motor")) BindScriptToWidget(m, tag, customScript);
-                            else BindTagToWidget(m, tag);
+                            // if (item.Type.Contains("Motor")) BindScriptToWidget(m, tag, customScript);
+                            // else BindTagToWidget(m, tag);
+                            BindScriptToWidget(m, tag, customScript);
                             Console.WriteLine($"      => [BINDED WIDGET] {item.Name} -> {tag}");
                             break;
                         }
@@ -1573,10 +1587,9 @@ namespace Middleware_console
                     scriptObj.ScriptCode = !string.IsNullOrEmpty(scriptCode) ? scriptCode : defaultScript;
 
                     // Thông báo trạng thái nạp
-                    if (triggerSuccess)
-                        Console.WriteLine($"      => [THẬT RGB SCRIPT] {item.Name} -> {tagName} (Trigger OK)");
-                    else
-                        Console.WriteLine($"      => [THẬT RGB SCRIPT] {item.Name} -> {tagName} (Cần gán Trigger tay)");
+               
+                    Console.WriteLine($"      =>[DYNAMIZATION] Applied RGB Script: {item.Name} Linked to {tagName}");
+                    
                 }
             }
             catch (Exception ex)
@@ -1615,7 +1628,7 @@ namespace Middleware_console
 
                     ((dynamic)scriptDyn).ScriptCode = finalScript;
 
-                    Console.WriteLine($"      => [THẬT WIDGET JSON SCRIPT] {member.PropertyName} -> {tagName}");
+                    Console.WriteLine($"      =>[WIDGET SCRIPT] Injected JSON Logic: {member.PropertyName} -> {tagName}");
                 }
             }
             catch (Exception ex)
@@ -1641,7 +1654,7 @@ namespace Middleware_console
                     // Thực thi nạp Tag vào đúng cổng PropertyName của Member
                     var tagDyn = method.MakeGenericMethod(tagType).Invoke(dyns, new object[] { member.PropertyName });
                     ((dynamic)tagDyn).Tag = tagName;
-                    Console.WriteLine($"      => [THẬT WIDGET] {member.PropertyName} -> {tagName}");
+                    Console.WriteLine($"      =>[WIDGET CONFIG] Property Bound: {member.PropertyName} -> {tagName}");
                 }
             }
             catch (Exception ex)

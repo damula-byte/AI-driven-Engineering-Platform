@@ -24,10 +24,19 @@
       "hint": "inlet valve, top of pipe entering tank"
     },
     {
-      "_comment_motor": "LIBRARY OBJECT EXAMPLE — Motor/Pump",
+      "_comment_motor": "LIBRARY OBJECT EXAMPLE — Motor",
       "name": "Bom_Cap_Nuoc",
       "type": "Motor",
       "subtype": "Motor2",
+      "bind_tag": "V3_2",
+      "behaviors": ["color_on_status"],
+      "hint": "feed pump, bottom left of screen"
+    },
+    {
+      "_comment_pump": "LIBRARY OBJECT EXAMPLE — Pump",
+      "name": "Bom_Cap_Nuoc",
+      "type": "Pump",
+      "subtype": "ClassicPump",
       "bind_tag": "V3_2",
       "behaviors": ["color_on_status"],
       "hint": "feed pump, bottom left of screen"
