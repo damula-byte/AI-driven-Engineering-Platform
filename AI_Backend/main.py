@@ -9,14 +9,38 @@ from langchain_anthropic import ChatAnthropic
 import memory 
 import app_secrets
 import re
+import chromadb
+from langchain_huggingface import HuggingFaceEmbeddings
 
 os.environ["CHROMA_TELEMETRY_IMPL"] = "none"
 warnings.filterwarnings("ignore")
 logging.getLogger("chromadb").setLevel(logging.ERROR)
 logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
 logging.getLogger("langchain").setLevel(logging.ERROR)
+
+# ─────────────────────────────────────────────────────────────────
+# GLOBAL SINGLETON CACHES — Initialize once per Python process
+# ─────────────────────────────────────────────────────────────────
+_embeddings_cache = None
+_persistent_client_cache = None
+
+def get_embeddings():
+    """Lazily initialize and cache embeddings model (avoid reloading per request)."""
+    global _embeddings_cache
+    if _embeddings_cache is None:
+        _embeddings_cache = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    return _embeddings_cache
+
+def get_persistent_client():
+    """Lazily initialize and cache chromadb persistent client (avoid reopening DB per request)."""
+    global _persistent_client_cache
+    if _persistent_client_cache is None:
+        _persistent_client_cache = chromadb.PersistentClient(path=app_secrets.CHROMA_DB_PATH)
+    return _persistent_client_cache
+
+# ─────────────────────────────────────────────────────────────────
       
-CURRENT_KEY =   app_secrets.get_next_api_key()
+CURRENT_KEY = app_secrets.get_next_api_key()
 os.environ["GOOGLE_API_KEY"] = CURRENT_KEY
 
 def get_system_prompt_part1():
@@ -110,11 +134,9 @@ def main():
         user_tags = request_data.get("user_tags", "").strip()
         spec_text = request_data.get("spec_text", "").strip()
         target_block_type = request_data.get("target_block_type", "AUTO").upper()
+        custom_api_key = request_data.get("api_key", "").strip()
 
         # region XỬ LÝ LỆNH ĐẶC BIỆT (KHÔNG PHẢI CHAT) - LIST SESSIONS, RESET SESSION, UPDATE SPEC, CHECK SPEC
-
-        
-
         if command_type == "list_sessions":
             sessions = memory.list_all_sessions()
             send_response({"status": "success", "sessions": sessions})
@@ -129,28 +151,33 @@ def main():
 
         # --- BƯỚC 2: XỬ LÝ LỆNH UPDATE SPEC ---
         if command_type == "update_spec":
-            from langchain_huggingface import HuggingFaceEmbeddings 
-            from langchain_community.vectorstores import Chroma
             from langchain_text_splitters import RecursiveCharacterTextSplitter
-            import chromadb
 
             try:
-                persistent_client = chromadb.PersistentClient(path=app_secrets.CHROMA_DB_PATH)
+                # Reuse global client and embeddings to avoid reload overhead
+                persistent_client = get_persistent_client()
+                embeddings = get_embeddings()
+                
+                # Delete old collection if it exists
                 try:
                     persistent_client.delete_collection("current_project_spec")
                 except Exception:
                     pass 
                 
                 if spec_text:
+                    # Split spec into chunks
                     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
                     chunks = splitter.split_text(spec_text)
                     
-                    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-                    Chroma.from_texts(
-                        texts=chunks, 
-                        embedding=embeddings, 
-                        persist_directory=app_secrets.CHROMA_DB_PATH,
-                        collection_name="current_project_spec"
+                    # Create collection and upsert documents directly (bypass LangChain wrapper overhead)
+                    collection = persistent_client.create_collection(name="current_project_spec")
+                    
+                    # Batch embed and upsert
+                    chunk_embeddings = embeddings.embed_documents(chunks)
+                    collection.upsert(
+                        documents=chunks,
+                        embeddings=chunk_embeddings,
+                        ids=[f"chunk_{i}" for i in range(len(chunks))]
                     )
                     msg = f"Chunked and loaded {len(chunks)} chunks Spec into Vector DB."
                 else:
@@ -160,18 +187,24 @@ def main():
             except Exception as e:
                 send_response({"status": "error", "message": f"Error loading Spec: {str(e)}"})
         if command_type == "check_spec":
-            import chromadb
             try:
-                persistent_client = chromadb.PersistentClient(path=app_secrets.CHROMA_DB_PATH)
+                # Reuse global client to avoid DB reopening overhead
+                persistent_client = get_persistent_client()
+                
                 try:
                     collection = persistent_client.get_collection("current_project_spec")
-                    results = collection.get()
+                    results = collection.get(limit=1000)  # Limit retrieval for memory efficiency
                     docs = results.get("documents", [])
                     
                     if not docs:
                         msg = "No current spec found. The system is empty."
                     else:
-                        preview_text = "\n\n--- [CHUNK NEXT] ---\n\n".join(docs)
+                        # Show first 10 chunks, then indicate if there are more
+                        displayed_docs = docs[:10]
+                        preview_text = "\n\n--- [CHUNK NEXT] ---\n\n".join(displayed_docs)
+                        remaining = len(docs) - len(displayed_docs)
+                        if remaining > 0:
+                            preview_text += f"\n\n... and {remaining} more chunks"
                         msg = f"Found {len(docs)} chunks in current Spec.\n\n[CURRENT SPEC CONTENT]:\n{preview_text}"
                 except Exception:
                     msg = "No current Spec collection found. The system is completely empty."
@@ -183,14 +216,14 @@ def main():
         # --- LỆNH DỌN DẸP VECTOR DB (SPEC) ---
         elif command_type == "clear_spec":
             try:
-                import shutil
-                # SỬA LỖI Ở ĐÂY: Trỏ thẳng vào thư mục CHROMA_DB_PATH trong app_secrets
-                db_directory = app_secrets.CHROMA_DB_PATH 
-
-                if os.path.exists(db_directory):
-                    shutil.rmtree(db_directory)
-                    msg = "Deleted spec successful. Database has been cleared!"
-                else:
+                # Reuse global client to avoid DB reopening overhead
+                persistent_client = get_persistent_client()
+                
+                try:
+                    persistent_client.delete_collection("current_project_spec")
+                    msg = "Deleted spec successful. Database collection cleared!"
+                except Exception:
+                    # Collection doesn't exist — already empty
                     msg = "System is empty, no Spec to delete."
 
                 send_response({"status": "success", "message": msg})
@@ -208,14 +241,14 @@ def main():
         #   1. Skip LangChain Chroma wrapper overhead (~0.3s per collection open)
         #   2. kb_context and spec_context retrieved IN PARALLEL (concurrent I/O)
         #   3. Embedding computed ONCE, reused for both queries
+        #   4. GLOBAL CACHES: embeddings & persistent_client reused across requests
         # ─────────────────────────────────────────────────────────────────────
-        from langchain_huggingface import HuggingFaceEmbeddings
         from langchain_google_genai import ChatGoogleGenerativeAI
-        import chromadb
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-        persistent_client = chromadb.PersistentClient(path=app_secrets.CHROMA_DB_PATH)
+        # Reuse global cached embeddings and client to avoid reload overhead (~1-3s saved)
+        embeddings = get_embeddings()
+        persistent_client = get_persistent_client()
 
         # Embed the query ONCE — reused for all collection queries
         query_vector = embeddings.embed_query(user_query)
@@ -229,14 +262,8 @@ def main():
             try:
                 if target_block_type == "CWC_SCREEN":
                     collection = persistent_client.get_collection("cwc_standard_kb")
-                    k = 5
+                    k = 8
                     where = None
-                    if any(w in query_upper for w in ["GAUGE","CHART","TABLE","BUTTON","INDICATOR","BAR","LED","DISPLAY"]):
-                        where = {"type": {"$in": ["UI", "LIFECYCLE"]}}
-                    elif any(w in query_upper for w in ["PROPERTY","TAG","BOOL","NUMBER","STRING","REAL","INT"]):
-                        where = {"type": {"$in": ["PROPERTY", "EVENT"]}}
-                    elif any(w in query_upper for w in ["EVENT","METHOD","FIRE","CLICK","PRESS"]):
-                        where = {"type": {"$in": ["EVENT", "UI"]}}
 
                 elif target_block_type == "HMI_SCREEN":
                     collection = persistent_client.get_collection("hmi_standard_kb")
