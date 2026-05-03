@@ -39,9 +39,6 @@ def get_persistent_client():
     return _persistent_client_cache
 
 # ─────────────────────────────────────────────────────────────────
-      
-CURRENT_KEY = app_secrets.get_next_api_key()
-os.environ["GOOGLE_API_KEY"] = CURRENT_KEY
 
 def get_system_prompt_part1():
     try:
@@ -134,7 +131,16 @@ def main():
         user_tags = request_data.get("user_tags", "").strip()
         spec_text = request_data.get("spec_text", "").strip()
         target_block_type = request_data.get("target_block_type", "AUTO").upper()
-        custom_api_key = request_data.get("api_key", "").strip()
+        system_mode = request_data.get("system_mode", "USER").upper()
+        custom_api_key = request_data.get("custom_api_key", "").strip()
+
+
+        if system_mode == "DEV":
+            CURRENT_KEY = app_secrets.get_next_api_key()
+        else:
+            CURRENT_KEY = custom_api_key
+
+        os.environ["GOOGLE_API_KEY"] = CURRENT_KEY  
 
         # region XỬ LÝ LỆNH ĐẶC BIỆT (KHÔNG PHẢI CHAT) - LIST SESSIONS, RESET SESSION, UPDATE SPEC, CHECK SPEC
         if command_type == "list_sessions":
@@ -598,7 +604,8 @@ def main():
         )
 
         # ── Cooldown guard ────────────────────────────────────────────────────
-        app_secrets.enforce_cooldown(min_seconds=5.0)
+        if system_mode == "DEV":
+            app_secrets.enforce_cooldown(min_seconds=5.0)
 
         # ── Retry logic ───────────────────────────────────────────────────────
         # Only 503 and RPM are safe to retry — neither charges RPD quota.
@@ -617,37 +624,54 @@ def main():
         MAX_RETRIES = 3
         response   = None
         last_hint  = ""
-
+        
+        
         for attempt in range(MAX_RETRIES + 1):  # 0, 1, 2, 3
             try:
                 response = llm.invoke(full_prompt)
-                app_secrets.record_api_call()
+                if system_mode == "DEV":
+                    app_secrets.record_api_call()
                 break  # success — exit loop
 
             except Exception as api_exc:
                 err_type = app_secrets.classify_api_error(api_exc)
 
                 # ── Errors that should NEVER be retried ───────────────────────
+                # if err_type == "RPD":
+                #     last_hint = (
+                #         "Daily quota (RPD) exhausted on this key. "
+                #         "Add more keys to list_keys_gemini or wait until tomorrow."
+                #     )
+                #     # Rotate key for NEXT session — useless for this call
+                #     new_key = app_secrets.get_next_api_key()
+                #     os.environ["GOOGLE_API_KEY"] = new_key
+                #     break
                 if err_type == "RPD":
                     last_hint = (
-                        "Daily quota (RPD) exhausted on this key. "
-                        "Add more keys to list_keys_gemini or wait until tomorrow."
+                        "Daily quota (RPD) exhausted on this key. Rotate keys or wait."
+                        if system_mode == "DEV" else 
+                        "Your API Key has exhausted its daily quota."
                     )
-                    # Rotate key for NEXT session — useless for this call
-                    new_key = app_secrets.get_next_api_key()
-                    os.environ["GOOGLE_API_KEY"] = new_key
-                    break  # do not retry
+                    break
+
+                # if err_type == "AUTH":
+                #     last_hint = (
+                #         "API key rejected (401/403). "
+                #         "Check your keys in app_secrets.py."
+                #     )
+                #     # Rotate key immediately — this key is invalid
+                #     new_key = app_secrets.get_next_api_key()
+                #     os.environ["GOOGLE_API_KEY"] = new_key
+                #     break  # do not retry
 
                 if err_type == "AUTH":
                     last_hint = (
-                        "API key rejected (401/403). "
-                        "Check your keys in app_secrets.py."
+                        "API key rejected (401/403). Check app_secrets.py."
+                        if system_mode == "DEV" else 
+                        "Your Custom API Key is invalid or expired."
                     )
-                    # Rotate key immediately — this key is invalid
-                    new_key = app_secrets.get_next_api_key()
-                    os.environ["GOOGLE_API_KEY"] = new_key
-                    break  # do not retry
-
+                    break
+                
                 if err_type == "OTHER":
                     last_hint = str(api_exc)
                     break  # unknown error — surface immediately
@@ -668,7 +692,13 @@ def main():
                     break
 
                 # Rotate key for next attempt
-                new_key = app_secrets.get_next_api_key()
+                if system_mode == "DEV":
+                    new_key = app_secrets.get_next_api_key()
+                    print_action = "Rotated key."
+                else:
+                    new_key = custom_api_key
+                    print_action = "Holding custom key."
+
                 os.environ["GOOGLE_API_KEY"] = new_key
                 llm = ChatGoogleGenerativeAI(
                     model="gemini-2.5-flash",
@@ -678,29 +708,38 @@ def main():
                     model_kwargs={"response_mime_type": "application/json"},
                 )
 
+                # if err_type == "503":
+                #     wait = 5 * (attempt + 1)   # 5s, 10s, 15s
+                #     print(
+                #         f"[RETRY {attempt + 1}/{MAX_RETRIES}] 503 — server overload. "
+                #         f"Rotated key. Waiting {wait}s...",
+                #         file=sys.stderr, flush=True
+                #     )
+                # elif err_type == "RPM":
+                #     wait = 60                  # RPM window is always ~60s
+                #     print(
+                #         f"[RETRY {attempt + 1}/{MAX_RETRIES}] RPM limit hit. "
+                #         f"Rotated key. Waiting {wait}s...",
+                #         file=sys.stderr, flush=True
+                #     )
+
+                # time.sleep(wait)
                 if err_type == "503":
-                    wait = 5 * (attempt + 1)   # 5s, 10s, 15s
-                    print(
-                        f"[RETRY {attempt + 1}/{MAX_RETRIES}] 503 — server overload. "
-                        f"Rotated key. Waiting {wait}s...",
-                        file=sys.stderr, flush=True
-                    )
+                    wait = 5 * (attempt + 1)
+                    print(f"[RETRY {attempt + 1}/{MAX_RETRIES}] 503 — server overload. {print_action} Waiting {wait}s...", file=sys.stderr, flush=True)
                 elif err_type == "RPM":
-                    wait = 60                  # RPM window is always ~60s
-                    print(
-                        f"[RETRY {attempt + 1}/{MAX_RETRIES}] RPM limit hit. "
-                        f"Rotated key. Waiting {wait}s...",
-                        file=sys.stderr, flush=True
-                    )
+                    wait = 60
+                    print(f"[RETRY {attempt + 1}/{MAX_RETRIES}] RPM limit hit. {print_action} Waiting {wait}s...", file=sys.stderr, flush=True)
 
                 time.sleep(wait)
 
         # Surface error to C# if all attempts failed
         if response is None:
             send_response({
-                "status":  "error",
-                "message": f"[API ERROR — {err_type}] {last_hint}"
+                    "status":  "error",
+                    "message": f"[API ERROR — {err_type}] {last_hint}"
             })
+            
 
         # 2. Gọi AI sinh code (Dùng Langchain)
         final_json_str = clean_json_response(response.content)

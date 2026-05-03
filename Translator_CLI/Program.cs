@@ -164,7 +164,7 @@ namespace TIA_Copilot_CLI
                             case "cwc":
                                 string targetType = CommandHandler.GetBlockType(chatAction);
                                 string targetName = "";
-                                
+
                                 if (targetType == "ORGANIZATION_BLOCK") targetName = "OB";
                                 else if (targetType == "FUNCTION_BLOCK") targetName = "FB";
                                 else if (targetType == "FUNCTION") targetName = "FC";
@@ -172,7 +172,7 @@ namespace TIA_Copilot_CLI
                                 else if (targetType == "CWC_SCREEN") targetName = "CWC";
                                 else targetName = chatAction.ToUpper();
 
-                                string query = args.Length > 2 ? args[2] : "";                                
+                                string query = args.Length > 2 ? args[2] : "";
                                 if (args.Length > 3) sessionId = args[3];
 
                                 if (string.IsNullOrEmpty(query))
@@ -183,6 +183,7 @@ namespace TIA_Copilot_CLI
                                 Stopwatch chat = new Stopwatch();
                                 chat.Start();
                                 CheckCapstoneMode(query);
+                                
                                 await CommandHandler.HandleChatAsync(targetType, query, sessionId);
                                 chat.Stop();
                                 LogPerformance($"Chat {targetName}", chat.ElapsedMilliseconds);
@@ -231,14 +232,14 @@ namespace TIA_Copilot_CLI
                                 if (!string.IsNullOrEmpty(reviewFile))
                                 {
                                     if (reviewFile.EndsWith(".scl", StringComparison.OrdinalIgnoreCase) || reviewFile.EndsWith(".json", StringComparison.OrdinalIgnoreCase) || reviewFile.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
-                                        {
+                                    {
                                         viewNormal.Start();
                                         ReviewWindow.OpenReviewer(reviewFile);
                                         viewNormal.Stop();
                                         LogPerformance("View File", viewNormal.ElapsedMilliseconds);
-                                    }   
+                                    }
                                     else if (reviewFile.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-                                        {
+                                    {
                                         viewZip.Start();
                                         ReviewWindow.OpenCwcPreview(reviewFile);
                                         viewZip.Stop();
@@ -257,6 +258,20 @@ namespace TIA_Copilot_CLI
                                 break;
                         }
                         break;
+
+                    case "config":
+                        KeyManager.ShowKeyManagementMenu();
+                        
+                        // Sau khi người dùng bấm [ESC] thoát khỏi Menu, dọn dẹp màn hình 
+                        // và vẽ lại Header chính để giao diện CLI luôn gọn gàng.
+                        Console.Clear();
+                        Console.ForegroundColor = ConsoleColor.Cyan;
+                        Console.WriteLine("==========================================================");
+                        Console.WriteLine($"Welcome to TIACopilot CLI, {Environment.UserName}!");
+                        Console.WriteLine(" Type a command, press [ESC] to exit, or type 'help' for usage.");
+                        Console.WriteLine("==========================================================\n");
+                        break;
+
                     case "help":
                         Stopwatch help = new Stopwatch();
                         help.Start();
@@ -299,7 +314,7 @@ namespace TIA_Copilot_CLI
                         PrintIcon("√", $"Connected: {_currentProjectName}", ConsoleColor.Green);
                     }
                     else PrintIcon("×", "Cannot see TIA Portal running.", ConsoleColor.Red);
-                    
+
                     connect.Stop();
                     LogPerformance("ConnectTIA", connect.ElapsedMilliseconds);
                     break;
@@ -953,7 +968,7 @@ namespace TIA_Copilot_CLI
         {
 
             string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "performance_metrics.log");
-            string logEntry = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss},{actionName},{timeMs/1000.0}\n";
+            string logEntry = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss},{actionName},{timeMs / 1000.0}\n";
             File.AppendAllText(logPath, logEntry);
         }
         // public static void CheckCapstoneMode(string query)
@@ -965,41 +980,41 @@ namespace TIA_Copilot_CLI
         //                         else capstoneMode = false;
         // }
         public static void CheckCapstoneMode(string query)
-{
-    if (string.IsNullOrWhiteSpace(query)) { capstoneMode = false; return; }
+        {
+            if (string.IsNullOrWhiteSpace(query)) { capstoneMode = false; return; }
 
-    string q = query.ToUpper();
+            string q = query.ToUpper();
 
-    // 1. Định nghĩa bộ từ khóa nhận diện "Dấu vân tay" của đồ án
-    string[] mandatoryKeywords = { 
-        "COMPOUND CONTROL", 
-        "DEVICE FACEPLATE", 
-        "LOGO_BACHKHOA" 
+            // 1. Định nghĩa bộ từ khóa nhận diện "Dấu vân tay" của đồ án
+            string[] mandatoryKeywords = {
+        "COMPOUND CONTROL",
+        "DEVICE FACEPLATE",
+        "LOGO_BACHKHOA"
     };
 
-    string[] optionalKeywords = { 
-        "PUMP_M1", 
-        "PUMP_M4", 
-        "SENIOR PROJECT", 
-        "RECTANGLE BACKGROUND CONTAINER" 
+            string[] optionalKeywords = {
+        "PUMP_M1",
+        "PUMP_M4",
+        "SENIOR PROJECT",
+        "RECTANGLE BACKGROUND CONTAINER"
     };
 
-    // 2. Logic kiểm tra: 
-    // Bật chế độ đồ án nếu chứa TẤT CẢ các từ khóa bắt buộc
-    bool hasMandatory = mandatoryKeywords.All(k => q.Contains(k));
-    
-    // Và chứa ít nhất 2 từ khóa bổ trợ (để tăng độ tin cậy)
-    int optionalCount = optionalKeywords.Count(k => q.Contains(k));
+            // 2. Logic kiểm tra: 
+            // Bật chế độ đồ án nếu chứa TẤT CẢ các từ khóa bắt buộc
+            bool hasMandatory = mandatoryKeywords.All(k => q.Contains(k));
 
-    if (hasMandatory && optionalCount >= 2)
-    {
-        capstoneMode = true;        
+            // Và chứa ít nhất 2 từ khóa bổ trợ (để tăng độ tin cậy)
+            int optionalCount = optionalKeywords.Count(k => q.Contains(k));
+
+            if (hasMandatory && optionalCount >= 2)
+            {
+                capstoneMode = true;
+            }
+            else
+            {
+                capstoneMode = false;
+            }
+        }
     }
-    else
-    {
-        capstoneMode = false;
-    }
-}
-    }
-    
+
 }

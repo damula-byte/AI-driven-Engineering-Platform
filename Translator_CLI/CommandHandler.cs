@@ -53,14 +53,35 @@ namespace TIA_Copilot_CLI
                 // Ghi đè chuỗi Tag đã gọt sạch sẽ vào file txt ẩn
                 File.WriteAllText(TagCacheFile, userTagsContent);
                 Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine($"[SUCCESS] Successfully saved Tags to local cache!");
+                Console.WriteLine($"[SUCCESS] Successfully saved Tags to local cache!");
                 Console.ResetColor();
             }
         }
 
         public static async Task HandleChatAsync(string targetType, string query, string sessionId)
         {
+            var settings = SettingsManager.Load();
+            string keytoPass = "";
+
+            if (settings.Mode == "USER")
+            {
+                if (settings.IsKeyMissing)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("\n[API ERROR] You are in USER MODE but no API Key is configured.");
+                    Console.WriteLine("Please type the command 'config' to enter your Gemini API Key.");
+                    Console.ResetColor();
+                    return; // CHẶN LẠI NGAY LẬP TỨC, không gọi AI nữa
+                }
+                keytoPass = settings.UserApiKey; // Lấy key của User để gửi
+            }
+            else if (settings.Mode == "DEV")
+            {
+                keytoPass = ""; // Bản DEV sẽ dùng key cứng trong code Python, không gửi gì cả
+            }
+
             Console.WriteLine($"\n🚀 [START] Generating code for block: {targetType}");
+            Console.WriteLine($"[INFO] Key using: {keytoPass}");
 
             string userTagsContent = "";
 
@@ -85,7 +106,7 @@ namespace TIA_Copilot_CLI
             }
 
             // Gọi backend
-            var backendTask = AiEngine.CallPythonBackendAsync(query, sessionId, "chat", "", "", targetType, userTagsContent);
+            var backendTask = AiEngine.CallPythonBackendAsync(query, sessionId, "chat", "", "", targetType, userTagsContent, settings.Mode, keytoPass);
             string jsonResponse = await RunWithSpinner(backendTask, "Generating...");
 
             if (string.IsNullOrWhiteSpace(jsonResponse))
@@ -198,7 +219,7 @@ namespace TIA_Copilot_CLI
                     jsonResponse = jsonResponse.Substring(startIdx, endIdx - startIdx + 1);
                 }
                 dynamic obj = JsonConvert.DeserializeObject(jsonResponse);
-                
+
                 if (obj.status == "success")
                 {
                     Console.ForegroundColor = ConsoleColor.Green;
@@ -555,34 +576,26 @@ namespace TIA_Copilot_CLI
             int spinnerIndex = 0;
 
             Console.ForegroundColor = ConsoleColor.Yellow;
+            // In thông báo và dư ra 1 dấu cách để làm khoảng trống cho Spinner
             Console.Write($"{waitingMessage}  ");
 
-
-            int cursorLeft = Console.CursorLeft;
-            int cursorTop = Console.CursorTop;
-
-            // 1. Lên cò mốc thời gian nổ (Timeout)
             DateTime timeoutTime = DateTime.Now.AddSeconds(timeoutSeconds);
 
             try
             {
-                // 2. Vòng lặp Spinner: Xoay cho đến khi targetTask xong HOẶC hết giờ
                 while (!targetTask.IsCompleted)
                 {
-                    // KHIÊN CHỐNG TREO: Chặt đứt vòng lặp nếu quá hạn
                     if (DateTime.Now > timeoutTime)
                     {
                         throw new TimeoutException($"Backend did not respond within {timeoutSeconds} seconds.");
                     }
 
-                    Console.SetCursorPosition(cursorLeft - 1, cursorTop);
-                    Console.ForegroundColor = ConsoleColor.Cyan;
-                    Console.Write(spinnerChars[spinnerIndex]);
+                    // TUYỆT KỸ: Dùng \b lùi con trỏ lại 1 ô, in ký tự mới đè lên, không xài tọa độ tuyệt đối
+                    Console.Write("\b" + spinnerChars[spinnerIndex]);
                     spinnerIndex = (spinnerIndex + 1) % spinnerChars.Length;
                     await Task.Delay(100);
                 }
 
-                // 3. Trả về kết quả thực sự của backend nếu mọi thứ suôn sẻ
                 return await targetTask;
             }
             catch (TimeoutException ex)
@@ -613,10 +626,8 @@ namespace TIA_Copilot_CLI
             }
             finally
             {
-                Console.SetCursorPosition(cursorLeft - 1, cursorTop);
-                Console.Write(" ");
-                Console.SetCursorPosition(cursorLeft - 1, cursorTop);
-                Console.WriteLine();
+                // Khi xong việc: lùi lại xóa cái Spinner đi và thay bằng khoảng trắng, rồi xuống dòng
+                Console.Write("\b \n");
                 Console.ResetColor();
             }
         }

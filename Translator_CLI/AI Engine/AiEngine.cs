@@ -72,7 +72,7 @@ namespace TIA_Copilot_CLI
             }
         }
 
-        public static async Task<string> CallPythonBackendAsync(string query, string sessionId, string commandType, string contextCode = "", string specText = "", string targetType = "AUTO", string userTags = "")
+        public static async Task<string> CallPythonBackendAsync(string query, string sessionId, string commandType, string contextCode = "", string specText = "", string targetType = "AUTO", string userTags = "",string systemMode = "USER", string customApiKey = "")
         {
             try
             {
@@ -110,7 +110,9 @@ namespace TIA_Copilot_CLI
                         context_code = contextCode,
                         spec_text = specText,
                         target_block_type = targetType,
-                        user_tags = userTags
+                        user_tags = userTags,
+                        system_mode = systemMode,
+                        custom_api_key = customApiKey
                     };
 
                     string jsonInput = JsonConvert.SerializeObject(payload);
