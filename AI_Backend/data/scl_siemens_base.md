@@ -461,7 +461,7 @@ CRITICAL RULES:
 4. DO NOT use `#` when calling a Global DB.
 5. **BLOCK NAMING**: The block name MUST be the exact OB number between `OB30` and `OB35`. In the JSON output, it MUST be a clean string.
    - CORRECT JSON: `"name": "OB30"`
-6. **METADATA REQUIRED**: You MUST include the comment `// @CyclicTime: <Value>ms` ANYWHERE inside the "body_code". This is used by the external compiler to set the interval.
+6. **METADATA REQUIRED**: You MUST include the comment `// @CyclicTime: <Value>µs` ANYWHERE inside the "body_code". This is used by the external compiler to set the interval.
 
 ```scl
 ORGANIZATION_BLOCK OB30

@@ -597,7 +597,7 @@ def main():
             - **JSON CLEAN NAME:** The "name" field MUST ALWAYS be a clean string WITHOUT ANY literal escaped quotes. (e.g., `"name": "Main_Loop"`, NEVER `"name": "\"Main_Loop\""`).
             - **For Main Loop (Program Cycle):** The name can be auto-generated (e.g., `"name": "PID_Main"`). DO NOT add @CyclicTime.
             - **For Timed Loops (Cyclic Interrupt):** To be recognized by TIA Portal, the name MUST be exactly between "OB30" and "OB35" (e.g., `"name": "OB30"`).
-            - **CYCLIC TIME COMMENT:** For Cyclic Interrupts ONLY, you MUST include the metadata comment `// @CyclicTime: <Value>ms` ANYWHERE inside the "body_code" string.
+            - **CYCLIC TIME COMMENT:** For Cyclic Interrupts ONLY, you MUST include the metadata comment `// @CyclicTime: <Value>µs` ANYWHERE inside the "body_code" string.
 
         ### USER REQUEST:
         {user_query}
