@@ -452,91 +452,111 @@ namespace Middleware_console
             else throw new Exception($"{targetPlcName} is not a valid PLC.");
         }
         public void CreateOBblockFromSource(string targetPlcName, string sourcePath)
+{
+    if (_project == null) CheckProject();
+    Device device = FindDeviceRecursive(_project, targetPlcName);
+    if (device == null) throw new Exception($"PLC '{targetPlcName}' not found.");
+
+    var software = GetSoftware(device);
+    if (software is PlcSoftware plcSoftware)
+    {
+        // 1. Đọc nội dung file SCL để kiểm tra kiểu khai báo
+        string sclContent = File.ReadAllText(sourcePath);
+
+        // Kiểm tra xem ORGANIZATION_BLOCK có đi kèm dấu ngoặc kép hay không
+        // Regex này tìm: ORGANIZATION_BLOCK theo sau bởi dấu cách và dấu ngoặc kép
+        bool isNamedIdentifier = Regex.IsMatch(sclContent, @"ORGANIZATION_BLOCK\s+""[^""]+""", RegexOptions.IgnoreCase);
+
+        if (isNamedIdentifier)
         {
-            if (_project == null) CheckProject();
-            Device device = FindDeviceRecursive(_project, targetPlcName);
-            if (device == null) throw new Exception($"PLC '{targetPlcName}' not found.");
-
-            var software = GetSoftware(device);
-            if (software is PlcSoftware plcSoftware)
-            {
-                // 1. Đọc nội dung file SCL
-                string sclContent = File.ReadAllText(sourcePath);
-                
-                // 1.1. Regex tìm số hiệu OB
-                var obMatch = Regex.Match(sclContent, @"ORGANIZATION_BLOCK\s+OB(\d+)", RegexOptions.IgnoreCase);
-                if (!obMatch.Success) 
-                    throw new Exception("OB declaration not found (e.g., OB30) in the source file.");
-                
-                int obNumber = int.Parse(obMatch.Groups[1].Value);
-                string obDefaultName = "OB" + obNumber;
-
-                // 1.2. REGEX MỚI: Quét giá trị CyclicTime từ Comment trong file SCL
-                // Tìm định dạng: // @CyclicTime: 1000ms
-                int dynamicCyclicTime = 100; // Giá trị mặc định nếu không tìm thấy nhãn
-                var timeMatch = Regex.Match(sclContent, @"@CyclicTime:\s*(\d+)ms", RegexOptions.IgnoreCase);
-                if (timeMatch.Success)
-                {
-                    dynamicCyclicTime = int.Parse(timeMatch.Groups[1].Value);
-                }
-
-                // 2. Xử lý External Source (Xóa cũ, tạo mới)
-                var group = plcSoftware.ExternalSourceGroup;
-                var fileName = Path.GetFileName(sourcePath);
-                var existingSrc = group.ExternalSources.Find(fileName);
-                if (existingSrc != null) existingSrc.Delete();
-                
-                var src = group.ExternalSources.CreateFromFile(fileName, sourcePath);
-                
-                // 3. Biên dịch Source thành Block
-                src.GenerateBlocksFromSource();
-
-                // 4. LOGIC CẤU HÌNH VÀ ĐẶT TÊN
-                var generatedBlock = plcSoftware.BlockGroup.Blocks.Find(obDefaultName);
-                if (generatedBlock != null)
-                {
-                    // 4.1. Cấu hình CyclicTime nếu là OB ngắt chu kỳ (30-38)
-                    if (obNumber >= 30 && obNumber <= 38)
-                    {
-                        try 
-                        {
-                            // Sử dụng giá trị dynamicCyclicTime vừa quét được
-                            // Ép kiểu chuẩn Int32 như đã Debug thành công
-                            generatedBlock.SetAttribute("CyclicTime", (int)dynamicCyclicTime);                            
-                            Console.WriteLine($"[CONFIG] OB{obNumber} has been configured with the time:  {dynamicCyclicTime} ms");
-                        } 
-                        catch (Exception ex) 
-                        {
-                            Console.WriteLine($"[Warning] Cannot set CyclicTime: {ex.Message}");
-                        }
-                    }
-
-                    // 4.2. Xác định Prefix dựa trên dải số OB
-                    string prefix = "Unknown_OB";
-                    if (obNumber == 1 || (obNumber >= 123 && obNumber <= 32767)) prefix = "MainCycle";
-                    else if (obNumber >= 20 && obNumber <= 23) prefix = "TimeDelay";
-                    else if (obNumber >= 30 && obNumber <= 38) prefix = "CyclicInterrupt";
-                    else if (obNumber >= 40 && obNumber <= 47) prefix = "HardwareInterrupt";
-                    else if (obNumber == 100) prefix = "Startup";
-                    else if (obNumber >= 80 && obNumber <= 87) prefix = "ErrorInterrupt";
-
-                    // 4.3. Logic tăng số thứ tự để tránh trùng tên (Tên_1, Tên_2...)
-                    string baseName = prefix + "_";
-                    string finalName = baseName + "1";
-                    int counter = 1;
-
-                    while (plcSoftware.BlockGroup.Blocks.Find(finalName) != null)
-                    {
-                        counter++;
-                        finalName = baseName + counter;
-                    }
-
-                    // 4.4. Đổi tên khối
-                    generatedBlock.Name = finalName;
-                }
-            }
-            else throw new Exception($"{targetPlcName} is not a valid PLC.");
+            // --- KIỂU MỚI: Khai báo bằng tên trong ngoặc kép (giống FB) ---
+            // Chỉ cần Import source và Generate, TIA sẽ tự quản lý tên và thuộc tính trong metadata file
+            var group = plcSoftware.ExternalSourceGroup;
+            var fileName = Path.GetFileName(sourcePath);
+            var existingSrc = group.ExternalSources.Find(fileName);
+            if (existingSrc != null) existingSrc.Delete();
+            
+            var src = group.ExternalSources.CreateFromFile(fileName, sourcePath);
+            src.GenerateBlocksFromSource();
+            Console.WriteLine($"[INFO] OB with named identifier generated successfully from {fileName}");
         }
+        else
+        {
+            // --- KIỂU CŨ: Khai báo dạng OB30 (Logic cấu hình và đổi tên của bạn) ---
+            
+            // 1.1. Regex tìm số hiệu OB
+            var obMatch = Regex.Match(sclContent, @"ORGANIZATION_BLOCK\s+OB(\d+)", RegexOptions.IgnoreCase);
+            if (!obMatch.Success) 
+                throw new Exception("OB declaration not found (e.g., OB30) or missing quotes in the source file.");
+            
+            int obNumber = int.Parse(obMatch.Groups[1].Value);
+            string obDefaultName = "OB" + obNumber;
+
+            // 1.2. Quét giá trị CyclicTime từ Comment
+            int dynamicCyclicTime = 100000; // Mặc định 100000us nếu không tìm thấy
+            var timeMatch = Regex.Match(sclContent, @"@CyclicTime:\s*(\d+)us", RegexOptions.IgnoreCase);
+            if (timeMatch.Success)
+            {
+                dynamicCyclicTime = int.Parse(timeMatch.Groups[1].Value);
+            }
+
+            // 2. Xử lý External Source
+            var group = plcSoftware.ExternalSourceGroup;
+            var fileName = Path.GetFileName(sourcePath);
+            var existingSrc = group.ExternalSources.Find(fileName);
+            if (existingSrc != null) existingSrc.Delete();
+            
+            var src = group.ExternalSources.CreateFromFile(fileName, sourcePath);
+            
+            // 3. Biên dịch Source thành Block
+            src.GenerateBlocksFromSource();
+
+            // 4. LOGIC CẤU HÌNH VÀ ĐẶT TÊN (Chỉ dành cho kiểu khai báo số hiệu)
+            var generatedBlock = plcSoftware.BlockGroup.Blocks.Find(obDefaultName);
+            if (generatedBlock != null)
+            {
+                // 4.1. Cấu hình CyclicTime (OB 30-38)
+                if (obNumber >= 30 && obNumber <= 38)
+                {
+                    try 
+                    {
+                        generatedBlock.SetAttribute("CyclicTime", (int)dynamicCyclicTime);                             
+                        Console.WriteLine($"[CONFIG] {obDefaultName} configured with: {dynamicCyclicTime} ms");
+                    } 
+                    catch (Exception ex) 
+                    {
+                        Console.WriteLine($"[Warning] Cannot set CyclicTime: {ex.Message}");
+                    }
+                }
+
+                // 4.2. Xác định Prefix
+                string prefix = "Unknown_OB";
+                if (obNumber == 1 || (obNumber >= 123 && obNumber <= 32767)) prefix = "MainCycle";
+                else if (obNumber >= 20 && obNumber <= 23) prefix = "TimeDelay";
+                else if (obNumber >= 30 && obNumber <= 38) prefix = "CyclicInterrupt";
+                else if (obNumber >= 40 && obNumber <= 47) prefix = "HardwareInterrupt";
+                else if (obNumber == 100) prefix = "Startup";
+                else if (obNumber >= 80 && obNumber <= 87) prefix = "ErrorInterrupt";
+
+                // 4.3. Logic tăng số thứ tự để tránh trùng tên
+                string baseName = prefix + "_";
+                string finalName = baseName + "1";
+                int counter = 1;
+
+                while (plcSoftware.BlockGroup.Blocks.Find(finalName) != null)
+                {
+                    counter++;
+                    finalName = baseName + counter;
+                }
+
+                // 4.4. Đổi tên khối
+                generatedBlock.Name = finalName;
+                Console.WriteLine($"[RENAME] {obDefaultName} -> {finalName}");
+            }
+        }
+    }
+    else throw new Exception($"{targetPlcName} is not a valid PLC.");
+}
 
         // Đảm bảo các hàm này nằm TRONG class TIA_V20
         public string CompileSpecific(string rawDeviceName, bool compileHW, bool compileSW, bool rebuildAll = false)
