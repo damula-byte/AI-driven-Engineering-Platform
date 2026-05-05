@@ -1335,7 +1335,7 @@ namespace Middleware_console
                             // 3. Gán giá trị FillLevelValue chạy theo Tag (Level)
                             else if (m.PropertyName == "FillLevelValue")
                             {
-                                BindScriptToWidget(m, tag, customScript); // tag ở đây chính là LevelTag bạn đã trích xuất ở trên
+                                BindTagToWidget(m, tag);  // tag ở đây chính là LevelTag bạn đã trích xuất ở trên
                                 Console.WriteLine($"      => [DYNAMIC TANK] {item.Name}");
                             }
                         }

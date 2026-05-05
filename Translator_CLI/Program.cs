@@ -69,8 +69,11 @@ namespace TIA_Copilot_CLI
 
         static async Task RunInteractiveShell()
         {
+            var setting = SettingsManager.Load();
+            string mode = setting.Mode.ToUpper();
             string userName = Environment.UserName;
             string appName = "TIACopilot";
+             
 
             Console.Clear();
             Console.ForegroundColor = ConsoleColor.Cyan;
@@ -83,7 +86,7 @@ namespace TIA_Copilot_CLI
             while (true)
             {
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.Write($"{userName}@{appName}");
+                Console.Write($"{userName}-{appName}-[{mode}]");
                 Console.ResetColor();
                 Console.Write(" > ");
 
@@ -102,6 +105,8 @@ namespace TIA_Copilot_CLI
                                         .ToArray();
 
                 await RouteCommand(cmdArgs);
+                var settings = SettingsManager.Load();
+                mode = settings.Mode.ToUpper();
             }
         }
 
@@ -809,6 +814,7 @@ namespace TIA_Copilot_CLI
             Console.WriteLine("  chat session                                   : Manage Session");
             Console.WriteLine("  chat status                                    : Check Session status");
             Console.WriteLine("  chat check-data                                : Check Session data");
+            Console.WriteLine("  config                 : Configure AI's api key settings");
 
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine("\n[TIA MODULE]");

@@ -430,9 +430,13 @@ CRITICAL RULES:
    - Example 1: If FB is `FB_Pump`, the DB must be `"Inst_FB_Pump_01"`.
    - Example 2: If FB is `FB_Conveyor`, the DB must be `"Inst_FB_Conveyor_Main"`.
    - DO NOT use `#` when calling a Global DB.
+4. **BLOCK NAMING:** The block name can be auto-generated based on its logic purpose. In the JSON output, it MUST be a clean string.
+   - CORRECT JSON: `"name": "Main_Conveyor_Loop"`
+   - WRONG JSON: `"name": "\"Main_Conveyor_Loop\""`
+5. DO NOT include any `@CyclicTime` metadata in OB1.
 
 ```scl
-ORGANIZATION_BLOCK "AUTO_GENERATED_OB_NAME"
+ORGANIZATION_BLOCK "AUTO-GENERATED_NAME"
    VAR_TEMP
       // [Prefix temp_]: Intermediate logic flags
    END_VAR
@@ -445,6 +449,30 @@ BEGIN
    
    // Example: Calling a Global Timer
    "Timer_DB_1".TON(IN := "Tag_Sensor", PT := T#5s);
+END_ORGANIZATION_BLOCK
+```
+
+## STRATEGY: ORGANIZATION_BLOCK (OB) - CYCLIC INTERRUPT TEMPLATE (OB30-OB35)
+Use Cyclic Interrupts when the user asks for code to run at exact time intervals (e.g., every 500ms, every 2 seconds).
+CRITICAL RULES:
+1. OB has NO STATIC MEMORY (Only `VAR_TEMP`).
+2. You must call FBs or Timers using Single Instance (Global DB).
+3. **NAMING CONVENTION FOR INSTANCE DB**: The DB name MUST follow this exact structure: `"Inst_[Exact_FB_Name]_[Optional_Suffix]"`.
+4. DO NOT use `#` when calling a Global DB.
+5. **BLOCK NAMING**: The block name MUST be the exact OB number between `OB30` and `OB35`. In the JSON output, it MUST be a clean string.
+   - CORRECT JSON: `"name": "OB30"`
+6. **METADATA REQUIRED**: You MUST include the comment `// @CyclicTime: <Value>ms` ANYWHERE inside the "body_code". This is used by the external compiler to set the interval.
+
+```scl
+ORGANIZATION_BLOCK OB30
+{ S7_Optimized_Access := 'TRUE' }
+   VAR_TEMP
+   END_VAR
+BEGIN
+   // @CyclicTime: 1000ms
+   // Logic that runs exactly every 1000ms
+   "temp1" := NORM_X(MIN := 0, VALUE := "Tag_AnalogIn", MAX := 27648);
+   "Tag_Temperature" := SCALE_X(MIN := 0.0, VALUE := "temp1", MAX := 500.0);
 END_ORGANIZATION_BLOCK
 ```
 

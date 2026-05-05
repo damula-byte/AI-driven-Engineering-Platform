@@ -93,8 +93,17 @@ namespace TIA_Copilot_CLI
                     }
                     else if (blockType == "ORGANIZATION_BLOCK")
                     {
-                        sb.AppendLine($"ORGANIZATION_BLOCK \"{data.Name}\"");
-                        sb.AppendLine("TITLE = \"Main Program Sweep (Cycle)\"");
+                        if (!string.IsNullOrEmpty(data.Name) && data.Name.StartsWith("OB3"))
+                        {
+                            // Cyclic Interrupt: KHÔNG dùng ngoặc kép
+                            sb.AppendLine($"ORGANIZATION_BLOCK {data.Name}");
+                        }
+                        else
+                        {
+                            // Program Cycle (OB1) hoặc OB thường: CÓ ngoặc kép
+                            sb.AppendLine($"ORGANIZATION_BLOCK \"{data.Name}\"");
+                            sb.AppendLine("TITLE = \"Main Program Sweep (Cycle)\"");
+                        }
                     }
                     else
                     {
@@ -1084,13 +1093,13 @@ namespace TIA_Copilot_CLI
             {
                 clusterOffsetX = 500;
                 clusterOffsetmotorX = 935;
-                clusterOffsetmotorY = 115;
+                clusterOffsetmotorY = 295;
             }
             else if (itemName.Contains("M4"))
             {
                 clusterOffsetX = 750;
                 clusterOffsetmotorX = 935;
-                clusterOffsetmotorY = 295;
+                clusterOffsetmotorY = 115;
             }
 
             else if (itemName.Contains("Pipe_1"))

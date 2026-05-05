@@ -579,7 +579,7 @@ def main():
         5. **STATE MACHINE & TIMERS (CRITICAL):** NEVER call the same Timer (TON/TOF) or Counter (CTU/CTD) multiple times inside IF or CASE statements. You MUST call them EXACTLY ONCE at the end of the "body_code". Use internal flags to trigger their inputs.
         6. **MATH & ANALOG RULE (CRITICAL):** NORM_X, SCALE_X, ABS, MIN, MAX are built-in functions. DO NOT declare them in the interface (VAR). Call them directly and assign their return value (e.g., `#temp_Real := SCALE_X(MIN:=0.0, VALUE:=#temp_Norm, MAX:=100.0);`). ALWAYS use 'VALUE' parameter, NOT 'IN'.
         7. **GLOBAL TAG DECLARATION:** If you generate an OB and create any global tags (with `TAG_` prefix), 
-           you MUST list ALL of them inside the `"global_tags"` JSON array with their "type" and "comment".
+           you MUST list ALL of them inside the `"global_tags"` JSON array with their "type", "address" and "comment". If new tags created for OB, you MUST not let their address be the same as any existing PLC tags in the user-provided list. Invent new addresses for them, but follow the same naming convention.
            FORBIDDEN types in global_tags: TON, TOF, TP, TONR, R_TRIG, F_TRIG, CTU, CTD, CTUD, or any FB type.
            ONLY use plain data types: BOOL, INT, REAL, DINT, WORD, DWORD, BYTE, STRING, TIME.
            Timers and triggers exist ONLY inside FB VAR sections, accessed via Instance DB in OB body_code.
@@ -588,7 +588,17 @@ def main():
            Do NOT declare this timer in the "interface" (VAR). 
            You MUST list its exact name in the `"global_timers"` JSON array (e.g., `"global_timers": ["T10S"]`).
            If no global timers are requested, return `"global_timers": []`.
-        
+        10. **VERSION CONTROL NAMING (CRITICAL):** 
+            - If "CURRENT FILE CONTEXT" is EMPTY: You are creating a NEW block. Give it a clean name (e.g., "FB_ValveController"). DO NOT add any version suffix.
+            - If "CURRENT FILE CONTEXT" HAS DATA: You are MODIFYING an existing block. You MUST extract its original name and INCREMENT its version suffix in your new JSON output.
+              * Rule A: If the original name has NO version, append "_V2" (e.g., "FB_Pump" -> "FB_Pump_V2").
+              * Rule B: If the original name ends in "_V[N]", replace it with "_V[N+1]" (e.g., "FB_Pump_V2" -> "FB_Pump_V3", "FC_Math_V9" -> "FC_Math_V10").
+        11. **ORGANIZATION BLOCK (OB) NAMING & METADATA RULE (CRITICAL):**
+            - **JSON CLEAN NAME:** The "name" field MUST ALWAYS be a clean string WITHOUT ANY literal escaped quotes. (e.g., `"name": "Main_Loop"`, NEVER `"name": "\"Main_Loop\""`).
+            - **For Main Loop (Program Cycle):** The name can be auto-generated (e.g., `"name": "PID_Main"`). DO NOT add @CyclicTime.
+            - **For Timed Loops (Cyclic Interrupt):** To be recognized by TIA Portal, the name MUST be exactly between "OB30" and "OB35" (e.g., `"name": "OB30"`).
+            - **CYCLIC TIME COMMENT:** For Cyclic Interrupts ONLY, you MUST include the metadata comment `// @CyclicTime: <Value>ms` ANYWHERE inside the "body_code" string.
+
         ### USER REQUEST:
         {user_query}
         
