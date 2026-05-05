@@ -423,13 +423,11 @@ namespace TIA_Copilot_CLI
 
                 // --- GROUP 3: LOGIC & DATA ---
                 case "fb":
-                case "fc":
-                case "ob":
+                case "fc":  
+                {              
                     string blockType = "";
                     if (action == "fb") blockType = "FB";
-                    else if (action == "fc") blockType = "FC";
-                    else if (action == "ob") blockType = "OB";
-
+                    else if (action == "fc") blockType = "FC";                    
                     Stopwatch ImportLogicPLC = new Stopwatch();
                     ImportLogicPLC.Start();
                     string sclPath = GetPathOrOpenDialog(args, 2, "SCL Files (*.scl)|*.scl");
@@ -437,7 +435,21 @@ namespace TIA_Copilot_CLI
                     ImportLogicPLC.Stop();
                     LogPerformance($"Import {blockType} file", ImportLogicPLC.ElapsedMilliseconds);
                     break;
+                }
 
+                case "ob":
+                {
+                    string blockType = "";                    
+                    if (action == "ob") blockType = "OB";
+
+                    Stopwatch ImportLogicPLC = new Stopwatch();
+                    ImportLogicPLC.Start();
+                    string sclPath = GetPathOrOpenDialog(args, 2, "SCL Files (*.scl)|*.scl");
+                    TiaOBImportLogic(action.ToUpper(), sclPath);
+                    ImportLogicPLC.Stop();
+                    LogPerformance($"Import {blockType} file", ImportLogicPLC.ElapsedMilliseconds);
+                    break;
+                }
                 case "tag-plc":
                     Stopwatch ImportPlcTags = new Stopwatch();
                     ImportPlcTags.Start();
@@ -614,12 +626,11 @@ namespace TIA_Copilot_CLI
                     PrintIcon("i", isRebuild ? "Rebuilding all..." : "Compiling...", ConsoleColor.Cyan);
                     string cRes = _tiaEngine.CompileSpecific(_currentDeviceName, cMode == "hw" || cMode == "both", cMode == "sw" || cMode == "both", isRebuild);
                     Console.WriteLine(cRes);
-                    break;
-
+                    break;               
                 case "run":
                 case "stop":
                 case "download":
-                case "check":
+                case "check":               
                     HandleOnlineAction(action, args);
                     break;
 
@@ -742,6 +753,7 @@ namespace TIA_Copilot_CLI
                     case "check":
                         PrintIcon("√", $"Online Status: {_tiaEngine.GetPlcStatus(_currentDeviceName, selectedAdapter)}", ConsoleColor.Green);
                         break;
+                    
                 }
             }
             catch (Exception ex) { PrintIcon("×", $"Lỗi: {ex.Message}", ConsoleColor.Red); }
@@ -769,6 +781,27 @@ namespace TIA_Copilot_CLI
             else PrintIcon("×", "Cannot find SCL file.", ConsoleColor.Red);
         }
 
+        public static void TiaOBImportLogic(string blockType, string explicitPath)
+        {
+            PrintIcon("i", $"--- IMPORT {blockType} ---", ConsoleColor.Cyan);
+            string path = explicitPath;
+            if (string.IsNullOrEmpty(path))
+            {
+                var latestSclFile = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory).GetFiles("*.scl").OrderByDescending(f => f.LastWriteTime).FirstOrDefault();
+                if (latestSclFile != null) path = latestSclFile.FullName;
+            }
+            if (File.Exists(path))
+            {
+                try
+                {
+                    string target = !string.IsNullOrEmpty(_currentDeviceName) && _currentDeviceName != "None" ? _currentDeviceName : _tiaEngine.GetPlcList().FirstOrDefault();
+                    _tiaEngine.CreateOBblockFromSource(target, path);
+                    PrintIcon("√", $"Successfully imported to {target}!", ConsoleColor.Green);
+                }
+                catch (Exception ex) { PrintIcon("×", $"Error: {ex.Message}", ConsoleColor.Red); }
+            }
+            else PrintIcon("×", "Cannot find SCL file.", ConsoleColor.Red);
+        }
         static string ReadLineWithEscape()
         {
             StringBuilder sb = new StringBuilder();

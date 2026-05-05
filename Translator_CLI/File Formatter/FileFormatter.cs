@@ -1084,13 +1084,13 @@ namespace TIA_Copilot_CLI
             {
                 clusterOffsetX = 500;
                 clusterOffsetmotorX = 935;
-                clusterOffsetmotorY = 115;
+                clusterOffsetmotorY = 295;
             }
             else if (itemName.Contains("M4"))
             {
                 clusterOffsetX = 750;
                 clusterOffsetmotorX = 935;
-                clusterOffsetmotorY = 295;
+                clusterOffsetmotorY = 115;
             }
 
             else if (itemName.Contains("Pipe_1"))
