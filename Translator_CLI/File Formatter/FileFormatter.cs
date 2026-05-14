@@ -1077,25 +1077,25 @@ namespace TIA_Copilot_CLI
             int graphicSpacingX = 110;
             int elseRectangleCounter = 0;
             int rectangleSpacingX = 110;
-            if (itemName.Contains("M1"))
+            if (itemName.Contains("M1") || itemName.Contains("Pump1")) 
             {
                 clusterOffsetX = 0;
                 clusterOffsetmotorX = 425;
                 clusterOffsetmotorY = 335;
             }
-            else if (itemName.Contains("M2"))
+            else if (itemName.Contains("M2") || itemName.Contains("Pump2"))
             {
                 clusterOffsetX = 250;
                 clusterOffsetmotorX = 425;
                 clusterOffsetmotorY = 130;
             }
-            else if (itemName.Contains("M3"))
+            else if (itemName.Contains("M3") || itemName.Contains("Pump3"))
             {
                 clusterOffsetX = 500;
                 clusterOffsetmotorX = 935;
                 clusterOffsetmotorY = 295;
             }
-            else if (itemName.Contains("M4"))
+            else if (itemName.Contains("M4") || itemName.Contains("Pump4"))
             {
                 clusterOffsetX = 750;
                 clusterOffsetmotorX = 935;

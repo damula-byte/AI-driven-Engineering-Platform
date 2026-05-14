@@ -237,7 +237,7 @@ def main():
                 send_response({"status": "error", "message": f"Error deleting Spec: {str(e)}"})
         # endregion
         
-        # region DUAL-PATH RAG RETRIEVAL — parallel execution, direct ChromaDB client
+        # region TRIPPLE-PATH RAG RETRIEVAL — parallel execution, direct ChromaDB client
         # ─────────────────────────────────────────────────────────────────────
         # SPEED RATIONALE:
         #   Old approach: LangChain Chroma wrapper → sequential kb then spec retrieval
