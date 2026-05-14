@@ -446,7 +446,7 @@ namespace Middleware_console
                 var fileName = Path.GetFileName(sourcePath);
                 var existingSrc = group.ExternalSources.Find(fileName);
                 if (existingSrc != null) existingSrc.Delete();
-                var sr   = group.ExternalSources.CreateFromFile(fileName, sourcePath);
+                var src = group.ExternalSources.CreateFromFile(fileName, sourcePath);
                 src.GenerateBlocksFromSource();
             }
             else throw new Exception($"{targetPlcName} is not a valid PLC.");
