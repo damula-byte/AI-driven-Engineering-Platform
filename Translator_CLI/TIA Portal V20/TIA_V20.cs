@@ -446,7 +446,7 @@ namespace Middleware_console
                 var fileName = Path.GetFileName(sourcePath);
                 var existingSrc = group.ExternalSources.Find(fileName);
                 if (existingSrc != null) existingSrc.Delete();
-                var src = group.ExternalSources.CreateFromFile(fileName, sourcePath);
+                var sr   = group.ExternalSources.CreateFromFile(fileName, sourcePath);
                 src.GenerateBlocksFromSource();
             }
             else throw new Exception($"{targetPlcName} is not a valid PLC.");
@@ -493,7 +493,7 @@ namespace Middleware_console
             string obDefaultName = "OB" + obNumber;
 
             // 1.2. Quét giá trị CyclicTime từ Comment
-            int dynamicCyclicTime = 100000; // Mặc định 100000us nếu không tìm thấy
+            int dynamicCyclicTime = 500; // Mặc định 500us đối với s71500 và 500ms đối với s71200 nếu không tìm thấy
             var timeMatch = Regex.Match(sclContent, @"@CyclicTime:\s*(\d+)us", RegexOptions.IgnoreCase);
             if (timeMatch.Success)
             {
