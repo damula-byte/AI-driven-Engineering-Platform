@@ -250,6 +250,8 @@ def main():
         #   4. GLOBAL CACHES: embeddings & persistent_client reused across requests
         # ─────────────────────────────────────────────────────────────────────
         from langchain_google_genai import ChatGoogleGenerativeAI
+        from langchain_openai import ChatOpenAI
+        from langchain_anthropic import ChatAnthropic
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         # Reuse global cached embeddings and client to avoid reload overhead (~1-3s saved)
@@ -606,13 +608,49 @@ def main():
         """
         # endregion
         
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
-            temperature=0.1,
-            convert_system_message_to_human=True,
-            model_kwargs={"response_mime_type": "application/json"},
-        )
+        if system_mode == "USER":
+            # USER MODE: Use ChatGPT 4o mini
+            if not custom_api_key:
+                send_response({"status": "error", "message": "USER mode requires custom_api_key parameter with OpenAI API key"})
+            
+            os.environ["OPENAI_API_KEY"] = custom_api_key
+            llm = ChatOpenAI(
+                model="gpt-4o-mini",
+                temperature=0.1,
+                api_key=custom_api_key,
+                model_kwargs={"response_format": {"type": "json_object"}},
+                max_retries=0 
+            )
 
+            # os.environ["ANTHROPIC_API_KEY"] = custom_api_key
+            # llm = ChatAnthropic(
+            # model="claude-3-5-sonnet-20240620",
+            # temperature=0.1,
+            # api_key=custom_api_key,
+            # # Claude KHÔNG dùng model_kwargs để ép JSON Mode. 
+            # # Thay vào đó, BẮT BUỘC phải cấp max_tokens để tránh bị cắt cụt code
+            # max_tokens=8192, 
+            # max_retries=0 
+            # )
+
+            # os.environ["GOOGLE_API_KEY"] = new_key
+            # llm = ChatGoogleGenerativeAI(
+            #     model="gemini-2.5-flash",
+            #     temperature=0.1,
+            #     convert_system_message_to_human=True,
+            #     google_api_key=new_key,
+            #     model_kwargs={"response_mime_type": "application/json"},
+            # )
+
+        else:
+            # DEV MODE: Use Gemini (existing behavior)
+            llm = ChatGoogleGenerativeAI(
+                model="gemini-2.5-flash",
+                temperature=0.1,
+                convert_system_message_to_human=True,
+                model_kwargs={"response_mime_type": "application/json"},
+            )
+        
         # ── Cooldown guard ────────────────────────────────────────────────────
         if system_mode == "DEV":
             app_secrets.enforce_cooldown(min_seconds=5.0)
