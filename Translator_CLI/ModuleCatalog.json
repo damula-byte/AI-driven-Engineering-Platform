@@ -1,0 +1,39 @@
+{
+  "S71200_Modules": [
+    { "Name": "DI 8x24VDC", "OrderNumber": "6ES7 221-1BF32-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.0", "V2.1", "V2.2"] },
+    { "Name": "DI 16x24VDC", "OrderNumber": "6ES7 221-1BH32-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.0", "V2.2"] },
+    { "Name": "DQ 8x24VDC", "OrderNumber": "6ES7 222-1BF32-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.0", "V2.2"] },
+    { "Name": "DQ 16x24VDC", "OrderNumber": "6ES7 222-1BH32-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.0", "V2.2"] },
+    { "Name": "DQ 16xRelay", "OrderNumber": "6ES7 222-1HH32-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.0", "V2.2"] },
+    { "Name": "DQ 8xRelay", "OrderNumber": "6ES7 222-1HF32-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.0", "V2.2"] },
+    { "Name": "DI 8/DQ 8x24VDC", "OrderNumber": "6ES7 223-1BH32-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.0", "V2.2"] },
+    { "Name": "DI 16/DQ 16x24VDC", "OrderNumber": "6ES7 223-1BL32-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.0", "V2.2"] },
+    { "Name": "AI 4x13BIT", "OrderNumber": "6ES7 231-4HD32-0XB0", "Version": "V2.0", "AvailableVersions": ["V2.0"] },
+    { "Name": "AI 8x13BIT", "OrderNumber": "6ES7 231-4HF32-0XB0", "Version": "V2.0", "AvailableVersions": ["V2.0"] },
+    { "Name": "AI 4xRTD", "OrderNumber": "6ES7 231-5PD32-0XB0", "Version": "V2.0", "AvailableVersions": ["V2.0"] },
+    { "Name": "AI 4xTC", "OrderNumber": "6ES7 231-5QD32-0XB0", "Version": "V2.0", "AvailableVersions": ["V2.0"] },
+    { "Name": "AI 4x13BIT/AQ 2x14BIT", "OrderNumber": "6ES7 234-4HE32-0XB0", "Version": "V2.0", "AvailableVersions": ["V2.0"] },
+    { "Name": "CP 1243-1 (Ethernet)", "OrderNumber": "6GK7 243-1BX30-0XE0", "Version": "V3.2", "AvailableVersions": ["V3.0", "V3.2"] },
+    { "Name": "CM 1241 (RS232)", "OrderNumber": "6ES7 241-1AH32-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.1", "V2.2"] },
+    { "Name": "CM 1241 (RS485)", "OrderNumber": "6ES7 241-1CH32-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.1", "V2.2"] }
+  ],
+  "S71500_Modules": [
+    { "Name": "DI 16x24VDC BA", "OrderNumber": "6ES7 521-1BH10-0AA0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
+    { "Name": "DI 16x24VDC HF", "OrderNumber": "6ES7 521-1BH00-0AB0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
+    { "Name": "DI 32x24VDC BA", "OrderNumber": "6ES7 521-1BL10-0AA0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
+    { "Name": "DI 64x24VDC SNK/SRC BA", "OrderNumber": "6ES7 521-1BP00-0AA0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
+    { "Name": "F-DI 16x24V DC", "OrderNumber": "6ES7 526-1BH00-0AB0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
+    { "Name": "DQ 8x24VDC/2A HF", "OrderNumber": "6ES7 522-1BF00-0AB0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
+    { "Name": "DQ 16x24VDC/0.5A ST", "OrderNumber": "6ES7 522-1BH00-0AB0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
+    { "Name": "DQ 32x24VDC/0.5A BA", "OrderNumber": "6ES7 522-1BL10-0AA0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
+    { "Name": "DQ 8x230VAC/2A ST", "OrderNumber": "6ES7 522-5FF00-0AB0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
+    { "Name": "DI 16/DQ 16x24VDC/0.5A BA", "OrderNumber": "6ES7 523-1BL00-0AA0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
+    { "Name": "AI 8xU/I/RTD/TC ST", "OrderNumber": "6ES7 531-7KF00-0AB0", "Version": "V1.1", "AvailableVersions": ["V1.0", "V1.1"] },
+    { "Name": "AI 8xU/I HF", "OrderNumber": "6ES7 531-7NF00-0AB0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
+    { "Name": "AQ 4xU/I ST", "OrderNumber": "6ES7 532-5HD00-0AB0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
+    { "Name": "AQ 8xU/I HS", "OrderNumber": "6ES7 532-5HF00-0AB0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
+    { "Name": "CP 1543-1 (Ethernet)", "OrderNumber": "6GK7 543-1AX00-0XE0", "Version": "V3.0", "AvailableVersions": ["V2.1", "V3.0"] },
+    { "Name": "CM 1542-5 (PROFIBUS)", "OrderNumber": "6GK7 542-5DX00-0XE0", "Version": "V2.0", "AvailableVersions": ["V1.0", "V2.0"] },
+    { "Name": "CM 8xIO-Link master", "OrderNumber": "6ES7 547-1JF00-0AB0", "Version": "V1.0", "AvailableVersions": ["V1.0"] }
+  ]
+}

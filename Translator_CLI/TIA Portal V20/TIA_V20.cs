@@ -209,7 +209,7 @@ namespace Middleware_console
         #endregion
 
         #region 3. Hardware Configuration & Network
-        public void CreateDev(string devName, string typeIdentifier, string ipX1, string ipX2)
+        public void CreateDev(string devName, string typeIdentifier, string ip, string subnet = "255.255.255.0", string gateway = "")
         {
             if (_project == null) CheckProject();
             if (string.IsNullOrWhiteSpace(devName)) devName = "Device_1";
@@ -222,6 +222,7 @@ namespace Middleware_console
 
             try
             {
+                // 1. Logic tạo thiết bị (PLC hoặc WinCC Unified PC)
                 if (typeIdentifier.Contains("xxxxx") || typeIdentifier.Contains("6AV2 155"))
                 {
                     Console.WriteLine($"[Auto-Fix] Detected WinCC Unified PC. Starting Optimized Creation...");
@@ -253,6 +254,7 @@ namespace Middleware_console
                         }
                     }
 
+                    // Xử lý nạp Software WinCC Unified
                     string firmware = "20.0.0.0";
                     if (typeIdentifier.Contains("/") && typeIdentifier.Split('/').Length > 1)
                     {
@@ -271,16 +273,81 @@ namespace Middleware_console
                 }
                 else
                 {
+                    // Tạo PLC thông thường (S7-1200/1500)
                     newDevice = _project.Devices.CreateWithItem(typeIdentifier, devName, devName);
                 }
 
-                if (newDevice != null && !string.IsNullOrEmpty(ipX1))
+                // 2. CẤU HÌNH MẠNG NÂNG CAO (IP, Subnet, Gateway)
+                if (newDevice != null && !string.IsNullOrEmpty(ip))
                 {
-                    try { SetPlcIpAddress(newDevice, ipX1); } catch { }
+                    try 
+                    { 
+                        // Tận dụng hàm UpdateNetworkSettings để đảm bảo logic đồng nhất
+                        UpdateNetworkSettings(devName, ip, subnet, gateway); 
+                        Console.WriteLine($"   [Network] Configured: IP={ip}, Subnet={subnet}, GW={gateway}");
+                    } 
+                    catch (Exception exNetwork) 
+                    {
+                        Console.WriteLine($"   [Warning] Device created but Network Config failed: {exNetwork.Message}");
+                    }
                 }
             }
             catch (Exception ex) { throw new Exception($"Create Failed: {ex.Message}"); }
         }
+        
+        public string PlugModule(string deviceName, string moduleIdentifier, int slotNum)
+        {
+            if (_project == null) CheckProject();
+
+            try
+            {
+                // 1. Tìm thiết bị trong Project
+                Device device = _project.Devices.FirstOrDefault(d => d.Name == deviceName);
+                if (device == null) return $"FAILED: Device '{deviceName}' not found.";
+
+                // 2. Lấy DeviceItem đại diện cho Rack (thường là Item đầu tiên)
+                // Đối với S7-1200/1500, chúng ta sẽ Plug vào các Slot của Rack này
+                DeviceItem rack = device.DeviceItems[0]; 
+
+                // 3. Kiểm tra và thực hiện Plug
+                // moduleIdentifier có định dạng "OrderNumber:6ES7..."
+                if (rack.CanPlugNew(moduleIdentifier, "", slotNum))
+                {
+                    rack.PlugNew(moduleIdentifier, "", slotNum);
+                    return $"SUCCESS: Plugged {moduleIdentifier} into Slot {slotNum}.";
+                }
+                else
+                {
+                    return $"FAILED: Cannot plug into Slot {slotNum}. Check if slot is occupied or incompatible.";
+                }
+            }
+            catch (Exception ex)
+            {
+                return $"ERROR: {ex.Message}";
+            }
+        }
+
+        public string GetDeviceFamily(string deviceName)
+{
+    if (_project == null) return "UNKNOWN";
+    var device = _project.Devices.FirstOrDefault(d => d.Name == deviceName);
+    if (device == null) return "UNKNOWN";
+
+    // Duyệt qua các item bên trong để tìm CPU
+    foreach (DeviceItem item in device.DeviceItems)
+    {
+        // CPU luôn có mã bắt đầu bằng 6ES7 2... (1200) hoặc 6ES7 5... (1500)
+        // Ta check TypeIdentifier của chính cái Item đó
+        if (item.TypeIdentifier.Contains("6ES7 2")) return "S71200";
+        if (item.TypeIdentifier.Contains("6ES7 5")) return "S71500";
+    }
+
+    // Fallback: Nếu không tìm thấy trong Item, thử check ở cấp Device
+    if (device.TypeIdentifier.Contains("6ES7 2")) return "S71200";
+    if (device.TypeIdentifier.Contains("6ES7 5")) return "S71500";
+
+    return "UNKNOWN";
+}
 
         public string GetDeviceType(string deviceName)
         {
@@ -386,13 +453,11 @@ namespace Middleware_console
                     {
                         if (item == null) continue;
 
-                        // Bỏ qua các thành phần rack/rail
-                        if (item.Name.StartsWith("Rail") || item.Name.StartsWith("Rack")) continue;
-
-                        // If item name differs from station name and not a system keyword, it's the CPU
-                        // Nếu tên item khác tên trạm và không phải từ khóa hệ thống, đó là CPU
-                        if (item.Name != device.Name && !item.Name.ToLower().Contains("station"))
+                        // BẢO VỆ: Chỉ lấy Item nào thực sự là CPU (có chứa SoftwareContainer)
+                        var swContainer = item.GetService<SoftwareContainer>();
+                        if (swContainer != null)
                         {
+                            // Trả về tên CPU (ví dụ: PLC_1)
                             return item.Name;
                         }
                     }
@@ -425,15 +490,36 @@ namespace Middleware_console
             catch { }
             return adapterNames;
         }
+        
+        public string UpdateNetworkSettings(string deviceName, string newIp, string subnet = "255.255.255.0", string gateway = "")
+        {
+            try {
+                Device device = FindDeviceRecursive(_project, deviceName);
+                var netItem = FindNetworkInterfaceItem(device.DeviceItems);
+                var node = netItem.GetService<Siemens.Engineering.HW.Features.NetworkInterface>().Nodes[0];
+
+                // 1. Cập nhật IP Address
+                node.SetAttribute("Address", newIp);
+
+                // 2. Cập nhật Subnet Mask
+                node.SetAttribute("SubnetMask", subnet);
+
+                // 3. Cập nhật Router/Gateway (Nếu có)
+                if (!string.IsNullOrEmpty(gateway)) {
+                    node.SetAttribute("UseRouter", true);
+                    node.SetAttribute("RouterAddress", gateway);
+                }
+
+                return $"SUCCESS: Network settings updated for {deviceName}.";
+            }
+            catch (Exception ex) {
+                return "FAILED: " + ex.Message;
+            }
+        }
         #endregion
 
         #region 4. PLC Software & Block Operations
-        public void ImportBlock(string filePath, string targetPlcName)
-        {
-            CreateFBblockFromSource(targetPlcName, filePath);
-        }
-
-        public void CreateFBblockFromSource(string targetPlcName, string sourcePath)
+            public void CreateFBblockFromSource(string targetPlcName, string sourcePath)
         {
             if (_project == null) CheckProject();
             Device device = FindDeviceRecursive(_project, targetPlcName);
@@ -452,111 +538,111 @@ namespace Middleware_console
             else throw new Exception($"{targetPlcName} is not a valid PLC.");
         }
         public void CreateOBblockFromSource(string targetPlcName, string sourcePath)
-{
-    if (_project == null) CheckProject();
-    Device device = FindDeviceRecursive(_project, targetPlcName);
-    if (device == null) throw new Exception($"PLC '{targetPlcName}' not found.");
-
-    var software = GetSoftware(device);
-    if (software is PlcSoftware plcSoftware)
-    {
-        // 1. Đọc nội dung file SCL để kiểm tra kiểu khai báo
-        string sclContent = File.ReadAllText(sourcePath);
-
-        // Kiểm tra xem ORGANIZATION_BLOCK có đi kèm dấu ngoặc kép hay không
-        // Regex này tìm: ORGANIZATION_BLOCK theo sau bởi dấu cách và dấu ngoặc kép
-        bool isNamedIdentifier = Regex.IsMatch(sclContent, @"ORGANIZATION_BLOCK\s+""[^""]+""", RegexOptions.IgnoreCase);
-
-        if (isNamedIdentifier)
         {
-            // --- KIỂU MỚI: Khai báo bằng tên trong ngoặc kép (giống FB) ---
-            // Chỉ cần Import source và Generate, TIA sẽ tự quản lý tên và thuộc tính trong metadata file
-            var group = plcSoftware.ExternalSourceGroup;
-            var fileName = Path.GetFileName(sourcePath);
-            var existingSrc = group.ExternalSources.Find(fileName);
-            if (existingSrc != null) existingSrc.Delete();
-            
-            var src = group.ExternalSources.CreateFromFile(fileName, sourcePath);
-            src.GenerateBlocksFromSource();
-            Console.WriteLine($"[INFO] OB with named identifier generated successfully from {fileName}");
-        }
-        else
-        {
-            // --- KIỂU CŨ: Khai báo dạng OB30 (Logic cấu hình và đổi tên của bạn) ---
-            
-            // 1.1. Regex tìm số hiệu OB
-            var obMatch = Regex.Match(sclContent, @"ORGANIZATION_BLOCK\s+OB(\d+)", RegexOptions.IgnoreCase);
-            if (!obMatch.Success) 
-                throw new Exception("OB declaration not found (e.g., OB30) or missing quotes in the source file.");
-            
-            int obNumber = int.Parse(obMatch.Groups[1].Value);
-            string obDefaultName = "OB" + obNumber;
+            if (_project == null) CheckProject();
+            Device device = FindDeviceRecursive(_project, targetPlcName);
+            if (device == null) throw new Exception($"PLC '{targetPlcName}' not found.");
 
-            // 1.2. Quét giá trị CyclicTime từ Comment
-            int dynamicCyclicTime = 500; // Mặc định 500us đối với s71500 và 500ms đối với s71200 nếu không tìm thấy
-            var timeMatch = Regex.Match(sclContent, @"@CyclicTime:\s*(\d+)us", RegexOptions.IgnoreCase);
-            if (timeMatch.Success)
+            var software = GetSoftware(device);
+            if (software is PlcSoftware plcSoftware)
             {
-                dynamicCyclicTime = int.Parse(timeMatch.Groups[1].Value);
-            }
+                // 1. Đọc nội dung file SCL để kiểm tra kiểu khai báo
+                string sclContent = File.ReadAllText(sourcePath);
 
-            // 2. Xử lý External Source
-            var group = plcSoftware.ExternalSourceGroup;
-            var fileName = Path.GetFileName(sourcePath);
-            var existingSrc = group.ExternalSources.Find(fileName);
-            if (existingSrc != null) existingSrc.Delete();
-            
-            var src = group.ExternalSources.CreateFromFile(fileName, sourcePath);
-            
-            // 3. Biên dịch Source thành Block
-            src.GenerateBlocksFromSource();
+                // Kiểm tra xem ORGANIZATION_BLOCK có đi kèm dấu ngoặc kép hay không
+                // Regex này tìm: ORGANIZATION_BLOCK theo sau bởi dấu cách và dấu ngoặc kép
+                bool isNamedIdentifier = Regex.IsMatch(sclContent, @"ORGANIZATION_BLOCK\s+""[^""]+""", RegexOptions.IgnoreCase);
 
-            // 4. LOGIC CẤU HÌNH VÀ ĐẶT TÊN (Chỉ dành cho kiểu khai báo số hiệu)
-            var generatedBlock = plcSoftware.BlockGroup.Blocks.Find(obDefaultName);
-            if (generatedBlock != null)
-            {
-                // 4.1. Cấu hình CyclicTime (OB 30-38)
-                if (obNumber >= 30 && obNumber <= 38)
+                if (isNamedIdentifier)
                 {
-                    try 
+                    // --- KIỂU MỚI: Khai báo bằng tên trong ngoặc kép (giống FB) ---
+                    // Chỉ cần Import source và Generate, TIA sẽ tự quản lý tên và thuộc tính trong metadata file
+                    var group = plcSoftware.ExternalSourceGroup;
+                    var fileName = Path.GetFileName(sourcePath);
+                    var existingSrc = group.ExternalSources.Find(fileName);
+                    if (existingSrc != null) existingSrc.Delete();
+
+                    var src = group.ExternalSources.CreateFromFile(fileName, sourcePath);
+                    src.GenerateBlocksFromSource();
+                    Console.WriteLine($"[INFO] OB with named identifier generated successfully from {fileName}");
+                }
+                else
+                {
+                    // --- KIỂU CŨ: Khai báo dạng OB30 (Logic cấu hình và đổi tên của bạn) ---
+
+                    // 1.1. Regex tìm số hiệu OB
+                    var obMatch = Regex.Match(sclContent, @"ORGANIZATION_BLOCK\s+OB(\d+)", RegexOptions.IgnoreCase);
+                    if (!obMatch.Success)
+                        throw new Exception("OB declaration not found (e.g., OB30) or missing quotes in the source file.");
+
+                    int obNumber = int.Parse(obMatch.Groups[1].Value);
+                    string obDefaultName = "OB" + obNumber;
+
+                    // 1.2. Quét giá trị CyclicTime từ Comment
+                    int dynamicCyclicTime = 500; // Mặc định 500us đối với s71500 và 500ms đối với s71200 nếu không tìm thấy
+                    var timeMatch = Regex.Match(sclContent, @"@CyclicTime:\s*(\d+)us", RegexOptions.IgnoreCase);
+                    if (timeMatch.Success)
                     {
-                        generatedBlock.SetAttribute("CyclicTime", (int)dynamicCyclicTime);                             
-                        Console.WriteLine($"[CONFIG] {obDefaultName} configured with: {dynamicCyclicTime} ms");
-                    } 
-                    catch (Exception ex) 
+                        dynamicCyclicTime = int.Parse(timeMatch.Groups[1].Value);
+                    }
+
+                    // 2. Xử lý External Source
+                    var group = plcSoftware.ExternalSourceGroup;
+                    var fileName = Path.GetFileName(sourcePath);
+                    var existingSrc = group.ExternalSources.Find(fileName);
+                    if (existingSrc != null) existingSrc.Delete();
+
+                    var src = group.ExternalSources.CreateFromFile(fileName, sourcePath);
+
+                    // 3. Biên dịch Source thành Block
+                    src.GenerateBlocksFromSource();
+
+                    // 4. LOGIC CẤU HÌNH VÀ ĐẶT TÊN (Chỉ dành cho kiểu khai báo số hiệu)
+                    var generatedBlock = plcSoftware.BlockGroup.Blocks.Find(obDefaultName);
+                    if (generatedBlock != null)
                     {
-                        Console.WriteLine($"[Warning] Cannot set CyclicTime: {ex.Message}");
+                        // 4.1. Cấu hình CyclicTime (OB 30-38)
+                        if (obNumber >= 30 && obNumber <= 38)
+                        {
+                            try
+                            {
+                                generatedBlock.SetAttribute("CyclicTime", (int)dynamicCyclicTime);
+                                Console.WriteLine($"[CONFIG] {obDefaultName} configured with: {dynamicCyclicTime} ms");
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"[Warning] Cannot set CyclicTime: {ex.Message}");
+                            }
+                        }
+
+                        // 4.2. Xác định Prefix
+                        string prefix = "Unknown_OB";
+                        if (obNumber == 1 || (obNumber >= 123 && obNumber <= 32767)) prefix = "MainCycle";
+                        else if (obNumber >= 20 && obNumber <= 23) prefix = "TimeDelay";
+                        else if (obNumber >= 30 && obNumber <= 38) prefix = "CyclicInterrupt";
+                        else if (obNumber >= 40 && obNumber <= 47) prefix = "HardwareInterrupt";
+                        else if (obNumber == 100) prefix = "Startup";
+                        else if (obNumber >= 80 && obNumber <= 87) prefix = "ErrorInterrupt";
+
+                        // 4.3. Logic tăng số thứ tự để tránh trùng tên
+                        string baseName = prefix + "_";
+                        string finalName = baseName + "1";
+                        int counter = 1;
+
+                        while (plcSoftware.BlockGroup.Blocks.Find(finalName) != null)
+                        {
+                            counter++;
+                            finalName = baseName + counter;
+                        }
+
+                        // 4.4. Đổi tên khối
+                        generatedBlock.Name = finalName;
+                        Console.WriteLine($"[RENAME] {obDefaultName} -> {finalName}");
                     }
                 }
-
-                // 4.2. Xác định Prefix
-                string prefix = "Unknown_OB";
-                if (obNumber == 1 || (obNumber >= 123 && obNumber <= 32767)) prefix = "MainCycle";
-                else if (obNumber >= 20 && obNumber <= 23) prefix = "TimeDelay";
-                else if (obNumber >= 30 && obNumber <= 38) prefix = "CyclicInterrupt";
-                else if (obNumber >= 40 && obNumber <= 47) prefix = "HardwareInterrupt";
-                else if (obNumber == 100) prefix = "Startup";
-                else if (obNumber >= 80 && obNumber <= 87) prefix = "ErrorInterrupt";
-
-                // 4.3. Logic tăng số thứ tự để tránh trùng tên
-                string baseName = prefix + "_";
-                string finalName = baseName + "1";
-                int counter = 1;
-
-                while (plcSoftware.BlockGroup.Blocks.Find(finalName) != null)
-                {
-                    counter++;
-                    finalName = baseName + counter;
-                }
-
-                // 4.4. Đổi tên khối
-                generatedBlock.Name = finalName;
-                Console.WriteLine($"[RENAME] {obDefaultName} -> {finalName}");
             }
+            else throw new Exception($"{targetPlcName} is not a valid PLC.");
         }
-    }
-    else throw new Exception($"{targetPlcName} is not a valid PLC.");
-}
 
         // Đảm bảo các hàm này nằm TRONG class TIA_V20
         public string CompileSpecific(string rawDeviceName, bool compileHW, bool compileSW, bool rebuildAll = false)
@@ -702,18 +788,18 @@ namespace Middleware_console
             string state = stateProp?.GetValue(result)?.ToString() ?? "Unknown";
 
             string stateColor;
-                if (state == "Success") 
-                {
-                    stateColor = "\u001b[32m"; // Green
-                }
-                else if (state == "Warning") 
-                {
-                    stateColor = "\u001b[33m"; // Yellow
-                }
-                else 
-                {
-                    stateColor = "\u001b[31m"; // Red (cho Error hoặc Unknown)
-                }
+            if (state == "Success")
+            {
+                stateColor = "\u001b[32m"; // Green
+            }
+            else if (state == "Warning")
+            {
+                stateColor = "\u001b[33m"; // Yellow
+            }
+            else
+            {
+                stateColor = "\u001b[31m"; // Red (cho Error hoặc Unknown)
+            }
             string reset = "\u001b[0m";
 
             StringBuilder sb = new StringBuilder();
@@ -1417,7 +1503,7 @@ namespace Middleware_console
                 // 2. NHÓM WIDGET (Thư viện)
                 else if (item.Properties.ContainsKey("LibraryPath"))
                 {
-                    string targetProp = item.Type.Contains("Tank") ? null: "BasicColor";
+                    string targetProp = item.Type.Contains("Tank") ? null : "BasicColor";
                     string customScript = item.Properties.ContainsKey("ColorScript") ? item.Properties["ColorScript"].ToString() : "";
                     if (item.Type.Contains("Tank"))
                     {
@@ -1450,7 +1536,7 @@ namespace Middleware_console
                         }
                     }
 
-                    
+
                     foreach (dynamic m in dynItem.Interface)
                     {
                         if (m.PropertyName == targetProp)
@@ -1696,9 +1782,9 @@ namespace Middleware_console
                     scriptObj.ScriptCode = !string.IsNullOrEmpty(scriptCode) ? scriptCode : defaultScript;
 
                     // Thông báo trạng thái nạp
-               
+
                     Console.WriteLine($"      =>[DYNAMIZATION] Applied RGB Script: {item.Name} Linked to {tagName}");
-                    
+
                 }
             }
             catch (Exception ex)
@@ -2969,8 +3055,8 @@ namespace Middleware_console
             {
                 File.WriteAllText(outputPath, "{\"FatalError\": \"" + ex.Message + "\"}");
             }
-        }
-        #endregion
+        }        
+        #endregion        
     }
     public class PlcCatalogItem
     {
@@ -2995,4 +3081,9 @@ namespace Middleware_console
         public List<PlcCatalogItem> S71500 { get; set; }
         public List<PlcCatalogItem> WinCC_Unified { get; set; }
     }
+    public class ModuleCatalogWrapper
+{
+    public List<PlcCatalogItem> S71200_Modules { get; set; }
+    public List<PlcCatalogItem> S71500_Modules { get; set; }
+}
 }

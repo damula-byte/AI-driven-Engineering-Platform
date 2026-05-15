@@ -25,6 +25,7 @@ namespace TIA_Copilot_CLI
         private static string _lastGeneratedFilePath = "";
         public static string _currentSessionId = "default";
         public static bool capstoneMode = false;
+        private static ModuleCatalogWrapper moduleData;
 
         [STAThread]
         static async Task Main(string[] args)
@@ -410,15 +411,56 @@ namespace TIA_Copilot_CLI
                     LogPerformance("CreateDevice", createDev.ElapsedMilliseconds);
 
                     break;
-
+                case "add-module":
+                    // Gọi hàm Wizard đã được đóng gói logic duyệt Catalog Module
+                    HandlePlugModuleWizard();
+                    break;
                 case "choose":
                     Stopwatch chooseDev = new Stopwatch();
                     chooseDev.Start();
                     HandleChooseDevice(args);
                     chooseDev.Stop();
                     LogPerformance("ChooseDevice", chooseDev.ElapsedMilliseconds);
-                    break;
+                    break;                
 
+                case "changeip":
+                    try {
+                        // Ensure a device has been selected first using the 'choose' command
+                        if (string.IsNullOrEmpty(_currentDeviceName)) {
+                            PrintIcon("X", "Please select a device first (use 'tia choose')!", ConsoleColor.Red);
+                            break;
+                        }
+
+                        Console.WriteLine($"\n--- Network Configuration for: {_currentDeviceName} ---");
+                        Console.WriteLine("(Press Enter to keep the default value or skip)");
+
+                        // 1. Input IP Address
+                        Console.Write(" -> IP Address [192.168.0.1]: ");
+                        string inputIp = Console.ReadLine().Trim();
+                        string newIp = string.IsNullOrEmpty(inputIp) ? "192.168.0.1" : inputIp;
+
+                        // 2. Input Subnet Mask
+                        Console.Write(" -> Subnet Mask [255.255.255.0]: ");
+                        string inputSubnet = Console.ReadLine().Trim();
+                        string subnet = string.IsNullOrEmpty(inputSubnet) ? "255.255.255.0" : inputSubnet;
+
+                        // 3. Input Gateway (Router)
+                        Console.Write(" -> Gateway (Leave blank if none): ");
+                        string gateway = Console.ReadLine().Trim();
+
+                        // Summary of inputs before calling the TIA Openness logic
+                        Console.WriteLine($"\n[i] Updating: IP={newIp}, Subnet={subnet}, GW={(string.IsNullOrEmpty(gateway) ? "None" : gateway)}...");
+
+                        // Invoke the updated logic from TIA_V20.cs
+                        string result = _tiaEngine.UpdateNetworkSettings(_currentDeviceName, newIp, subnet, gateway);
+
+                        PrintIcon(result.Contains("SUCCESS") ? "√" : "X", result, 
+                                result.Contains("SUCCESS") ? ConsoleColor.Green : ConsoleColor.Red);
+                    }
+                    catch (Exception ex) {
+                        PrintIcon("X", "System Error: " + ex.Message, ConsoleColor.Red);
+                    }
+                    break;
                 case "hmi-conn":
                     if (args.Length < 4)
                     {
@@ -835,6 +877,150 @@ namespace TIA_Copilot_CLI
             }
             catch (Exception ex) { PrintIcon("×", $"Lỗi: {ex.Message}", ConsoleColor.Red); }
         }
+        private static void HandlePlugModuleWizard()
+        {
+            // 1. Kiểm tra xem người dùng đã chọn PLC đích chưa
+            if (string.IsNullOrEmpty(_currentDeviceName))
+            {
+                PrintIcon("!", "Bạn chưa chọn PLC! Hãy dùng lệnh 'tia choose <ID>' trước khi gắn module.", ConsoleColor.Yellow);
+                return;
+            }
+
+            string moduleIdentifier = "";
+            Console.WriteLine("\n" + new string('=', 55));
+            Console.WriteLine("[MODULE INSTALLATION WIZARD - TIA V20 OPTIMIZED]");
+            Console.WriteLine(" 1. Choose from Module Catalog (Organized by PLC Family)");
+            Console.WriteLine(" 2. Manual entry (Manual parameters)");
+            Console.Write("Select mode (1/2): ");
+            string mode = Console.ReadLine();
+
+            if (mode == "1")
+            {
+                // --- CHẾ ĐỘ CATALOG (Dựa trên code cũ của Thịnh) ---
+                string modulePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ModuleCatalog.json");
+                if (!File.Exists(modulePath))
+                {
+                    PrintIcon("X", "The ModuleCatalog.json file was not found!", ConsoleColor.Red);
+                    return;
+                }
+
+                try
+                {
+                    var json = File.ReadAllText(modulePath);
+                    var moduleData = JsonConvert.DeserializeObject<ModuleCatalogWrapper>(json);
+
+                    string family = _tiaEngine.GetDeviceFamily(_currentDeviceName);
+                    List<PlcCatalogItem> availableModules = (family == "S71200") ? moduleData.S71200_Modules : moduleData.S71500_Modules;
+
+                    if (availableModules != null && availableModules.Count > 0)
+                    {
+                        Console.WriteLine("\n ID | MODULE NAME                | PART NUMBER");
+                        Console.WriteLine(new string('-', 65));
+                        for (int i = 0; i < availableModules.Count; i++)
+                        {
+                            Console.WriteLine($" {i + 1,-2} | {availableModules[i].Name,-28} | {availableModules[i].OrderNumber}");
+                        }
+
+                        Console.Write("\nChọn ID Module: ");
+                        if (int.TryParse(Console.ReadLine(), out int selIdx) && selIdx > 0 && selIdx <= availableModules.Count)
+                        {
+                            var selectedItem = availableModules[selIdx - 1];
+                            string finalVer = selectedItem.Version;
+
+                            if (selectedItem.AvailableVersions != null && selectedItem.AvailableVersions.Count > 0)
+                            {
+                                Console.WriteLine($"\n--> Supported firmware for {selectedItem.Name}:");
+                                for (int j = 0; j < selectedItem.AvailableVersions.Count; j++)
+                                {
+                                    Console.WriteLine($"    {j + 1}. {selectedItem.AvailableVersions[j]}");
+                                }
+                                Console.Write($"Select version ID (Press Enter to use {finalVer}): ");
+                                string vInput = Console.ReadLine();
+                                if (int.TryParse(vInput, out int vIdx) && vIdx > 0 && vIdx <= selectedItem.AvailableVersions.Count)
+                                {
+                                    finalVer = selectedItem.AvailableVersions[vIdx - 1];
+                                }
+                            }
+                            moduleIdentifier = $"OrderNumber:{selectedItem.OrderNumber}/{finalVer}";
+                        }
+                    }
+                    else PrintIcon("!", "The module catalog for this PLC series is empty.", ConsoleColor.Yellow);
+                }
+                catch (Exception ex) { PrintIcon("X", $"Catalog Error: {ex.Message}", ConsoleColor.Red); }
+            }
+            else
+            {
+                // --- CHẾ ĐỘ NHẬP TAY (Tương tự Create Device) ---
+                Console.WriteLine("\n--- MANUAL MODULE PARAMETER ENTRY ---");
+                Console.Write(" -> Enter Module Order Number (e.g., 6ES7 221-1BF32-0XB0): ");
+                string mlfb = Console.ReadLine().Trim();
+
+                Console.Write(" -> Enter Version (e.g., V2.2): ");
+                string version = Console.ReadLine().Trim();
+
+                if (!string.IsNullOrWhiteSpace(mlfb) && !string.IsNullOrWhiteSpace(version))
+                {
+                    if (!version.StartsWith("V", StringComparison.OrdinalIgnoreCase)) version = "V" + version;
+                    moduleIdentifier = $"OrderNumber:{mlfb}/{version}";
+                    Console.WriteLine($"[i] Generated Module Identifier: {moduleIdentifier}");
+                }
+                else PrintIcon("X", "Module information cannot be empty!", ConsoleColor.Red);
+            }
+
+            // --- PHẦN THỰC THI CHUNG (Dành cho cả 2 chế độ) ---
+            if (!string.IsNullOrEmpty(moduleIdentifier))
+            {
+                // BỔ SUNG: Logic gợi ý Slot thông minh
+                string family = _tiaEngine.GetDeviceFamily(_currentDeviceName);
+                // Tách lấy phần MLFB từ Identifier (bỏ tiền tố OrderNumber: và hậu tố /Version)
+                string mlfb = moduleIdentifier.Split(':')[1].Split('/')[0];
+
+                Console.WriteLine("\n" + new string('-', 40));
+                Console.WriteLine($"[SUGGESTED SLOT LOCATIONS FOR: {mlfb}]");
+
+                if (family == "S71200")
+                {
+                    if (mlfb.StartsWith("6ES7 241") || mlfb.StartsWith("6GK7"))
+                    {
+                        // Communication Modules (CM/CP) - Bên TRÁI CPU
+                        PrintIcon("i", "This is a COMMUNICATION MODULE. S7-1200 rule: Insert on the LEFT side of the CPU.", ConsoleColor.Cyan);
+                        PrintIcon("!", "Suggested location: Slot 101, 102 or 103.", ConsoleColor.Yellow);
+                    }
+                    else if (mlfb.StartsWith("6ES7 221") || mlfb.StartsWith("6ES7 222") || mlfb.StartsWith("6ES7 223") || 
+                            mlfb.StartsWith("6ES7 231") || mlfb.StartsWith("6ES7 232") || mlfb.StartsWith("6ES7 234"))
+                    {
+                        // Signal Modules (SM) - Bên PHẢI CPU
+                        PrintIcon("i", "This is a SIGNAL MODULE. S7-1200 rule: Insert on the RIGHT side of the CPU.", ConsoleColor.Cyan);
+                        PrintIcon("!", "Suggested location: Slot 2, 3, 4... (Slot 1 is the CPU).", ConsoleColor.Yellow);
+                    }
+                    else if (mlfb.Contains("30-0XB0") || mlfb.Contains("32-0XB0")) // Thường là các mã SB cũ/mới
+                    {
+                        // Signal Boards (SB) - Trên mặt CPU
+                        PrintIcon("i", "This is a SIGNAL BOARD. S7-1200 rule: Insert directly on the CPU.", ConsoleColor.Cyan);
+                        PrintIcon("!", "Suggested location: Slot 1.", ConsoleColor.Yellow);
+                    }
+                }
+                else if (family == "S71500")
+                {
+                    PrintIcon("i", "S7-1500 rule: Slot 1 (Power Supply), Slot 2 (CPU).", ConsoleColor.Cyan);
+                    PrintIcon("!", "Suggested location: Slots 3 and beyond for expansion modules.", ConsoleColor.Yellow);
+                }
+                Console.WriteLine(new string('-', 40));
+
+                Console.Write($"\nEnter Slot Location: ");
+                if (int.TryParse(Console.ReadLine(), out int slot))
+                {
+                    PrintIcon("i", $"The module is currently being installed into the slot. {slot}...", ConsoleColor.Cyan);
+                    string result = _tiaEngine.PlugModule(_currentDeviceName, moduleIdentifier, slot);
+                    
+                    if (result.Contains("SUCCESS"))
+                        PrintIcon("√", result, ConsoleColor.Green);
+                    else
+                        PrintIcon("X", result, ConsoleColor.Red);
+                }
+                else PrintIcon("X", "Invalid Slot Number!", ConsoleColor.Red);
+            }
+        }
 
         // public static void TiaImportLogic(string blockType, string explicitPath)
         // {
@@ -1008,9 +1194,11 @@ namespace TIA_Copilot_CLI
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("\n[6-8: DEVICE & CONFIGURATION]");
             Console.ResetColor();
-            Console.WriteLine("  tia device <Name> <IP> <Type> : Create PLC. Example: tia device \"PLC_01\" \"192.168.0.1\" \"S7-1500\"");
-            Console.WriteLine("  tia choose <Name>           : Lock target to PLC. Example: tia choose \"PLC_01\"");
-            Console.WriteLine("  tia hmi-conn <H_IP> <P_IP>  : Connect HMI-PLC. Example: tia hmi-conn \"192.168.0.2\" \"192.168.0.1\"");
+            Console.WriteLine("  tia device                    : Launch the Device Creation Wizard (Catalog/Manual) with full Network Setup.");
+            Console.WriteLine("  tia add-module                : Launch the Module Installation Wizard to plug SM/CM modules into slots.");
+            Console.WriteLine("  tia choose <Name>             : Lock target to PLC. Example: tia choose \"PLC_01\"");
+            Console.WriteLine("  tia changeip                  : Open network configuration wizard (IP, Subnet, Gateway) for the selected device.");
+            Console.WriteLine("  tia hmi-conn <H_IP> <P_IP>    : Connect HMI-PLC. Example: tia hmi-conn \"192.168.0.2\" \"192.168.0.1\"");
 
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("\n[9-13: PROGRAMMING & DATA]");
@@ -1129,24 +1317,80 @@ namespace TIA_Copilot_CLI
                 else PrintIcon("!", "Cannot find file PlcCatalog.json!", ConsoleColor.Yellow);
             }
 
-            // If not selected from Catalog or Catalog is empty
+            // If not selected from Catalog or Catalog is empty            
             if (string.IsNullOrEmpty(typeIdentifier))
             {
-                // ... (Keep original Manual Input logic as before) ...
+                Console.WriteLine("\n--- MANUAL PARAMETER ENTRY ---");
+                
+                // 1. Nhập mã thiết bị (MLFB)
+                Console.Write(" -> Enter Order Number (e.g., 6ES7 214-1AG40-0XB0): ");
+                string mlfb = Console.ReadLine().Trim();
+
+                if (string.IsNullOrWhiteSpace(mlfb))
+                {
+                    PrintIcon("X", "Order Number cannot be empty! Task aborted.", ConsoleColor.Red);
+                    return;
+                }
+
+                // 2. Nhập phiên bản (Firmware/Version)
+                Console.Write(" -> Enter Version (e.g., V4.4): ");
+                string version = Console.ReadLine().Trim();
+
+                if (string.IsNullOrWhiteSpace(version))
+                {
+                    PrintIcon("X", "Version cannot be empty! Task aborted.", ConsoleColor.Red);
+                    return;
+                }
+
+                // Đảm bảo có tiền tố 'V' cho phiên bản nếu người dùng quên nhập
+                if (!version.StartsWith("V", StringComparison.OrdinalIgnoreCase))
+                {
+                    version = "V" + version;
+                }
+
+                // 3. Tự động đóng gói thành Type Identifier chuẩn cho TIA Openness
+                typeIdentifier = $"OrderNumber:{mlfb}/{version}";
+                
+                Console.WriteLine($"[i] Generated Identifier: {typeIdentifier}");
             }
 
             // Proceed with device creation (Device Name, IP...)
-            Console.Write("\nDevice Name: "); string name = Console.ReadLine();
-            Console.Write("IP Address: "); string ip = Console.ReadLine();
+            // --- STEP 4: PROCEED WITH DEVICE CREATION & NETWORK SETUP ---
+            Console.Write("\nDevice Name (e.g., PLC_1): "); 
+            string name = Console.ReadLine().Trim();
+            if (string.IsNullOrEmpty(name)) name = "Device_1";
+
+            Console.WriteLine("\n--- Quick Network Setup ---");
+            
+            // 1. Nhập IP Address
+            Console.Write(" -> IP Address [192.168.0.1]: ");
+            string inputIp = Console.ReadLine().Trim();
+            string ip = string.IsNullOrEmpty(inputIp) ? "192.168.0.1" : inputIp;
+
+            // 2. Nhập Subnet Mask
+            Console.Write(" -> Subnet Mask [255.255.255.0]: ");
+            string inputSubnet = Console.ReadLine().Trim();
+            string subnet = string.IsNullOrEmpty(inputSubnet) ? "255.255.255.0" : inputSubnet;
+
+            // 3. Nhập Gateway
+            Console.Write(" -> Gateway (Leave blank if none): ");
+            string gateway = Console.ReadLine().Trim();
 
             try
             {
-                PrintIcon("i", $"Creating {name}...", ConsoleColor.Cyan);
-                _tiaEngine.CreateDev(name, typeIdentifier, ip, "");
-                PrintIcon("√", $"Device '{name}' created successfully!", ConsoleColor.Green);
+                PrintIcon("i", $"Initializing hardware creation for '{name}'...", ConsoleColor.Cyan);
+                
+                // Gọi hàm CreateDev đã được nâng cấp trong TIA_V20.cs
+                _tiaEngine.CreateDev(name, typeIdentifier, ip, subnet, gateway);
+                
+                PrintIcon("√", $"Device '{name}' created and configured successfully!", ConsoleColor.Green);
             }
-            catch (Exception ex) { PrintIcon("×", $"Lỗi: {ex.Message}", ConsoleColor.Red); }
+            catch (Exception ex) 
+            { 
+                PrintIcon("×", $"Creation Failed: {ex.Message}", ConsoleColor.Red); 
+            }
         }
+        
         public static void LogPerformance(string actionName, long timeMs)
         {
 
