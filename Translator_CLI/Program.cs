@@ -12,6 +12,7 @@ using System.Threading;
 using System.Collections.Generic;
 
 
+
 namespace TIA_Copilot_CLI
 {
     public class Program
@@ -71,6 +72,50 @@ namespace TIA_Copilot_CLI
             }
         }
 
+        // static async Task RunInteractiveShell()
+        // {
+        //     var setting = SettingsManager.Load();
+        //     string mode = setting.Mode.ToUpper();
+        //     string userName = Environment.UserName;
+        //     string appName = "TIACopilot";
+
+        //     ReadLine.HistoryEnabled = true;
+
+
+        //     Console.Clear();
+        //     Console.ForegroundColor = ConsoleColor.Cyan;
+        //     Console.WriteLine("==========================================================");
+        //     Console.WriteLine($"Welcome to {appName} CLI, {userName}!");
+        //     Console.WriteLine(" Type a command, press [ESC] to exit, or type 'help' for usage.");
+        //     Console.WriteLine("==========================================================\n");
+        //     Console.ResetColor();
+
+        //     while (true)
+        //     {
+        //         Console.ForegroundColor = ConsoleColor.Green;
+        //         Console.Write($"{userName}-{appName}-[{mode}]");
+        //         Console.ResetColor();
+        //         Console.Write(" > ");
+
+        //         string input = ReadLineWithEscape();
+
+        //         if (input == null || input.Trim().ToLower() == "exit")
+        //         {
+        //             PrintIcon("!", "Exit command received. Closing engine...", ConsoleColor.Yellow);
+        //             break;
+        //         }
+
+        //         if (string.IsNullOrWhiteSpace(input)) continue;
+
+        //         string[] cmdArgs = Regex.Matches(input, @"[\""].+?[\""]|[^ ]+")
+        //                                 .Cast<Match>().Select(m => m.Value.Trim('"'))
+        //                                 .ToArray();
+
+        //         await RouteCommand(cmdArgs);
+        //         var settings = SettingsManager.Load();
+        //         mode = settings.Mode.ToUpper();
+        //     }
+        // }
         static async Task RunInteractiveShell()
         {
             var setting = SettingsManager.Load();
@@ -78,37 +123,40 @@ namespace TIA_Copilot_CLI
             string userName = Environment.UserName;
             string appName = "TIACopilot";
 
+            ReadLine.HistoryEnabled = true;
 
             Console.Clear();
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("==========================================================");
             Console.WriteLine($"Welcome to {appName} CLI, {userName}!");
-            Console.WriteLine(" Type a command, press [ESC] to exit, or type 'help' for usage.");
+            Console.WriteLine(" Use Arrow [Up/Down] for history, type 'exit' to quit.");
             Console.WriteLine("==========================================================\n");
             Console.ResetColor();
 
             while (true)
             {
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.Write($"{userName}-{appName}-[{mode}]");
-                Console.ResetColor();
-                Console.Write(" > ");
+                // 2. TẠO PROMPT DYNAMIC
+                string prompt = $"\u001b[32m{userName}-{appName}-[{mode}]\u001b[0m > ";
 
-                string input = ReadLineWithEscape();
+                string input = ReadLine.Read(prompt);
 
-                if (input == null || input.Trim().ToLower() == "exit")
+                if (string.IsNullOrWhiteSpace(input)) continue;
+
+                if (input.Trim().ToLower() == "exit")
                 {
                     PrintIcon("!", "Exit command received. Closing engine...", ConsoleColor.Yellow);
                     break;
                 }
 
-                if (string.IsNullOrWhiteSpace(input)) continue;
-
+                // 5. PARSE LỆNH
                 string[] cmdArgs = Regex.Matches(input, @"[\""].+?[\""]|[^ ]+")
-                                        .Cast<Match>().Select(m => m.Value.Trim('"'))
+                                        .Cast<Match>()
+                                        .Select(m => m.Value.Trim('"'))
                                         .ToArray();
 
+                // THỰC THI
                 await RouteCommand(cmdArgs);
+
                 var settings = SettingsManager.Load();
                 mode = settings.Mode.ToUpper();
             }
@@ -421,12 +469,14 @@ namespace TIA_Copilot_CLI
                     HandleChooseDevice(args);
                     chooseDev.Stop();
                     LogPerformance("ChooseDevice", chooseDev.ElapsedMilliseconds);
-                    break;                
+                    break;
 
                 case "changeip":
-                    try {
+                    try
+                    {
                         // Ensure a device has been selected first using the 'choose' command
-                        if (string.IsNullOrEmpty(_currentDeviceName)) {
+                        if (string.IsNullOrEmpty(_currentDeviceName))
+                        {
                             PrintIcon("X", "Please select a device first (use 'tia choose')!", ConsoleColor.Red);
                             break;
                         }
@@ -454,10 +504,11 @@ namespace TIA_Copilot_CLI
                         // Invoke the updated logic from TIA_V20.cs
                         string result = _tiaEngine.UpdateNetworkSettings(_currentDeviceName, newIp, subnet, gateway);
 
-                        PrintIcon(result.Contains("SUCCESS") ? "√" : "X", result, 
+                        PrintIcon(result.Contains("SUCCESS") ? "√" : "X", result,
                                 result.Contains("SUCCESS") ? ConsoleColor.Green : ConsoleColor.Red);
                     }
-                    catch (Exception ex) {
+                    catch (Exception ex)
+                    {
                         PrintIcon("X", "System Error: " + ex.Message, ConsoleColor.Red);
                     }
                     break;
@@ -986,7 +1037,7 @@ namespace TIA_Copilot_CLI
                         PrintIcon("i", "This is a COMMUNICATION MODULE. S7-1200 rule: Insert on the LEFT side of the CPU.", ConsoleColor.Cyan);
                         PrintIcon("!", "Suggested location: Slot 101, 102 or 103.", ConsoleColor.Yellow);
                     }
-                    else if (mlfb.StartsWith("6ES7 221") || mlfb.StartsWith("6ES7 222") || mlfb.StartsWith("6ES7 223") || 
+                    else if (mlfb.StartsWith("6ES7 221") || mlfb.StartsWith("6ES7 222") || mlfb.StartsWith("6ES7 223") ||
                             mlfb.StartsWith("6ES7 231") || mlfb.StartsWith("6ES7 232") || mlfb.StartsWith("6ES7 234"))
                     {
                         // Signal Modules (SM) - Bên PHẢI CPU
@@ -1012,7 +1063,7 @@ namespace TIA_Copilot_CLI
                 {
                     PrintIcon("i", $"The module is currently being installed into the slot. {slot}...", ConsoleColor.Cyan);
                     string result = _tiaEngine.PlugModule(_currentDeviceName, moduleIdentifier, slot);
-                    
+
                     if (result.Contains("SUCCESS"))
                         PrintIcon("√", result, ConsoleColor.Green);
                     else
@@ -1227,7 +1278,7 @@ namespace TIA_Copilot_CLI
             Console.WriteLine("\n" + new string('-', 85));
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine(" NOTE: Paths and dialog text containing spaces MUST be wrapped in double quotes \" \".");
-            Console.WriteLine(" Type 'exit' or press [ESC] to end the session.");
+            Console.WriteLine(" Type 'exit' to end the program.");
             Console.ResetColor();
             Console.WriteLine(new string('=', 85) + "\n");
         }
@@ -1321,7 +1372,7 @@ namespace TIA_Copilot_CLI
             if (string.IsNullOrEmpty(typeIdentifier))
             {
                 Console.WriteLine("\n--- MANUAL PARAMETER ENTRY ---");
-                
+
                 // 1. Nhập mã thiết bị (MLFB)
                 Console.Write(" -> Enter Order Number (e.g., 6ES7 214-1AG40-0XB0): ");
                 string mlfb = Console.ReadLine().Trim();
@@ -1350,18 +1401,18 @@ namespace TIA_Copilot_CLI
 
                 // 3. Tự động đóng gói thành Type Identifier chuẩn cho TIA Openness
                 typeIdentifier = $"OrderNumber:{mlfb}/{version}";
-                
+
                 Console.WriteLine($"[i] Generated Identifier: {typeIdentifier}");
             }
 
             // Proceed with device creation (Device Name, IP...)
             // --- STEP 4: PROCEED WITH DEVICE CREATION & NETWORK SETUP ---
-            Console.Write("\nDevice Name (e.g., PLC_1): "); 
+            Console.Write("\nDevice Name (e.g., PLC_1): ");
             string name = Console.ReadLine().Trim();
             if (string.IsNullOrEmpty(name)) name = "Device_1";
 
             Console.WriteLine("\n--- Quick Network Setup ---");
-            
+
             // 1. Nhập IP Address
             Console.Write(" -> IP Address [192.168.0.1]: ");
             string inputIp = Console.ReadLine().Trim();
@@ -1379,18 +1430,18 @@ namespace TIA_Copilot_CLI
             try
             {
                 PrintIcon("i", $"Initializing hardware creation for '{name}'...", ConsoleColor.Cyan);
-                
+
                 // Gọi hàm CreateDev đã được nâng cấp trong TIA_V20.cs
                 _tiaEngine.CreateDev(name, typeIdentifier, ip, subnet, gateway);
-                
+
                 PrintIcon("√", $"Device '{name}' created and configured successfully!", ConsoleColor.Green);
             }
-            catch (Exception ex) 
-            { 
-                PrintIcon("×", $"Creation Failed: {ex.Message}", ConsoleColor.Red); 
+            catch (Exception ex)
+            {
+                PrintIcon("×", $"Creation Failed: {ex.Message}", ConsoleColor.Red);
             }
         }
-        
+
         public static void LogPerformance(string actionName, long timeMs)
         {
 

@@ -19,6 +19,7 @@
     <PackageReference Include="ClosedXML" Version="0.105.0" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3856.49" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="ReadLine" Version="2.0.1" />
   </ItemGroup>
    <ItemGroup>
     <Reference Include="System.Net.Http" />
