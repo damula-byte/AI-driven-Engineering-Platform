@@ -11,6 +11,7 @@ namespace TIA_Copilot_CLI
     {
         public static string PYTHON_EXE_PATH = "";
         public static string PYTHON_SCRIPT_PATH = "";
+        public static string PYTHON_WORKING_DIR = "";
 
         public static void InitializePaths()
         {
@@ -34,37 +35,30 @@ namespace TIA_Copilot_CLI
             if (backendFolder != null)
             {
 #if DEBUG
-                // ==========================================
-                // MÔI TRƯỜNG DEV: ÉP BUỘC DÙNG PYTHON RAW
-                // ==========================================
                 PYTHON_EXE_PATH = Path.Combine(backendFolder, "env", "python.exe");
                 if (!File.Exists(PYTHON_EXE_PATH))
                 {
                     PYTHON_EXE_PATH = Path.Combine(backendFolder, "env", "Scripts", "python.exe");
                 }
                 PYTHON_SCRIPT_PATH = Path.Combine(backendFolder, "main.py");
-
-                Console.ForegroundColor = ConsoleColor.Magenta;
-                Console.WriteLine($"[SYSTEM] Running DEBUG mode: Calling source code directly {PYTHON_SCRIPT_PATH}");
-                Console.ResetColor();
+                PYTHON_WORKING_DIR = backendFolder;
 #else
-                // ==========================================
-                // MÔI TRƯỜNG DEPLOY: ÉP BUỘC DÙNG FILE EXE
-                // ==========================================
                 string distExePath = Path.Combine(backendFolder, "dist", "ai_engine", "ai_engine.exe");
                 string releaseExePath = Path.Combine(backendFolder, "ai_engine.exe");
 
                 if (File.Exists(releaseExePath))
                 {
                     PYTHON_EXE_PATH = releaseExePath;
-                    PYTHON_SCRIPT_PATH = ""; // Cực kỳ quan trọng: Để trống để C# biết không xài script
+                    PYTHON_SCRIPT_PATH = "";
+                    PYTHON_WORKING_DIR = backendFolder;
                 }
-                else if (File.Exists(distExePath))
+            else if (File.Exists(distExePath))
                 {
                     PYTHON_EXE_PATH = distExePath;
-                    PYTHON_SCRIPT_PATH = ""; 
+                    PYTHON_SCRIPT_PATH = "";
+                    PYTHON_WORKING_DIR = backendFolder;
                 }
-                else
+            else
                 {
                     throw new FileNotFoundException("Cannot find ai_engine.exe file to run Deploy!");
                 }
@@ -72,16 +66,13 @@ namespace TIA_Copilot_CLI
             }
         }
 
-        public static async Task<string> CallPythonBackendAsync(string query, string sessionId, string commandType, string contextCode = "", string specText = "", string targetType = "AUTO", string userTags = "",string systemMode = "USER", string customApiKey = "")
+
+        public static async Task<string> CallPythonBackendAsync(string query, string sessionId, string commandType, string contextCode = "", string specText = "", string targetType = "AUTO", string userTags = "", string systemMode = "USER", string customApiKey = "")
         {
             try
             {
                 ProcessStartInfo start = new ProcessStartInfo();
                 start.FileName = PYTHON_EXE_PATH;
-
-                // [QUAN TRỌNG]: Đổi logic gán Argument
-                // Nếu chạy bản Dev (có path tới main.py) -> truyền argument
-                // Nếu chạy bản Deploy (file exe) -> để trống argument
                 if (!string.IsNullOrEmpty(PYTHON_SCRIPT_PATH))
                 {
                     start.Arguments = $"\"{PYTHON_SCRIPT_PATH}\"";
@@ -90,7 +81,9 @@ namespace TIA_Copilot_CLI
                 else
                 {
                     start.Arguments = "";
-                    start.WorkingDirectory = Path.GetDirectoryName(PYTHON_EXE_PATH);
+                    start.WorkingDirectory = !string.IsNullOrEmpty(PYTHON_WORKING_DIR)
+                        ? PYTHON_WORKING_DIR
+                        : Path.GetDirectoryName(PYTHON_EXE_PATH);
                 }
 
                 start.UseShellExecute = false;
@@ -98,7 +91,6 @@ namespace TIA_Copilot_CLI
                 start.RedirectStandardOutput = true;
                 start.RedirectStandardError = true;
                 start.CreateNoWindow = true;
-                start.StandardOutputEncoding = Encoding.UTF8;
 
                 using (Process process = Process.Start(start))
                 {
@@ -122,6 +114,7 @@ namespace TIA_Copilot_CLI
                     {
                         await writer.WriteAsync(jsonInput);
                         await writer.FlushAsync();
+                        writer.Close();
                     }
 
                     // 2. TUYỆT KỸ PHÁ DEADLOCK

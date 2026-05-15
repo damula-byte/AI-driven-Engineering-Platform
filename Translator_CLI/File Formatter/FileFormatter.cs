@@ -500,22 +500,23 @@ namespace TIA_Copilot_CLI
 
                 // ==========================================================
                 // SCAN AND GENERATE DB FOR FB INSTANCES CALLED IN OB
+                // ALSO SCAN FC INSTANCES (NO DB GENERATION)
                 // ==========================================================
                 if (blockType == "ORGANIZATION_BLOCK" && !string.IsNullOrWhiteSpace(data.BodyCode))
                 {
-                    // Regex tìm các chuỗi có dạng "Inst_FB_TênKhuôn_HậuTố"
-                    // Ví dụ: "Inst_FB_MainConveyor_01" -> Match 1: Cả cụm, Match 2: FB_MainConveyor
-                    string pattern = @"\""(Inst_(FB_[a-zA-Z0-9_]+)__([a-zA-Z0-9_]+))\""\s*\(";
-                    MatchCollection matches = Regex.Matches(data.BodyCode, pattern);
+                    // Pattern 1: FB instances with name pattern "Inst_FB_TênKhuôn__HậuTố"
+                    // Example: "Inst_FB_MainConveyor__01" -> Match 1: Full instance name, Match 2: FB_MainConveyor
+                    string fbPattern = @"\""(Inst_(FB_[a-zA-Z0-9_]+)__([a-zA-Z0-9_]+))\""\s*\(";
+                    MatchCollection fbMatches = Regex.Matches(data.BodyCode, fbPattern);
 
                     HashSet<string> generatedDBs = new HashSet<string>();
 
-                    foreach (Match match in matches)
+                    foreach (Match match in fbMatches)
                     {
                         string dbName = match.Groups[1].Value; // VD: Inst_FB_MainConveyor_01
                         string fbType = match.Groups[2].Value; // VD: FB_MainConveyor
 
-                        // Dùng HashSet để tránh việc 1 DB bị gọi nhiều lần sinh ra nhiều khai báo trùng lặp
+                        // Use HashSet to prevent duplicate DB declarations
                         if (!generatedDBs.Contains(dbName))
                         {
                             generatedDBs.Add(dbName);
@@ -527,6 +528,21 @@ namespace TIA_Copilot_CLI
                             sb.AppendLine("BEGIN");
                             sb.AppendLine("END_DATA_BLOCK");
                         }
+                    }
+
+                    // Pattern 2: FC instances - exact name match, NO DB generation
+                    // Example: "FC_MyFunction"(...  or "Inst_FC_MyFunction"(...
+                    // FC naming must match previously created FC exactly (no pattern applied)
+                    string fcPattern = @"\""((?:Inst_)?FC_[a-zA-Z0-9_]+)\""\s*\(";
+                    MatchCollection fcMatches = Regex.Matches(data.BodyCode, fcPattern);
+
+                    // FC instances are validated but no DB is generated
+                    // The FC name must match an existing FC block definition
+                    foreach (Match match in fcMatches)
+                    {
+                        string fcName = match.Groups[1].Value; // VD: FC_MyFunction or Inst_FC_MyFunction
+                        // FC instances do not generate DBs - they require the FC to be pre-created
+                        // Validation would be done at compile time in TIA Portal
                     }
                 }
 

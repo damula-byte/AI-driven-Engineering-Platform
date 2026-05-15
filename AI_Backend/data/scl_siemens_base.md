@@ -421,12 +421,44 @@ BEGIN
 END_FUNCTION
 ```
 
+## STRATEGY: FUNCTION CALLS IN ORGANIZATION_BLOCK (FC INSTANCES)
+When calling Functions (FC) in an OB, use direct function names WITHOUT instance databases.
+
+CRITICAL RULES FOR FC INSTANCES:
+1. **FC NAMING:** Call FC by its exact function name - NO naming pattern is applied.
+   - Example 1: If FC is `FC_ScaleAnalog`, call it directly: `"FC_ScaleAnalog"(...)`
+   - Example 2: If FC is `FC_TemperatureConversion`, call it: `"FC_TemperatureConversion"(...)`
+2. **NO DATABASE CREATION:** Unlike FB instances, FC calls do NOT generate instance databases (DBs).
+3. **EXACT NAME MATCHING:** The FC name in the OB call MUST match the previously created FC block exactly.
+4. **DO NOT use `#` when calling an FC.**
+
+```scl
+ORGANIZATION_BLOCK "AUTO-GENERATED_NAME"
+   VAR_TEMP
+      temp_ScaledValue : REAL;
+      temp_ConvertedTemp : REAL;
+   END_VAR
+BEGIN
+   // Example: Calling FC directly (NO instance DB needed)
+   // FC returns a value based on inputs, state is NOT retained
+   "FC_ScaleAnalog"(i_RawValue := "Tag_AnalogInput",
+                    i_Min := 0,
+                    i_Max := 27648,
+                    q_ScaledValue => #temp_ScaledValue);
+   
+   "FC_TemperatureConversion"(i_Celsius := #temp_ScaledValue,
+                              q_Fahrenheit => #temp_ConvertedTemp);
+   
+   "Tag_TemperatureF" := #temp_ConvertedTemp;
+END_ORGANIZATION_BLOCK
+```
+
 ## STRATEGY: ORGANIZATION_BLOCK (OB) WIRING TEMPLATE
 Use OB for the Main Cycle to wire FBs together. 
 CRITICAL RULES:
 1. OB has NO STATIC MEMORY (Only `VAR_TEMP`). 
 2. You must call FBs or Timers using Single Instance (Global DB). 
-3. **NAMING CONVENTION FOR INSTANCE DB:** The DB name MUST follow this exact structure: `"Inst_[Exact_FB_Name]_[Optional_Suffix]"`. 
+3. **NAMING CONVENTION FOR FB INSTANCE DB:** The DB name MUST follow this exact structure: `"Inst_[Exact_FB_Name]_[Optional_Suffix]"`. 
    - Example 1: If FB is `FB_Pump`, the DB must be `"Inst_FB_Pump_01"`.
    - Example 2: If FB is `FB_Conveyor`, the DB must be `"Inst_FB_Conveyor_Main"`.
    - DO NOT use `#` when calling a Global DB.

@@ -94,7 +94,7 @@ def get_output_schema(target_block_type="AUTO"):
         return fallback
 
 def send_response(data_dict):
-    """Ép xả dữ liệu thẳng xuống ống nước (Buffer) và cưỡng bức tắt Python ngay lập tức"""
+    """Send JSON response to stdout and exit cleanly (no forced termination)"""
     output_bytes = (json.dumps(data_dict, ensure_ascii=False) + "\n").encode('utf-8')
     sys.stdout.buffer.write(output_bytes)
     sys.stdout.buffer.flush()
@@ -146,17 +146,20 @@ def main():
         if command_type == "list_sessions":
             sessions = memory.list_all_sessions()
             send_response({"status": "success", "sessions": sessions})
+            return
 
-        if command_type == "create_session":
+        elif command_type == "create_session":
             memory.init_session(session_id)
             send_response({"status": "success", "message": f"Created {session_id}"})
+            return
 
-        if command_type == "reset":
+        elif command_type == "reset":
             memory.clear_session(session_id)
             send_response({"status": "success", "message": f"Session '{session_id}' cleared."})
+            return
 
         # --- BƯỚC 2: XỬ LÝ LỆNH UPDATE SPEC ---
-        if command_type == "update_spec":
+        elif command_type == "update_spec":
             from langchain_text_splitters import RecursiveCharacterTextSplitter
 
             try:
@@ -190,9 +193,12 @@ def main():
                     msg = "Deleted old Spec. Current system has no Spec constraints."
                     
                 send_response({"status": "success", "message": msg})
+                return
             except Exception as e:
                 send_response({"status": "error", "message": f"Error loading Spec: {str(e)}"})
-        if command_type == "check_spec":
+                return
+            
+        elif command_type == "check_spec":
             try:
                 # Reuse global client to avoid DB reopening overhead
                 persistent_client = get_persistent_client()
@@ -213,11 +219,13 @@ def main():
                             preview_text += f"\n\n... and {remaining} more chunks"
                         msg = f"Found {len(docs)} chunks in current Spec.\n\n[CURRENT SPEC CONTENT]:\n{preview_text}"
                 except Exception:
-                    msg = "No current Spec collection found. The system is completely empty."
-                    
+                    msg = "No current Spec collection found. The system is completely empty."   
                 send_response({"status": "success", "message": msg})
+                return
+            
             except Exception as e:
                 send_response({"status": "error", "message": f"Error reading Spec: {str(e)}"})
+                return
                 
         # --- LỆNH DỌN DẸP VECTOR DB (SPEC) ---
         elif command_type == "clear_spec":
@@ -233,8 +241,11 @@ def main():
                     msg = "System is empty, no Spec to delete."
 
                 send_response({"status": "success", "message": msg})
+                return
             except Exception as e:
                 send_response({"status": "error", "message": f"Error deleting Spec: {str(e)}"})
+                return
+        
         # endregion
         
         # region TRIPPLE-PATH RAG RETRIEVAL — parallel execution, direct ChromaDB client

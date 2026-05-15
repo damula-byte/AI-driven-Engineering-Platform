@@ -266,6 +266,19 @@ namespace TIA_Copilot_CLI
                                 break;
                         }
                         break;
+                    // case "agent":
+                    //     string agentQuery = args.Length > 2 ? args[2] : "";
+                    //     if (string.IsNullOrEmpty(agentQuery))
+                    //     {
+                    //         PrintIcon("!", "Usage: tia agent \"<your instruction>\"", ConsoleColor.Yellow);
+                    //         break;
+                    //     }
+                    //     PrintIcon("i", "Starting TIA Agent...", ConsoleColor.Cyan);
+                    //     string agentResult = await AiEngine.RunAgentAsync(agentQuery, _currentSessionId, _tiaEngine, _currentDeviceName);
+                    //     Console.ForegroundColor = ConsoleColor.Green;
+                    //     Console.WriteLine($"\n[Agent] {agentResult}");
+                    //     Console.ResetColor();
+                    //     break;
 
                     case "config":
                         KeyManager.ShowKeyManagementMenu();
@@ -438,8 +451,10 @@ namespace TIA_Copilot_CLI
                         else if (action == "fc") blockType = "FC";
                         Stopwatch ImportLogicPLC = new Stopwatch();
                         ImportLogicPLC.Start();
-                        string sclPath = GetPathOrOpenDialog(args, 2, "SCL Files (*.scl)|*.scl");
-                        TiaImportLogic(action.ToUpper(), sclPath);
+                        // string sclPath = GetPathOrOpenDialog(args, 2, "SCL Files (*.scl)|*.scl");
+                        // TiaImportLogic(action.ToUpper(), sclPath);
+                        string[] sclPaths = GetPathsOrOpenDialogV2(args, 2, "SCL Files (*.scl)|*.scl");
+                        TiaImportLogic(action.ToUpper(), sclPaths);
                         ImportLogicPLC.Stop();
                         LogPerformance($"Import {blockType} file", ImportLogicPLC.ElapsedMilliseconds);
                         break;
@@ -452,8 +467,10 @@ namespace TIA_Copilot_CLI
 
                         Stopwatch ImportLogicPLC = new Stopwatch();
                         ImportLogicPLC.Start();
-                        string sclPath = GetPathOrOpenDialog(args, 2, "SCL Files (*.scl)|*.scl");
-                        TiaOBImportLogic(action.ToUpper(), sclPath);
+                        // string sclPath = GetPathOrOpenDialog(args, 2, "SCL Files (*.scl)|*.scl");
+                        // TiaOBImportLogic(action.ToUpper(), sclPath);
+                        string[] sclPaths = GetPathsOrOpenDialogV2(args, 2, "SCL Files (*.scl)|*.scl");
+                        TiaOBImportLogic(action.ToUpper(), sclPaths);
                         ImportLogicPLC.Stop();
                         LogPerformance($"Import {blockType} file", ImportLogicPLC.ElapsedMilliseconds);
                         break;
@@ -461,8 +478,16 @@ namespace TIA_Copilot_CLI
                 case "tag-plc":
                     Stopwatch ImportPlcTags = new Stopwatch();
                     ImportPlcTags.Start();
-                    string pTagPath = GetPathOrOpenDialog(args, 2, "CSV Tags (*.csv)|*.csv");
-                    if (!string.IsNullOrEmpty(pTagPath)) _tiaEngine.ImportPlcTagsFromCsv(_currentDeviceName, pTagPath);
+                    string[] pTagPaths = GetPathsOrOpenDialogV2(args, 2, "CSV Tags (*.csv)|*.csv");
+
+                    foreach (string path in pTagPaths)
+                    {
+                        if (!string.IsNullOrEmpty(path))
+                        {
+                            _tiaEngine.ImportPlcTagsFromCsv(_currentDeviceName, path);
+                            PrintIcon("√", $"Imported PLC Tags: {Path.GetFileName(path)}", ConsoleColor.Green);
+                        }
+                    }
                     ImportPlcTags.Stop();
                     LogPerformance("ImportPlcTags", ImportPlcTags.ElapsedMilliseconds);
                     break;
@@ -470,8 +495,16 @@ namespace TIA_Copilot_CLI
                 case "tag-hmi":
                     Stopwatch ImportHmiTags = new Stopwatch();
                     ImportHmiTags.Start();
-                    string hTagPath = GetPathOrOpenDialog(args, 2, "CSV Tags (*.csv)|*.csv");
-                    if (!string.IsNullOrEmpty(hTagPath)) _tiaEngine.ImportHmiTagsFromCsv(_currentDeviceName, hTagPath);
+                    string[] hTagPaths = GetPathsOrOpenDialogV2(args, 2, "CSV Tags (*.csv)|*.csv");
+
+                    foreach (string path in hTagPaths)
+                    {
+                        if (!string.IsNullOrEmpty(path))
+                        {
+                            _tiaEngine.ImportHmiTagsFromCsv(_currentDeviceName, path);
+                            PrintIcon("√", $"Imported HMI Tags: {Path.GetFileName(path)}", ConsoleColor.Green);
+                        }
+                    }
                     ImportHmiTags.Stop();
                     LogPerformance("ImportHmiTags", ImportHmiTags.ElapsedMilliseconds);
                     break;
@@ -482,15 +515,16 @@ namespace TIA_Copilot_CLI
                     deployCwc.Start();
 
                     _tiaEngine.GetProjectPath();
-                    string importPath = GetPathOrOpenDialog(args, 2, "All files (*.*)|*.*|Zip files (*.zip)|*.zip|Widget files (*.vwdgt)|*.vwdgt");
-                    if (!string.IsNullOrEmpty(importPath))
+                    string[] importPaths = GetPathsOrOpenDialogV2(args, 2, "All files (*.*)|*.*|Zip files (*.zip)|*.zip|Widget files (*.vwdgt)|*.vwdgt");
+
+                    if (importPaths.Length > 0)
                     {
-                        PrintIcon("i", $"Importing to CustomControls: {Path.GetFileName(importPath)}...", ConsoleColor.Cyan);
-
-                        // 3. Perform physical copy to UserFiles/CustomControls
-                        _tiaEngine.AddFileToUserFilesFolder(importPath);
-
-                        PrintIcon("√", "Imported successfully.", ConsoleColor.Green);
+                        foreach (string path in importPaths)
+                        {
+                            PrintIcon("i", $"Importing to CustomControls: {Path.GetFileName(path)}...", ConsoleColor.Cyan);
+                            _tiaEngine.AddFileToUserFilesFolder(path);
+                            PrintIcon("√", $"Deployed: {Path.GetFileName(path)}", ConsoleColor.Green);
+                        }
                     }
                     else
                     {
@@ -503,27 +537,36 @@ namespace TIA_Copilot_CLI
                 case "draw":
                     Stopwatch drawSCADA = new Stopwatch();
                     drawSCADA.Start();
-                    string jPath = GetPathOrOpenDialog(args, 2, "JSON SCADA (*.json)|*.json");
-                    if (!string.IsNullOrEmpty(jPath))
+                    string[] jPaths = GetPathsOrOpenDialogV2(args, 2, "JSON SCADA (*.json)|*.json");
+
+                    foreach (string path in jPaths)
                     {
-                        try
+                        if (!string.IsNullOrEmpty(path))
                         {
-                            var projectData = JsonConvert.DeserializeObject<ScadaProjectModel>(File.ReadAllText(jPath));
-                            _tiaEngine.GenerateScadaProject(projectData, _currentDeviceName);
-                            PrintIcon("√", "SCADA drawing completed!", ConsoleColor.Green);
+                            try
+                            {
+                                PrintIcon("i", $"Drawing screen from: {Path.GetFileName(path)}...", ConsoleColor.Cyan);
+                                var projectData = JsonConvert.DeserializeObject<ScadaProjectModel>(File.ReadAllText(path));
+                                _tiaEngine.GenerateScadaProject(projectData, _currentDeviceName);
+                                PrintIcon("√", $"Completed: {Path.GetFileName(path)}", ConsoleColor.Green);
+                            }
+                            catch (Exception ex) { PrintIcon("X", $"Drawing error [{Path.GetFileName(path)}]: {ex.Message}", ConsoleColor.Red); }
                         }
-                        catch (Exception ex) { PrintIcon("X", $"Drawing error: {ex.Message}", ConsoleColor.Red); }
                     }
                     drawSCADA.Stop();
                     LogPerformance("DrawSCADA", drawSCADA.ElapsedMilliseconds);
                     break;
 
                 case "img": // ADD-ON
-                    string imgPath = GetPathOrOpenDialog(args, 2, "Images|*.png;*.jpg;*.svg");
-                    if (!string.IsNullOrEmpty(imgPath))
+                    string[] imgPaths = GetPathsOrOpenDialogV2(args, 2, "Images|*.png;*.jpg;*.svg");
+
+                    foreach (string path in imgPaths)
                     {
-                        _tiaEngine.AddPngToProjectGraphics(imgPath, Path.GetFileNameWithoutExtension(imgPath));
-                        PrintIcon("√", "Image loaded to Graphics Folder.", ConsoleColor.Green);
+                        if (!string.IsNullOrEmpty(path))
+                        {
+                            _tiaEngine.AddPngToProjectGraphics(path, Path.GetFileNameWithoutExtension(path));
+                            PrintIcon("√", $"Image loaded: {Path.GetFileName(path)}", ConsoleColor.Green);
+                        }
                     }
                     break;
 
@@ -666,6 +709,32 @@ namespace TIA_Copilot_CLI
             return selectedPath;
         }
 
+        private static string[] GetPathsOrOpenDialogV2(string[] args, int index, string filter)
+        {
+            // Nếu người dùng đã gõ đường dẫn trực tiếp trong lệnh CLI
+            if (args.Length > index && !string.IsNullOrWhiteSpace(args[index]))
+                return new[] { args[index] };
+
+            string[] selectedPaths = null;
+            Thread t = new Thread(() =>
+            {
+                using (OpenFileDialog ofd = new OpenFileDialog
+                {
+                    Filter = filter,
+                    Multiselect = true, // BẬT CHẾ ĐỘ CHỌN NHIỀU FILE
+                    Title = "Select SCL files to import",
+                    InitialDirectory = OutputPaths.GetGeneratedDir()
+                })
+                {
+                    if (ofd.ShowDialog(new Form { TopMost = true }) == DialogResult.OK)
+                        selectedPaths = ofd.FileNames; // Lấy mảng tất cả các file đã chọn
+                }
+            });
+            t.SetApartmentState(ApartmentState.STA); t.Start(); t.Join();
+
+            return selectedPaths ?? Array.Empty<string>();
+        }
+
         private static void HandleChooseDevice(string[] args)
         {
             var devs = _tiaEngine.GetPlcList();
@@ -767,49 +836,121 @@ namespace TIA_Copilot_CLI
             catch (Exception ex) { PrintIcon("×", $"Lỗi: {ex.Message}", ConsoleColor.Red); }
         }
 
-        public static void TiaImportLogic(string blockType, string explicitPath)
+        // public static void TiaImportLogic(string blockType, string explicitPath)
+        // {
+        //     PrintIcon("i", $"--- IMPORT {blockType} ---", ConsoleColor.Cyan);
+        //     string path = explicitPath;
+        //     if (string.IsNullOrEmpty(path))
+        //     {
+        //         var latestSclFile = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory).GetFiles("*.scl").OrderByDescending(f => f.LastWriteTime).FirstOrDefault();
+        //         if (latestSclFile != null) path = latestSclFile.FullName;
+        //     }
+        //     if (File.Exists(path))
+        //     {
+        //         try
+        //         {
+        //             string target = !string.IsNullOrEmpty(_currentDeviceName) && _currentDeviceName != "None" ? _currentDeviceName : _tiaEngine.GetPlcList().FirstOrDefault();
+        //             _tiaEngine.CreateFBblockFromSource(target, path);
+        //             PrintIcon("√", $"Successfully imported to {target}!", ConsoleColor.Green);
+        //         }
+        //         catch (Exception ex) { PrintIcon("×", $"Error: {ex.Message}", ConsoleColor.Red); }
+        //     }
+        //     else PrintIcon("×", "Cannot find SCL file.", ConsoleColor.Red);
+        // }
+
+        public static void TiaImportLogic(string blockType, string[] explicitPaths)
         {
-            PrintIcon("i", $"--- IMPORT {blockType} ---", ConsoleColor.Cyan);
-            string path = explicitPath;
-            if (string.IsNullOrEmpty(path))
+            PrintIcon("i", $"--- IMPORT MULTIPLE {blockType} ---", ConsoleColor.Cyan);
+
+            // Nếu không chọn file nào, thử lấy file SCL mới nhất (giữ logic cũ)
+            if (explicitPaths == null || explicitPaths.Length == 0)
             {
-                var latestSclFile = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory).GetFiles("*.scl").OrderByDescending(f => f.LastWriteTime).FirstOrDefault();
-                if (latestSclFile != null) path = latestSclFile.FullName;
+                var latestSclFile = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory)
+                                    .GetFiles("*.scl")
+                                    .OrderByDescending(f => f.LastWriteTime)
+                                    .FirstOrDefault();
+                if (latestSclFile != null) explicitPaths = new[] { latestSclFile.FullName };
             }
-            if (File.Exists(path))
+
+            if (explicitPaths != null && explicitPaths.Length > 0)
             {
-                try
+                string target = !string.IsNullOrEmpty(_currentDeviceName) && _currentDeviceName != "None"
+                                ? _currentDeviceName
+                                : _tiaEngine.GetPlcList().FirstOrDefault();
+
+                foreach (string path in explicitPaths)
                 {
-                    string target = !string.IsNullOrEmpty(_currentDeviceName) && _currentDeviceName != "None" ? _currentDeviceName : _tiaEngine.GetPlcList().FirstOrDefault();
-                    _tiaEngine.CreateFBblockFromSource(target, path);
-                    PrintIcon("√", $"Successfully imported to {target}!", ConsoleColor.Green);
+                    if (File.Exists(path))
+                    {
+                        try
+                        {
+                            _tiaEngine.CreateFBblockFromSource(target, path);
+                            PrintIcon("√", $"Successfully imported: {Path.GetFileName(path)} to {target}", ConsoleColor.Green);
+                        }
+                        catch (Exception ex) { PrintIcon("×", $"Error importing {Path.GetFileName(path)}: {ex.Message}", ConsoleColor.Red); }
+                    }
                 }
-                catch (Exception ex) { PrintIcon("×", $"Error: {ex.Message}", ConsoleColor.Red); }
             }
-            else PrintIcon("×", "Cannot find SCL file.", ConsoleColor.Red);
+            else PrintIcon("×", "No SCL files found to import.", ConsoleColor.Red);
         }
 
-        public static void TiaOBImportLogic(string blockType, string explicitPath)
+        // public static void TiaOBImportLogic(string blockType, string explicitPath)
+        // {
+        //     PrintIcon("i", $"--- IMPORT {blockType} ---", ConsoleColor.Cyan);
+        //     string path = explicitPath;
+        //     if (string.IsNullOrEmpty(path))
+        //     {
+        //         var latestSclFile = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory).GetFiles("*.scl").OrderByDescending(f => f.LastWriteTime).FirstOrDefault();
+        //         if (latestSclFile != null) path = latestSclFile.FullName;
+        //     }
+        //     if (File.Exists(path))
+        //     {
+        //         try
+        //         {
+        //             string target = !string.IsNullOrEmpty(_currentDeviceName) && _currentDeviceName != "None" ? _currentDeviceName : _tiaEngine.GetPlcList().FirstOrDefault();
+        //             _tiaEngine.CreateOBblockFromSource(target, path);
+        //             PrintIcon("√", $"Successfully imported to {target}!", ConsoleColor.Green);
+        //         }
+        //         catch (Exception ex) { PrintIcon("×", $"Error: {ex.Message}", ConsoleColor.Red); }
+        //     }
+        //     else PrintIcon("×", "Cannot find SCL file.", ConsoleColor.Red);
+        // }
+
+        public static void TiaOBImportLogic(string blockType, string[] explicitPaths)
         {
-            PrintIcon("i", $"--- IMPORT {blockType} ---", ConsoleColor.Cyan);
-            string path = explicitPath;
-            if (string.IsNullOrEmpty(path))
+            PrintIcon("i", $"--- IMPORT MULTIPLE {blockType} ---", ConsoleColor.Cyan);
+
+            if (explicitPaths == null || explicitPaths.Length == 0)
             {
-                var latestSclFile = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory).GetFiles("*.scl").OrderByDescending(f => f.LastWriteTime).FirstOrDefault();
-                if (latestSclFile != null) path = latestSclFile.FullName;
+                var latestSclFile = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory)
+                                    .GetFiles("*.scl")
+                                    .OrderByDescending(f => f.LastWriteTime)
+                                    .FirstOrDefault();
+                if (latestSclFile != null) explicitPaths = new[] { latestSclFile.FullName };
             }
-            if (File.Exists(path))
+
+            if (explicitPaths != null && explicitPaths.Length > 0)
             {
-                try
+                string target = !string.IsNullOrEmpty(_currentDeviceName) && _currentDeviceName != "None"
+                                ? _currentDeviceName
+                                : _tiaEngine.GetPlcList().FirstOrDefault();
+
+                foreach (string path in explicitPaths)
                 {
-                    string target = !string.IsNullOrEmpty(_currentDeviceName) && _currentDeviceName != "None" ? _currentDeviceName : _tiaEngine.GetPlcList().FirstOrDefault();
-                    _tiaEngine.CreateOBblockFromSource(target, path);
-                    PrintIcon("√", $"Successfully imported to {target}!", ConsoleColor.Green);
+                    if (File.Exists(path))
+                    {
+                        try
+                        {
+                            _tiaEngine.CreateOBblockFromSource(target, path);
+                            PrintIcon("√", $"Successfully imported OB: {Path.GetFileName(path)} to {target}", ConsoleColor.Green);
+                        }
+                        catch (Exception ex) { PrintIcon("×", $"Error importing {Path.GetFileName(path)}: {ex.Message}", ConsoleColor.Red); }
+                    }
                 }
-                catch (Exception ex) { PrintIcon("×", $"Error: {ex.Message}", ConsoleColor.Red); }
             }
-            else PrintIcon("×", "Cannot find SCL file.", ConsoleColor.Red);
+            else PrintIcon("×", "No SCL files found to import.", ConsoleColor.Red);
         }
+
         static string ReadLineWithEscape()
         {
             StringBuilder sb = new StringBuilder();
@@ -1013,14 +1154,6 @@ namespace TIA_Copilot_CLI
             string logEntry = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss},{actionName},{timeMs / 1000.0}\n";
             File.AppendAllText(logPath, logEntry);
         }
-        // public static void CheckCapstoneMode(string query)
-        // {
-        // if (query == @"Generate a screen with 1 HmiGraphicView named it: Logo_BachKhoa; then create 4 horizontal faceplates for Pump_M1, Pump_M2, Pump_M3 and Pump_M4. Strictly follow the COMPOUND CONTROL — DEVICE FACEPLATE strategy: Start by drawing a Rectangle Background Container for each Pump. Group Start/Stop/Reset buttons/ 1 IOField output displaying the pump's running time , 1 HmiToggleSwitch and 2 Indicators of running , fault (these indicators are created using Circle) inside the gray frame as per the layout rules. Next, create 4 pumps (Pump_M1, Pump_M2, Pump_M3 where is create using ClassicPump, and Pump_M4, where Pump_M4 is created using a HorizontalPumpLeft type pump) ;  4 button (On_Valve_01, Off_Valve_01, On_Valve_02, Off_Valve_02); 2 button (Start_Auto, Stop_Auto); 2 tank (Tank_01, Tank_02); 7 PipeHorizontal (Pipe_1, Pipe_2, Pipe_3 , Pipe_4, Pipe_5, Pipe_6, Pipe_7); 2 ControlValve; 4 sensor using rectangle (Hi_1, Lo_1, Hi_2, Lo_2); 1 HmiText with content Senior Project (and named this HmiText is Header)")
-        //                         {
-        //                             capstoneMode = true;
-        //                         }
-        //                         else capstoneMode = false;
-        // }
         public static void CheckCapstoneMode(string query)
         {
             if (string.IsNullOrWhiteSpace(query)) { capstoneMode = false; return; }
@@ -1058,551 +1191,550 @@ namespace TIA_Copilot_CLI
             }
         }
 
-        public static void RunSclCorrectorTest()
-        {
-            Console.Clear();
-            Console.ForegroundColor = ConsoleColor.Magenta;
-            Console.WriteLine("\n" + new string('=', 80));
-            Console.WriteLine("  SCL GENERATOR TEST - Testing SclSyntaxCorrector Integration");
-            Console.WriteLine(new string('=', 80));
-            Console.ResetColor();
-
-            int testsPassed = 0;
-            int testsFailed = 0;
-
-            // =====================================================================
-            // TEST CASE 1: FB with VAR blocks misplaced inside BEGIN...END
-            // =====================================================================
-            Console.WriteLine("\n[TEST 1] FB with VAR blocks misplaced inside BEGIN...END");
-            Console.WriteLine(new string('-', 80));
-
-            var test1Data = new BlockData
-            {
-                Name = "TEST_FB_MisplacedVars",
-                Type = "FUNCTION_BLOCK",
-                Description = "Test misplaced VAR blocks",
-                Variables = new List<VariableInfo>
-        {
-            new VariableInfo { Name = "i_Start", DataType = "BOOL", Direction = "VAR_INPUT", Description = "Start signal" },
-            new VariableInfo { Name = "q_Motor", DataType = "BOOL", Direction = "VAR_OUTPUT", Description = "Motor output" }
-        },
-                BodyCode = @"BEGIN
-    VAR
-        temp_Counter : INT;
-        temp_Flag : BOOL;
-    END_VAR
-    
-    #q_Motor := #i_Start;
-    #temp_Counter := 0;
-    
-    VAR_TEMP
-        temp_Result : REAL;
-    END_VAR
-    
-    #temp_Result := SCALE_X(VALUE:=#temp_Counter, MIN:=0.0, MAX:=100.0);
-END_FUNCTION_BLOCK"
-            };
-
-            if (ExecuteTest(test1Data, "Variables correctly moved outside BEGIN block",
-                (content) => !Regex.IsMatch(content, @"BEGIN\s+(VAR|VAR_TEMP|VAR_CONSTANT)", RegexOptions.Singleline | RegexOptions.IgnoreCase) &&
-                             content.Contains("VAR_INPUT") && content.Contains("VAR_OUTPUT")))
-                testsPassed++;
-            else
-                testsFailed++;
-
-            // =====================================================================
-            // TEST CASE 2: VAR_CONSTANT syntax error + case variations
-            // =====================================================================
-            Console.WriteLine("\n[TEST 2] VAR_CONSTANT syntax error + case normalization");
-            Console.WriteLine(new string('-', 80));
-
-            var test2Data = new BlockData
-            {
-                Name = "TEST_FB_SyntaxErrors",
-                Type = "FUNCTION_BLOCK",
-                Description = "Test syntax errors",
-                Variables = new List<VariableInfo>
-        {
-            new VariableInfo { Name = "i_Enable", DataType = "BOOL", Direction = "var_input", Description = "Enable" },
-            new VariableInfo { Name = "q_Status", DataType = "BOOL", Direction = "VAR_OUTPUT", Description = "Status" }
-        },
-                BodyCode = @"BEGIN
-    VAR_CONSTANT
-        const_MaxSpeed : INT := 100;
-        const_MinSpeed : INT := 0;
-    END_VAR
-    
-    VAR_TEMP
-        temp_CalcValue : REAL;
-    END_VAR
-    END_VAR
-    
-    IF #i_Enable THEN
-        #q_Status := TRUE;
-    END_IF;
-END_FUNCTION_BLOCK"
-            };
-
-            if (ExecuteTest(test2Data, "VAR_CONSTANT normalized to VAR CONSTANT, duplicates removed",
-                (content) => content.Contains("VAR CONSTANT") &&
-                             !Regex.IsMatch(content, @"VAR_CONSTANT(?!\s)", RegexOptions.IgnoreCase) &&
-                             !content.Contains("END_VAR\n    END_VAR")))
-                testsPassed++;
-            else
-                testsFailed++;
-
-            // =====================================================================
-            // TEST CASE 3: Multiple VAR sections + extraction
-            // =====================================================================
-            Console.WriteLine("\n[TEST 3] Multiple VAR sections extraction and merging");
-            Console.WriteLine(new string('-', 80));
-
-            var test3Data = new BlockData
-            {
-                Name = "TEST_FC_MultipleVars",
-                Type = "FUNCTION",
-                Description = "Test multiple VAR sections",
-                Variables = new List<VariableInfo>
-        {
-            new VariableInfo { Name = "i_Pump1", DataType = "BOOL", Direction = "VAR_INPUT", Description = "Pump 1 status" },
-            new VariableInfo { Name = "i_Pump2", DataType = "BOOL", Direction = "VAR_INPUT", Description = "Pump 2 status" },
-            new VariableInfo { Name = "q_Output", DataType = "INT", Direction = "VAR_OUTPUT", Description = "Output value" }
-        },
-                BodyCode = @"BEGIN
-    VAR
-        stat_Timer : TON;
-        stat_Counter : INT := 0;
-    END_VAR
-    
-    #stat_Timer(IN := #i_Pump1, PT := T#10s);
-    
-    VAR_CONSTANT
-        const_Timeout : INT := 500;
-        const_Threshold : INT := 100;
-    END_VAR
-    
-    VAR_TEMP
-        temp_Sum : INT;
-        temp_Average : REAL;
-    END_VAR
-    END_VAR
-    
-    #q_Output := #stat_Counter + const_Timeout;
-END_FUNCTION"
-            };
-
-            if (ExecuteTest(test3Data, "All variable sections properly extracted and structured",
-                (content) => content.Contains("VAR") &&
-                             content.Contains("VAR CONSTANT") &&
-                             !Regex.IsMatch(content, @"BEGIN\s+(VAR|VAR_CONSTANT)", RegexOptions.Singleline | RegexOptions.IgnoreCase) &&
-                             Regex.IsMatch(content, @"BEGIN\s+#\w+", RegexOptions.Singleline)))
-                testsPassed++;
-            else
-                testsFailed++;
-
-            // =====================================================================
-            // TEST CASE 4: Organization Block (OB) with VAR_TEMP
-            // =====================================================================
-            Console.WriteLine("\n[TEST 4] Organization Block (OB) with VAR_TEMP in BEGIN");
-            Console.WriteLine(new string('-', 80));
-
-            var test4Data = new BlockData
-            {
-                Name = "OB1_Test",
-                Type = "ORGANIZATION_BLOCK",
-                Description = "Main cycle",
-                Variables = new List<VariableInfo>(),
-                BodyCode = @"BEGIN
-    VAR_TEMP
-        temp_Status : BOOL;
-        temp_Error : BOOL;
-    END_VAR
-    
-    VAR_CONSTANT
-        const_MaxRetries : INT := 3;
-    END_VAR
-    
-    ""Inst_FB_MainControl__Inst1""(
-        IN := TRUE,
-        OUT => #temp_Status
-    );
-    
-    IF #temp_Error THEN
-        // Error handling
-    END_IF;
-END_ORGANIZATION_BLOCK"
-            };
-
-            if (ExecuteTest(test4Data, "OB structure correct with VAR sections outside BEGIN",
-                (content) => content.Contains("VAR_TEMP") &&
-                             content.Contains("VAR CONSTANT") &&
-                             Regex.IsMatch(content, @"BEGIN\s+""Inst_", RegexOptions.Singleline)))
-                testsPassed++;
-            else
-                testsFailed++;
-
-            // =====================================================================
-            // TEST CASE 5: Case normalization
-            // =====================================================================
-            Console.WriteLine("\n[TEST 5] Case normalization (var_input, var_temp, var_constant)");
-            Console.WriteLine(new string('-', 80));
-
-            var test5Data = new BlockData
-            {
-                Name = "TEST_FB_CaseIssues",
-                Type = "FUNCTION_BLOCK",
-                Description = "Test case normalization",
-                Variables = new List<VariableInfo>
-        {
-            new VariableInfo { Name = "i_Signal", DataType = "BOOL", Direction = "var_input", Description = "Input" },
-            new VariableInfo { Name = "q_Output", DataType = "INT", Direction = "VAR_output", Description = "Output" },
-            new VariableInfo { Name = "temp_Var", DataType = "REAL", Direction = "var_TEMP", Description = "Temp" },
-            new VariableInfo { Name = "const_Val", DataType = "INT", Direction = "var_constant", Description = "Constant" }
-        },
-                BodyCode = "BEGIN\n    #q_Output := #i_Signal;\nEND_FUNCTION_BLOCK"
-            };
-
-            if (ExecuteTest(test5Data, "All keywords normalized to uppercase",
-                (content) => Regex.IsMatch(content, @"VAR_INPUT", RegexOptions.IgnoreCase) &&
-                             !Regex.IsMatch(content, @"var_input") &&
-                             Regex.IsMatch(content, @"VAR_OUTPUT", RegexOptions.IgnoreCase) &&
-                             content.Contains("VAR CONSTANT")))
-                testsPassed++;
-            else
-                testsFailed++;
-
-            // =====================================================================
-            // TEST CASE 6: Complex mixed case
-            // =====================================================================
-            Console.WriteLine("\n[TEST 6] Complex mixed case: FB with all issues combined");
-            Console.WriteLine(new string('-', 80));
-
-            var test6Data = new BlockData
-            {
-                Name = "TEST_FB_Complex",
-                Type = "FUNCTION_BLOCK",
-                Description = "Complex test",
-                Variables = new List<VariableInfo>
-        {
-            new VariableInfo { Name = "i_Start", DataType = "BOOL", Direction = "VAR_INPUT" }
-        },
-                BodyCode = @"BEGIN
-    VAR
-        stat_Count : INT := 0;
-    END_VAR
-    
-    VAR_TEMP
-        temp_Flag : BOOL;
-    END_VAR
-    
-    VAR_CONSTANT
-        const_Max : INT := 100;
-    END_VAR
-    END_VAR
-    
-    IF #i_Start THEN
-        #stat_Count := #stat_Count + 1;
-    END_IF;
-END_FUNCTION_BLOCK"
-            };
-
-            if (ExecuteTest(test6Data, "Complex case fully corrected",
-                (content) => content.Contains("FUNCTION_BLOCK") &&
-                             content.Contains("VAR_INPUT") &&
-                             content.Contains("VAR") &&
-                             content.Contains("VAR_TEMP") &&
-                             content.Contains("VAR CONSTANT") &&
-                             !Regex.IsMatch(content, @"BEGIN\s+(VAR|VAR_TEMP|VAR_CONSTANT)", RegexOptions.Singleline | RegexOptions.IgnoreCase) &&
-                             !content.Contains("END_VAR\n    END_VAR") &&
-                             content.Contains("#stat_Count := #stat_Count + 1")))
-                testsPassed++;
-            else
-                testsFailed++;
-
-            // =====================================================================
-            // TEST CASE 7: DATA_BLOCK with VAR misplaced
-            // =====================================================================
-            Console.WriteLine("\n[TEST 7] DATA_BLOCK with variables in BodyCode");
-            Console.WriteLine(new string('-', 80));
-
-            var test7Data = new BlockData
-            {
-                Name = "TEST_DB_WithVars",
-                Type = "DATA_BLOCK",
-                Description = "Test data block",
-                Variables = new List<VariableInfo>(),
-                BodyCode = @"BEGIN
-    VAR
-        motorStatus : BOOL;
-        pumpSpeed : INT;
-    END_VAR
-    
-    motorStatus := TRUE;
-    pumpSpeed := 500;
-END_DATA_BLOCK"
-            };
-
-            if (ExecuteTest(test7Data, "DATA_BLOCK variables properly extracted",
-                (content) => content.Contains("DATA_BLOCK") &&
-                             !Regex.IsMatch(content, @"BEGIN\s+VAR", RegexOptions.Singleline | RegexOptions.IgnoreCase)))
-                testsPassed++;
-            else
-                testsFailed++;
-
-            // =====================================================================
-            // TEST CASE 8: Variables with comments inside VAR blocks
-            // =====================================================================
-            Console.WriteLine("\n[TEST 8] VAR blocks with inline comments");
-            Console.WriteLine(new string('-', 80));
-
-            var test8Data = new BlockData
-            {
-                Name = "TEST_FB_WithComments",
-                Type = "FUNCTION_BLOCK",
-                Description = "Test with comments",
-                Variables = new List<VariableInfo>
-        {
-            new VariableInfo { Name = "i_Trigger", DataType = "BOOL", Direction = "VAR_INPUT" }
-        },
-                BodyCode = @"BEGIN
-    VAR
-        temp_Counter : INT;  // Line counter
-        temp_Flag : BOOL;    // Status flag
-    END_VAR
-    
-    // Main logic
-    IF #i_Trigger THEN
-        #temp_Counter := #temp_Counter + 1;
-    END_IF;
-END_FUNCTION_BLOCK"
-            };
-
-            if (ExecuteTest(test8Data, "VAR blocks with comments properly handled",
-                (content) => !Regex.IsMatch(content, @"BEGIN\s+VAR", RegexOptions.Singleline | RegexOptions.IgnoreCase) &&
-                             content.Contains("// Main logic")))
-                testsPassed++;
-            else
-                testsFailed++;
-
-            // =====================================================================
-            // TEST CASE 9: Only VAR blocks with minimal logic
-            // =====================================================================
-            Console.WriteLine("\n[TEST 9] Minimal logic with multiple VAR sections");
-            Console.WriteLine(new string('-', 80));
-
-            var test9Data = new BlockData
-            {
-                Name = "TEST_FB_MinimalLogic",
-                Type = "FUNCTION_BLOCK",
-                Description = "Minimal logic",
-                Variables = new List<VariableInfo>(),
-                BodyCode = @"BEGIN
-    VAR
-        stat_Timer : TON;
-    END_VAR
-    
-    VAR_INPUT
-        i_Start : BOOL;
-    END_VAR
-    
-    VAR_OUTPUT
-        q_Done : BOOL;
-    END_VAR
-    
-    #q_Done := FALSE;
-END_FUNCTION_BLOCK"
-            };
-
-            if (ExecuteTest(test9Data, "Minimal logic extracted correctly",
-                (content) => content.Contains("VAR_INPUT") &&
-                             content.Contains("VAR_OUTPUT") &&
-                             Regex.IsMatch(content, @"BEGIN\s+#q_Done", RegexOptions.Singleline)))
-                testsPassed++;
-            else
-                testsFailed++;
-
-            // =====================================================================
-            // TEST CASE 10: VAR blocks at different positions
-            // =====================================================================
-            Console.WriteLine("\n[TEST 10] VAR blocks at start, middle, and end of code");
-            Console.WriteLine(new string('-', 80));
-
-            var test10Data = new BlockData
-            {
-                Name = "TEST_FB_MultiPosition",
-                Type = "FUNCTION_BLOCK",
-                Description = "Multiple VAR positions",
-                Variables = new List<VariableInfo>
-    {
-        new VariableInfo { Name = "i_Enable", DataType = "BOOL", Direction = "VAR_INPUT" }
-    },
-                BodyCode = @"BEGIN
-    VAR
-        stat_Count1 : INT;
-    END_VAR
-    
-    #stat_Count1 := 0;
-    
-    VAR_TEMP
-        temp_Check : BOOL;
-    END_VAR
-    
-    #temp_Check := #i_Enable;
-    
-    VAR_CONSTANT
-        const_Limit : INT := 100;
-    END_VAR
-    
-    IF #stat_Count1 < const_Limit THEN
-        #stat_Count1 := #stat_Count1 + 1;
-    END_IF;
-END_FUNCTION_BLOCK"
-            };
-
-            if (ExecuteTest(test10Data, "Multiple VAR positions handled correctly",
-                (content) => !Regex.IsMatch(content, @"BEGIN\s+(VAR|VAR_TEMP|VAR_CONSTANT)", RegexOptions.Singleline | RegexOptions.IgnoreCase) &&
-                             content.Contains("VAR") &&
-                             content.Contains("VAR_TEMP") &&
-                             content.Contains("VAR CONSTANT") &&
-                             !content.Contains("END_VAR\n    END_VAR")))
-                testsPassed++;
-            else
-                testsFailed++;
-            // =====================================================================
-            // TEST CASE 11: Nested indentation in VAR blocks
-            // =====================================================================
-            Console.WriteLine("\n[TEST 11] Indented VAR blocks");
-            Console.WriteLine(new string('-', 80));
-
-            var test11Data = new BlockData
-            {
-                Name = "TEST_FB_Indented",
-                Type = "FUNCTION_BLOCK",
-                Description = "Indented code",
-                Variables = new List<VariableInfo>
-        {
-            new VariableInfo { Name = "i_Signal", DataType = "BOOL", Direction = "VAR_INPUT" }
-        },
-                BodyCode = @"BEGIN
-        VAR
-            temp_Value : INT;
-        END_VAR
-        
-        IF #i_Signal THEN
-            #temp_Value := 1;
-        END_IF;
-END_FUNCTION_BLOCK"
-            };
-
-            if (ExecuteTest(test11Data, "Indented VAR blocks extracted",
-                (content) => !Regex.IsMatch(content, @"BEGIN\s+\s+VAR", RegexOptions.Singleline | RegexOptions.IgnoreCase)))
-                testsPassed++;
-            else
-                testsFailed++;
-
-            // =====================================================================
-            // TEST CASE 12: Empty VAR blocks
-            // =====================================================================
-            Console.WriteLine("\n[TEST 12] Empty or malformed VAR blocks");
-            Console.WriteLine(new string('-', 80));
-
-            var test12Data = new BlockData
-            {
-                Name = "TEST_FB_EmptyVars",
-                Type = "FUNCTION_BLOCK",
-                Description = "Empty VAR block",
-                Variables = new List<VariableInfo>
-        {
-            new VariableInfo { Name = "i_Test", DataType = "BOOL", Direction = "VAR_INPUT" }
-        },
-                BodyCode = @"BEGIN
-    VAR
-    END_VAR
-    
-    #i_Test := TRUE;
-END_FUNCTION_BLOCK"
-            };
-
-            if (ExecuteTest(test12Data, "Empty VAR blocks handled gracefully",
-                (content) => !Regex.IsMatch(content, @"BEGIN\s+VAR", RegexOptions.Singleline | RegexOptions.IgnoreCase)))
-                testsPassed++;
-            else
-                testsFailed++;
-
-            // =====================================================================
-            // SUMMARY
-            // =====================================================================
-            Console.WriteLine("\n" + new string('=', 80));
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"TEST RESULTS: {testsPassed} PASSED, {testsFailed} FAILED (Total: {testsPassed + testsFailed})");
-            Console.ResetColor();
-            Console.WriteLine(new string('=', 80));
-
-            if (testsFailed == 0)
-            {
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("✓ ALL TESTS PASSED - SclSyntaxCorrector integration working correctly!");
-                Console.ResetColor();
-            }
-            else
-            {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"✗ {testsFailed} test(s) failed - review the corrector logic");
-                Console.ResetColor();
-            }
-
-            Console.WriteLine("\nGenerated files saved to: " + OutputPaths.GetGeneratedDir());
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine("Press any key to continue...");
-            Console.ResetColor();
-            Console.ReadKey();
-        }
-
         // =====================================================================
         // HELPER METHOD: Execute test and verify
         // =====================================================================
-        private static bool ExecuteTest(BlockData testData, string testDescription, Func<string, bool> verificationLogic)
-        {
-            try
-            {
-                SCLGenerator.GenerateAndSave(testData);
+        //         public static void RunSclCorrectorTest()
+        //         {
+        //             Console.Clear();
+        //             Console.ForegroundColor = ConsoleColor.Magenta;
+        //             Console.WriteLine("\n" + new string('=', 80));
+        //             Console.WriteLine("  SCL GENERATOR TEST - Testing SclSyntaxCorrector Integration");
+        //             Console.WriteLine(new string('=', 80));
+        //             Console.ResetColor();
 
-                string genFile = Path.Combine(OutputPaths.GetGeneratedDir(), testData.Name + ".scl");
-                if (File.Exists(genFile))
-                {
-                    string content = File.ReadAllText(genFile);
+        //             int testsPassed = 0;
+        //             int testsFailed = 0;
 
-                    if (verificationLogic(content))
-                    {
-                        Console.ForegroundColor = ConsoleColor.Green;
-                        Console.WriteLine($"  ✓ PASSED: {testDescription}");
-                        Console.ResetColor();
-                        return true;
-                    }
-                    else
-                    {
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine($"  ✗ FAILED: {testDescription}");
-                        Console.ResetColor();
-                        return false;
-                    }
-                }
-                else
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine($"  ✗ FAILED: Generated file not found");
-                    Console.ResetColor();
-                    return false;
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"  ✗ FAILED: {ex.Message}");
-                Console.ResetColor();
-                return false;
-            }
-        }
+        //             // =====================================================================
+        //             // TEST CASE 1: FB with VAR blocks misplaced inside BEGIN...END
+        //             // =====================================================================
+        //             Console.WriteLine("\n[TEST 1] FB with VAR blocks misplaced inside BEGIN...END");
+        //             Console.WriteLine(new string('-', 80));
+
+        //             var test1Data = new BlockData
+        //             {
+        //                 Name = "TEST_FB_MisplacedVars",
+        //                 Type = "FUNCTION_BLOCK",
+        //                 Description = "Test misplaced VAR blocks",
+        //                 Variables = new List<VariableInfo>
+        //         {
+        //             new VariableInfo { Name = "i_Start", DataType = "BOOL", Direction = "VAR_INPUT", Description = "Start signal" },
+        //             new VariableInfo { Name = "q_Motor", DataType = "BOOL", Direction = "VAR_OUTPUT", Description = "Motor output" }
+        //         },
+        //                 BodyCode = @"BEGIN
+        //     VAR
+        //         temp_Counter : INT;
+        //         temp_Flag : BOOL;
+        //     END_VAR
+
+        //     #q_Motor := #i_Start;
+        //     #temp_Counter := 0;
+
+        //     VAR_TEMP
+        //         temp_Result : REAL;
+        //     END_VAR
+
+        //     #temp_Result := SCALE_X(VALUE:=#temp_Counter, MIN:=0.0, MAX:=100.0);
+        // END_FUNCTION_BLOCK"
+        //             };
+
+        //             if (ExecuteTest(test1Data, "Variables correctly moved outside BEGIN block",
+        //                 (content) => !Regex.IsMatch(content, @"BEGIN\s+(VAR|VAR_TEMP|VAR_CONSTANT)", RegexOptions.Singleline | RegexOptions.IgnoreCase) &&
+        //                              content.Contains("VAR_INPUT") && content.Contains("VAR_OUTPUT")))
+        //                 testsPassed++;
+        //             else
+        //                 testsFailed++;
+
+        //             // =====================================================================
+        //             // TEST CASE 2: VAR_CONSTANT syntax error + case variations
+        //             // =====================================================================
+        //             Console.WriteLine("\n[TEST 2] VAR_CONSTANT syntax error + case normalization");
+        //             Console.WriteLine(new string('-', 80));
+
+        //             var test2Data = new BlockData
+        //             {
+        //                 Name = "TEST_FB_SyntaxErrors",
+        //                 Type = "FUNCTION_BLOCK",
+        //                 Description = "Test syntax errors",
+        //                 Variables = new List<VariableInfo>
+        //         {
+        //             new VariableInfo { Name = "i_Enable", DataType = "BOOL", Direction = "var_input", Description = "Enable" },
+        //             new VariableInfo { Name = "q_Status", DataType = "BOOL", Direction = "VAR_OUTPUT", Description = "Status" }
+        //         },
+        //                 BodyCode = @"BEGIN
+        //     VAR_CONSTANT
+        //         const_MaxSpeed : INT := 100;
+        //         const_MinSpeed : INT := 0;
+        //     END_VAR
+
+        //     VAR_TEMP
+        //         temp_CalcValue : REAL;
+        //     END_VAR
+        //     END_VAR
+
+        //     IF #i_Enable THEN
+        //         #q_Status := TRUE;
+        //     END_IF;
+        // END_FUNCTION_BLOCK"
+        //             };
+
+        //             if (ExecuteTest(test2Data, "VAR_CONSTANT normalized to VAR CONSTANT, duplicates removed",
+        //                 (content) => content.Contains("VAR CONSTANT") &&
+        //                              !Regex.IsMatch(content, @"VAR_CONSTANT(?!\s)", RegexOptions.IgnoreCase) &&
+        //                              !content.Contains("END_VAR\n    END_VAR")))
+        //                 testsPassed++;
+        //             else
+        //                 testsFailed++;
+
+        //             // =====================================================================
+        //             // TEST CASE 3: Multiple VAR sections + extraction
+        //             // =====================================================================
+        //             Console.WriteLine("\n[TEST 3] Multiple VAR sections extraction and merging");
+        //             Console.WriteLine(new string('-', 80));
+
+        //             var test3Data = new BlockData
+        //             {
+        //                 Name = "TEST_FC_MultipleVars",
+        //                 Type = "FUNCTION",
+        //                 Description = "Test multiple VAR sections",
+        //                 Variables = new List<VariableInfo>
+        //         {
+        //             new VariableInfo { Name = "i_Pump1", DataType = "BOOL", Direction = "VAR_INPUT", Description = "Pump 1 status" },
+        //             new VariableInfo { Name = "i_Pump2", DataType = "BOOL", Direction = "VAR_INPUT", Description = "Pump 2 status" },
+        //             new VariableInfo { Name = "q_Output", DataType = "INT", Direction = "VAR_OUTPUT", Description = "Output value" }
+        //         },
+        //                 BodyCode = @"BEGIN
+        //     VAR
+        //         stat_Timer : TON;
+        //         stat_Counter : INT := 0;
+        //     END_VAR
+
+        //     #stat_Timer(IN := #i_Pump1, PT := T#10s);
+
+        //     VAR_CONSTANT
+        //         const_Timeout : INT := 500;
+        //         const_Threshold : INT := 100;
+        //     END_VAR
+
+        //     VAR_TEMP
+        //         temp_Sum : INT;
+        //         temp_Average : REAL;
+        //     END_VAR
+        //     END_VAR
+
+        //     #q_Output := #stat_Counter + const_Timeout;
+        // END_FUNCTION"
+        //             };
+
+        //             if (ExecuteTest(test3Data, "All variable sections properly extracted and structured",
+        //                 (content) => content.Contains("VAR") &&
+        //                              content.Contains("VAR CONSTANT") &&
+        //                              !Regex.IsMatch(content, @"BEGIN\s+(VAR|VAR_CONSTANT)", RegexOptions.Singleline | RegexOptions.IgnoreCase) &&
+        //                              Regex.IsMatch(content, @"BEGIN\s+#\w+", RegexOptions.Singleline)))
+        //                 testsPassed++;
+        //             else
+        //                 testsFailed++;
+
+        //             // =====================================================================
+        //             // TEST CASE 4: Organization Block (OB) with VAR_TEMP
+        //             // =====================================================================
+        //             Console.WriteLine("\n[TEST 4] Organization Block (OB) with VAR_TEMP in BEGIN");
+        //             Console.WriteLine(new string('-', 80));
+
+        //             var test4Data = new BlockData
+        //             {
+        //                 Name = "OB1_Test",
+        //                 Type = "ORGANIZATION_BLOCK",
+        //                 Description = "Main cycle",
+        //                 Variables = new List<VariableInfo>(),
+        //                 BodyCode = @"BEGIN
+        //     VAR_TEMP
+        //         temp_Status : BOOL;
+        //         temp_Error : BOOL;
+        //     END_VAR
+
+        //     VAR_CONSTANT
+        //         const_MaxRetries : INT := 3;
+        //     END_VAR
+
+        //     ""Inst_FB_MainControl__Inst1""(
+        //         IN := TRUE,
+        //         OUT => #temp_Status
+        //     );
+
+        //     IF #temp_Error THEN
+        //         // Error handling
+        //     END_IF;
+        // END_ORGANIZATION_BLOCK"
+        //             };
+
+        //             if (ExecuteTest(test4Data, "OB structure correct with VAR sections outside BEGIN",
+        //                 (content) => content.Contains("VAR_TEMP") &&
+        //                              content.Contains("VAR CONSTANT") &&
+        //                              Regex.IsMatch(content, @"BEGIN\s+""Inst_", RegexOptions.Singleline)))
+        //                 testsPassed++;
+        //             else
+        //                 testsFailed++;
+
+        //             // =====================================================================
+        //             // TEST CASE 5: Case normalization
+        //             // =====================================================================
+        //             Console.WriteLine("\n[TEST 5] Case normalization (var_input, var_temp, var_constant)");
+        //             Console.WriteLine(new string('-', 80));
+
+        //             var test5Data = new BlockData
+        //             {
+        //                 Name = "TEST_FB_CaseIssues",
+        //                 Type = "FUNCTION_BLOCK",
+        //                 Description = "Test case normalization",
+        //                 Variables = new List<VariableInfo>
+        //         {
+        //             new VariableInfo { Name = "i_Signal", DataType = "BOOL", Direction = "var_input", Description = "Input" },
+        //             new VariableInfo { Name = "q_Output", DataType = "INT", Direction = "VAR_output", Description = "Output" },
+        //             new VariableInfo { Name = "temp_Var", DataType = "REAL", Direction = "var_TEMP", Description = "Temp" },
+        //             new VariableInfo { Name = "const_Val", DataType = "INT", Direction = "var_constant", Description = "Constant" }
+        //         },
+        //                 BodyCode = "BEGIN\n    #q_Output := #i_Signal;\nEND_FUNCTION_BLOCK"
+        //             };
+
+        //             if (ExecuteTest(test5Data, "All keywords normalized to uppercase",
+        //                 (content) => Regex.IsMatch(content, @"VAR_INPUT", RegexOptions.IgnoreCase) &&
+        //                              !Regex.IsMatch(content, @"var_input") &&
+        //                              Regex.IsMatch(content, @"VAR_OUTPUT", RegexOptions.IgnoreCase) &&
+        //                              content.Contains("VAR CONSTANT")))
+        //                 testsPassed++;
+        //             else
+        //                 testsFailed++;
+
+        //             // =====================================================================
+        //             // TEST CASE 6: Complex mixed case
+        //             // =====================================================================
+        //             Console.WriteLine("\n[TEST 6] Complex mixed case: FB with all issues combined");
+        //             Console.WriteLine(new string('-', 80));
+
+        //             var test6Data = new BlockData
+        //             {
+        //                 Name = "TEST_FB_Complex",
+        //                 Type = "FUNCTION_BLOCK",
+        //                 Description = "Complex test",
+        //                 Variables = new List<VariableInfo>
+        //         {
+        //             new VariableInfo { Name = "i_Start", DataType = "BOOL", Direction = "VAR_INPUT" }
+        //         },
+        //                 BodyCode = @"BEGIN
+        //     VAR
+        //         stat_Count : INT := 0;
+        //     END_VAR
+
+        //     VAR_TEMP
+        //         temp_Flag : BOOL;
+        //     END_VAR
+
+        //     VAR_CONSTANT
+        //         const_Max : INT := 100;
+        //     END_VAR
+        //     END_VAR
+
+        //     IF #i_Start THEN
+        //         #stat_Count := #stat_Count + 1;
+        //     END_IF;
+        // END_FUNCTION_BLOCK"
+        //             };
+
+        //             if (ExecuteTest(test6Data, "Complex case fully corrected",
+        //                 (content) => content.Contains("FUNCTION_BLOCK") &&
+        //                              content.Contains("VAR_INPUT") &&
+        //                              content.Contains("VAR") &&
+        //                              content.Contains("VAR_TEMP") &&
+        //                              content.Contains("VAR CONSTANT") &&
+        //                              !Regex.IsMatch(content, @"BEGIN\s+(VAR|VAR_TEMP|VAR_CONSTANT)", RegexOptions.Singleline | RegexOptions.IgnoreCase) &&
+        //                              !content.Contains("END_VAR\n    END_VAR") &&
+        //                              content.Contains("#stat_Count := #stat_Count + 1")))
+        //                 testsPassed++;
+        //             else
+        //                 testsFailed++;
+
+        //             // =====================================================================
+        //             // TEST CASE 7: DATA_BLOCK with VAR misplaced
+        //             // =====================================================================
+        //             Console.WriteLine("\n[TEST 7] DATA_BLOCK with variables in BodyCode");
+        //             Console.WriteLine(new string('-', 80));
+
+        //             var test7Data = new BlockData
+        //             {
+        //                 Name = "TEST_DB_WithVars",
+        //                 Type = "DATA_BLOCK",
+        //                 Description = "Test data block",
+        //                 Variables = new List<VariableInfo>(),
+        //                 BodyCode = @"BEGIN
+        //     VAR
+        //         motorStatus : BOOL;
+        //         pumpSpeed : INT;
+        //     END_VAR
+
+        //     motorStatus := TRUE;
+        //     pumpSpeed := 500;
+        // END_DATA_BLOCK"
+        //             };
+
+        //             if (ExecuteTest(test7Data, "DATA_BLOCK variables properly extracted",
+        //                 (content) => content.Contains("DATA_BLOCK") &&
+        //                              !Regex.IsMatch(content, @"BEGIN\s+VAR", RegexOptions.Singleline | RegexOptions.IgnoreCase)))
+        //                 testsPassed++;
+        //             else
+        //                 testsFailed++;
+
+        //             // =====================================================================
+        //             // TEST CASE 8: Variables with comments inside VAR blocks
+        //             // =====================================================================
+        //             Console.WriteLine("\n[TEST 8] VAR blocks with inline comments");
+        //             Console.WriteLine(new string('-', 80));
+
+        //             var test8Data = new BlockData
+        //             {
+        //                 Name = "TEST_FB_WithComments",
+        //                 Type = "FUNCTION_BLOCK",
+        //                 Description = "Test with comments",
+        //                 Variables = new List<VariableInfo>
+        //         {
+        //             new VariableInfo { Name = "i_Trigger", DataType = "BOOL", Direction = "VAR_INPUT" }
+        //         },
+        //                 BodyCode = @"BEGIN
+        //     VAR
+        //         temp_Counter : INT;  // Line counter
+        //         temp_Flag : BOOL;    // Status flag
+        //     END_VAR
+
+        //     // Main logic
+        //     IF #i_Trigger THEN
+        //         #temp_Counter := #temp_Counter + 1;
+        //     END_IF;
+        // END_FUNCTION_BLOCK"
+        //             };
+
+        //             if (ExecuteTest(test8Data, "VAR blocks with comments properly handled",
+        //                 (content) => !Regex.IsMatch(content, @"BEGIN\s+VAR", RegexOptions.Singleline | RegexOptions.IgnoreCase) &&
+        //                              content.Contains("// Main logic")))
+        //                 testsPassed++;
+        //             else
+        //                 testsFailed++;
+
+        //             // =====================================================================
+        //             // TEST CASE 9: Only VAR blocks with minimal logic
+        //             // =====================================================================
+        //             Console.WriteLine("\n[TEST 9] Minimal logic with multiple VAR sections");
+        //             Console.WriteLine(new string('-', 80));
+
+        //             var test9Data = new BlockData
+        //             {
+        //                 Name = "TEST_FB_MinimalLogic",
+        //                 Type = "FUNCTION_BLOCK",
+        //                 Description = "Minimal logic",
+        //                 Variables = new List<VariableInfo>(),
+        //                 BodyCode = @"BEGIN
+        //     VAR
+        //         stat_Timer : TON;
+        //     END_VAR
+
+        //     VAR_INPUT
+        //         i_Start : BOOL;
+        //     END_VAR
+
+        //     VAR_OUTPUT
+        //         q_Done : BOOL;
+        //     END_VAR
+
+        //     #q_Done := FALSE;
+        // END_FUNCTION_BLOCK"
+        //             };
+
+        //             if (ExecuteTest(test9Data, "Minimal logic extracted correctly",
+        //                 (content) => content.Contains("VAR_INPUT") &&
+        //                              content.Contains("VAR_OUTPUT") &&
+        //                              Regex.IsMatch(content, @"BEGIN\s+#q_Done", RegexOptions.Singleline)))
+        //                 testsPassed++;
+        //             else
+        //                 testsFailed++;
+
+        //             // =====================================================================
+        //             // TEST CASE 10: VAR blocks at different positions
+        //             // =====================================================================
+        //             Console.WriteLine("\n[TEST 10] VAR blocks at start, middle, and end of code");
+        //             Console.WriteLine(new string('-', 80));
+
+        //             var test10Data = new BlockData
+        //             {
+        //                 Name = "TEST_FB_MultiPosition",
+        //                 Type = "FUNCTION_BLOCK",
+        //                 Description = "Multiple VAR positions",
+        //                 Variables = new List<VariableInfo>
+        //     {
+        //         new VariableInfo { Name = "i_Enable", DataType = "BOOL", Direction = "VAR_INPUT" }
+        //     },
+        //                 BodyCode = @"BEGIN
+        //     VAR
+        //         stat_Count1 : INT;
+        //     END_VAR
+
+        //     #stat_Count1 := 0;
+
+        //     VAR_TEMP
+        //         temp_Check : BOOL;
+        //     END_VAR
+
+        //     #temp_Check := #i_Enable;
+
+        //     VAR_CONSTANT
+        //         const_Limit : INT := 100;
+        //     END_VAR
+
+        //     IF #stat_Count1 < const_Limit THEN
+        //         #stat_Count1 := #stat_Count1 + 1;
+        //     END_IF;
+        // END_FUNCTION_BLOCK"
+        //             };
+
+        //             if (ExecuteTest(test10Data, "Multiple VAR positions handled correctly",
+        //                 (content) => !Regex.IsMatch(content, @"BEGIN\s+(VAR|VAR_TEMP|VAR_CONSTANT)", RegexOptions.Singleline | RegexOptions.IgnoreCase) &&
+        //                              content.Contains("VAR") &&
+        //                              content.Contains("VAR_TEMP") &&
+        //                              content.Contains("VAR CONSTANT") &&
+        //                              !content.Contains("END_VAR\n    END_VAR")))
+        //                 testsPassed++;
+        //             else
+        //                 testsFailed++;
+        //             // =====================================================================
+        //             // TEST CASE 11: Nested indentation in VAR blocks
+        //             // =====================================================================
+        //             Console.WriteLine("\n[TEST 11] Indented VAR blocks");
+        //             Console.WriteLine(new string('-', 80));
+
+        //             var test11Data = new BlockData
+        //             {
+        //                 Name = "TEST_FB_Indented",
+        //                 Type = "FUNCTION_BLOCK",
+        //                 Description = "Indented code",
+        //                 Variables = new List<VariableInfo>
+        //         {
+        //             new VariableInfo { Name = "i_Signal", DataType = "BOOL", Direction = "VAR_INPUT" }
+        //         },
+        //                 BodyCode = @"BEGIN
+        //         VAR
+        //             temp_Value : INT;
+        //         END_VAR
+
+        //         IF #i_Signal THEN
+        //             #temp_Value := 1;
+        //         END_IF;
+        // END_FUNCTION_BLOCK"
+        //             };
+
+        //             if (ExecuteTest(test11Data, "Indented VAR blocks extracted",
+        //                 (content) => !Regex.IsMatch(content, @"BEGIN\s+\s+VAR", RegexOptions.Singleline | RegexOptions.IgnoreCase)))
+        //                 testsPassed++;
+        //             else
+        //                 testsFailed++;
+
+        //             // =====================================================================
+        //             // TEST CASE 12: Empty VAR blocks
+        //             // =====================================================================
+        //             Console.WriteLine("\n[TEST 12] Empty or malformed VAR blocks");
+        //             Console.WriteLine(new string('-', 80));
+
+        //             var test12Data = new BlockData
+        //             {
+        //                 Name = "TEST_FB_EmptyVars",
+        //                 Type = "FUNCTION_BLOCK",
+        //                 Description = "Empty VAR block",
+        //                 Variables = new List<VariableInfo>
+        //         {
+        //             new VariableInfo { Name = "i_Test", DataType = "BOOL", Direction = "VAR_INPUT" }
+        //         },
+        //                 BodyCode = @"BEGIN
+        //     VAR
+        //     END_VAR
+
+        //     #i_Test := TRUE;
+        // END_FUNCTION_BLOCK"
+        //             };
+
+        //             if (ExecuteTest(test12Data, "Empty VAR blocks handled gracefully",
+        //                 (content) => !Regex.IsMatch(content, @"BEGIN\s+VAR", RegexOptions.Singleline | RegexOptions.IgnoreCase)))
+        //                 testsPassed++;
+        //             else
+        //                 testsFailed++;
+
+        //             // =====================================================================
+        //             // SUMMARY
+        //             // =====================================================================
+        //             Console.WriteLine("\n" + new string('=', 80));
+        //             Console.ForegroundColor = ConsoleColor.Green;
+        //             Console.WriteLine($"TEST RESULTS: {testsPassed} PASSED, {testsFailed} FAILED (Total: {testsPassed + testsFailed})");
+        //             Console.ResetColor();
+        //             Console.WriteLine(new string('=', 80));
+
+        //             if (testsFailed == 0)
+        //             {
+        //                 Console.ForegroundColor = ConsoleColor.Green;
+        //                 Console.WriteLine("✓ ALL TESTS PASSED - SclSyntaxCorrector integration working correctly!");
+        //                 Console.ResetColor();
+        //             }
+        //             else
+        //             {
+        //                 Console.ForegroundColor = ConsoleColor.Red;
+        //                 Console.WriteLine($"✗ {testsFailed} test(s) failed - review the corrector logic");
+        //                 Console.ResetColor();
+        //             }
+
+        //             Console.WriteLine("\nGenerated files saved to: " + OutputPaths.GetGeneratedDir());
+        //             Console.ForegroundColor = ConsoleColor.Yellow;
+        //             Console.WriteLine("Press any key to continue...");
+        //             Console.ResetColor();
+        //             Console.ReadKey();
+        //         }
+        //         private static bool ExecuteTest(BlockData testData, string testDescription, Func<string, bool> verificationLogic)
+        //         {
+        //             try
+        //             {
+        //                 SCLGenerator.GenerateAndSave(testData);
+
+        //                 string genFile = Path.Combine(OutputPaths.GetGeneratedDir(), testData.Name + ".scl");
+        //                 if (File.Exists(genFile))
+        //                 {
+        //                     string content = File.ReadAllText(genFile);
+
+        //                     if (verificationLogic(content))
+        //                     {
+        //                         Console.ForegroundColor = ConsoleColor.Green;
+        //                         Console.WriteLine($"  ✓ PASSED: {testDescription}");
+        //                         Console.ResetColor();
+        //                         return true;
+        //                     }
+        //                     else
+        //                     {
+        //                         Console.ForegroundColor = ConsoleColor.Red;
+        //                         Console.WriteLine($"  ✗ FAILED: {testDescription}");
+        //                         Console.ResetColor();
+        //                         return false;
+        //                     }
+        //                 }
+        //                 else
+        //                 {
+        //                     Console.ForegroundColor = ConsoleColor.Red;
+        //                     Console.WriteLine($"  ✗ FAILED: Generated file not found");
+        //                     Console.ResetColor();
+        //                     return false;
+        //                 }
+        //             }
+        //             catch (Exception ex)
+        //             {
+        //                 Console.ForegroundColor = ConsoleColor.Red;
+        //                 Console.WriteLine($"  ✗ FAILED: {ex.Message}");
+        //                 Console.ResetColor();
+        //                 return false;
+        //             }
+        //         }
     }
 
 }
