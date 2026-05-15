@@ -49,6 +49,7 @@ TemporaryDependencyNodeTargetIdentifier=net48
 /target:exe
 /warnaserror-
 /utf8output
+/win32icon:logo_app_DATN.ico
 /deterministic+
 /langversion:latest
 /warnaserror+:NU1605

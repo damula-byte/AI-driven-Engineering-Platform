@@ -30,6 +30,9 @@ namespace TIA_Copilot_CLI
         [STAThread]
         static async Task Main(string[] args)
         {
+            // RunSclCorrectorTest();
+            // return;
+
             Console.OutputEncoding = Encoding.UTF8;
             Console.InputEncoding = Encoding.UTF8;
             /*
@@ -74,7 +77,7 @@ namespace TIA_Copilot_CLI
             string mode = setting.Mode.ToUpper();
             string userName = Environment.UserName;
             string appName = "TIACopilot";
-             
+
 
             Console.Clear();
             Console.ForegroundColor = ConsoleColor.Cyan;
@@ -189,7 +192,7 @@ namespace TIA_Copilot_CLI
                                 Stopwatch chat = new Stopwatch();
                                 chat.Start();
                                 CheckCapstoneMode(query);
-                                
+
                                 await CommandHandler.HandleChatAsync(targetType, query, sessionId);
                                 chat.Stop();
                                 LogPerformance($"Chat {targetName}", chat.ElapsedMilliseconds);
@@ -267,7 +270,7 @@ namespace TIA_Copilot_CLI
 
                     case "config":
                         KeyManager.ShowKeyManagementMenu();
-                        
+
                         // Sau khi người dùng bấm [ESC] thoát khỏi Menu, dọn dẹp màn hình 
                         // và vẽ lại Header chính để giao diện CLI luôn gọn gàng.
                         Console.Clear();
@@ -470,33 +473,33 @@ namespace TIA_Copilot_CLI
 
                 // --- GROUP 3: LOGIC & DATA ---
                 case "fb":
-                case "fc":  
-                {              
-                    string blockType = "";
-                    if (action == "fb") blockType = "FB";
-                    else if (action == "fc") blockType = "FC";                    
-                    Stopwatch ImportLogicPLC = new Stopwatch();
-                    ImportLogicPLC.Start();
-                    string sclPath = GetPathOrOpenDialog(args, 2, "SCL Files (*.scl)|*.scl");
-                    TiaImportLogic(action.ToUpper(), sclPath);
-                    ImportLogicPLC.Stop();
-                    LogPerformance($"Import {blockType} file", ImportLogicPLC.ElapsedMilliseconds);
-                    break;
-                }
+                case "fc":
+                    {
+                        string blockType = "";
+                        if (action == "fb") blockType = "FB";
+                        else if (action == "fc") blockType = "FC";
+                        Stopwatch ImportLogicPLC = new Stopwatch();
+                        ImportLogicPLC.Start();
+                        string sclPath = GetPathOrOpenDialog(args, 2, "SCL Files (*.scl)|*.scl");
+                        TiaImportLogic(action.ToUpper(), sclPath);
+                        ImportLogicPLC.Stop();
+                        LogPerformance($"Import {blockType} file", ImportLogicPLC.ElapsedMilliseconds);
+                        break;
+                    }
 
                 case "ob":
-                {
-                    string blockType = "";                    
-                    if (action == "ob") blockType = "OB";
+                    {
+                        string blockType = "";
+                        if (action == "ob") blockType = "OB";
 
-                    Stopwatch ImportLogicPLC = new Stopwatch();
-                    ImportLogicPLC.Start();
-                    string sclPath = GetPathOrOpenDialog(args, 2, "SCL Files (*.scl)|*.scl");
-                    TiaOBImportLogic(action.ToUpper(), sclPath);
-                    ImportLogicPLC.Stop();
-                    LogPerformance($"Import {blockType} file", ImportLogicPLC.ElapsedMilliseconds);
-                    break;
-                }
+                        Stopwatch ImportLogicPLC = new Stopwatch();
+                        ImportLogicPLC.Start();
+                        string sclPath = GetPathOrOpenDialog(args, 2, "SCL Files (*.scl)|*.scl");
+                        TiaOBImportLogic(action.ToUpper(), sclPath);
+                        ImportLogicPLC.Stop();
+                        LogPerformance($"Import {blockType} file", ImportLogicPLC.ElapsedMilliseconds);
+                        break;
+                    }
                 case "tag-plc":
                     Stopwatch ImportPlcTags = new Stopwatch();
                     ImportPlcTags.Start();
@@ -673,11 +676,11 @@ namespace TIA_Copilot_CLI
                     PrintIcon("i", isRebuild ? "Rebuilding all..." : "Compiling...", ConsoleColor.Cyan);
                     string cRes = _tiaEngine.CompileSpecific(_currentDeviceName, cMode == "hw" || cMode == "both", cMode == "sw" || cMode == "both", isRebuild);
                     Console.WriteLine(cRes);
-                    break;               
+                    break;
                 case "run":
                 case "stop":
                 case "download":
-                case "check":               
+                case "check":
                     HandleOnlineAction(action, args);
                     break;
 
@@ -800,7 +803,7 @@ namespace TIA_Copilot_CLI
                     case "check":
                         PrintIcon("√", $"Online Status: {_tiaEngine.GetPlcStatus(_currentDeviceName, selectedAdapter)}", ConsoleColor.Green);
                         break;
-                    
+
                 }
             }
             catch (Exception ex) { PrintIcon("×", $"Lỗi: {ex.Message}", ConsoleColor.Red); }
@@ -1296,6 +1299,552 @@ namespace TIA_Copilot_CLI
             else
             {
                 capstoneMode = false;
+            }
+        }
+
+        public static void RunSclCorrectorTest()
+        {
+            Console.Clear();
+            Console.ForegroundColor = ConsoleColor.Magenta;
+            Console.WriteLine("\n" + new string('=', 80));
+            Console.WriteLine("  SCL GENERATOR TEST - Testing SclSyntaxCorrector Integration");
+            Console.WriteLine(new string('=', 80));
+            Console.ResetColor();
+
+            int testsPassed = 0;
+            int testsFailed = 0;
+
+            // =====================================================================
+            // TEST CASE 1: FB with VAR blocks misplaced inside BEGIN...END
+            // =====================================================================
+            Console.WriteLine("\n[TEST 1] FB with VAR blocks misplaced inside BEGIN...END");
+            Console.WriteLine(new string('-', 80));
+
+            var test1Data = new BlockData
+            {
+                Name = "TEST_FB_MisplacedVars",
+                Type = "FUNCTION_BLOCK",
+                Description = "Test misplaced VAR blocks",
+                Variables = new List<VariableInfo>
+        {
+            new VariableInfo { Name = "i_Start", DataType = "BOOL", Direction = "VAR_INPUT", Description = "Start signal" },
+            new VariableInfo { Name = "q_Motor", DataType = "BOOL", Direction = "VAR_OUTPUT", Description = "Motor output" }
+        },
+                BodyCode = @"BEGIN
+    VAR
+        temp_Counter : INT;
+        temp_Flag : BOOL;
+    END_VAR
+    
+    #q_Motor := #i_Start;
+    #temp_Counter := 0;
+    
+    VAR_TEMP
+        temp_Result : REAL;
+    END_VAR
+    
+    #temp_Result := SCALE_X(VALUE:=#temp_Counter, MIN:=0.0, MAX:=100.0);
+END_FUNCTION_BLOCK"
+            };
+
+            if (ExecuteTest(test1Data, "Variables correctly moved outside BEGIN block",
+                (content) => !Regex.IsMatch(content, @"BEGIN\s+(VAR|VAR_TEMP|VAR_CONSTANT)", RegexOptions.Singleline | RegexOptions.IgnoreCase) &&
+                             content.Contains("VAR_INPUT") && content.Contains("VAR_OUTPUT")))
+                testsPassed++;
+            else
+                testsFailed++;
+
+            // =====================================================================
+            // TEST CASE 2: VAR_CONSTANT syntax error + case variations
+            // =====================================================================
+            Console.WriteLine("\n[TEST 2] VAR_CONSTANT syntax error + case normalization");
+            Console.WriteLine(new string('-', 80));
+
+            var test2Data = new BlockData
+            {
+                Name = "TEST_FB_SyntaxErrors",
+                Type = "FUNCTION_BLOCK",
+                Description = "Test syntax errors",
+                Variables = new List<VariableInfo>
+        {
+            new VariableInfo { Name = "i_Enable", DataType = "BOOL", Direction = "var_input", Description = "Enable" },
+            new VariableInfo { Name = "q_Status", DataType = "BOOL", Direction = "VAR_OUTPUT", Description = "Status" }
+        },
+                BodyCode = @"BEGIN
+    VAR_CONSTANT
+        const_MaxSpeed : INT := 100;
+        const_MinSpeed : INT := 0;
+    END_VAR
+    
+    VAR_TEMP
+        temp_CalcValue : REAL;
+    END_VAR
+    END_VAR
+    
+    IF #i_Enable THEN
+        #q_Status := TRUE;
+    END_IF;
+END_FUNCTION_BLOCK"
+            };
+
+            if (ExecuteTest(test2Data, "VAR_CONSTANT normalized to VAR CONSTANT, duplicates removed",
+                (content) => content.Contains("VAR CONSTANT") &&
+                             !Regex.IsMatch(content, @"VAR_CONSTANT(?!\s)", RegexOptions.IgnoreCase) &&
+                             !content.Contains("END_VAR\n    END_VAR")))
+                testsPassed++;
+            else
+                testsFailed++;
+
+            // =====================================================================
+            // TEST CASE 3: Multiple VAR sections + extraction
+            // =====================================================================
+            Console.WriteLine("\n[TEST 3] Multiple VAR sections extraction and merging");
+            Console.WriteLine(new string('-', 80));
+
+            var test3Data = new BlockData
+            {
+                Name = "TEST_FC_MultipleVars",
+                Type = "FUNCTION",
+                Description = "Test multiple VAR sections",
+                Variables = new List<VariableInfo>
+        {
+            new VariableInfo { Name = "i_Pump1", DataType = "BOOL", Direction = "VAR_INPUT", Description = "Pump 1 status" },
+            new VariableInfo { Name = "i_Pump2", DataType = "BOOL", Direction = "VAR_INPUT", Description = "Pump 2 status" },
+            new VariableInfo { Name = "q_Output", DataType = "INT", Direction = "VAR_OUTPUT", Description = "Output value" }
+        },
+                BodyCode = @"BEGIN
+    VAR
+        stat_Timer : TON;
+        stat_Counter : INT := 0;
+    END_VAR
+    
+    #stat_Timer(IN := #i_Pump1, PT := T#10s);
+    
+    VAR_CONSTANT
+        const_Timeout : INT := 500;
+        const_Threshold : INT := 100;
+    END_VAR
+    
+    VAR_TEMP
+        temp_Sum : INT;
+        temp_Average : REAL;
+    END_VAR
+    END_VAR
+    
+    #q_Output := #stat_Counter + const_Timeout;
+END_FUNCTION"
+            };
+
+            if (ExecuteTest(test3Data, "All variable sections properly extracted and structured",
+                (content) => content.Contains("VAR") &&
+                             content.Contains("VAR CONSTANT") &&
+                             !Regex.IsMatch(content, @"BEGIN\s+(VAR|VAR_CONSTANT)", RegexOptions.Singleline | RegexOptions.IgnoreCase) &&
+                             Regex.IsMatch(content, @"BEGIN\s+#\w+", RegexOptions.Singleline)))
+                testsPassed++;
+            else
+                testsFailed++;
+
+            // =====================================================================
+            // TEST CASE 4: Organization Block (OB) with VAR_TEMP
+            // =====================================================================
+            Console.WriteLine("\n[TEST 4] Organization Block (OB) with VAR_TEMP in BEGIN");
+            Console.WriteLine(new string('-', 80));
+
+            var test4Data = new BlockData
+            {
+                Name = "OB1_Test",
+                Type = "ORGANIZATION_BLOCK",
+                Description = "Main cycle",
+                Variables = new List<VariableInfo>(),
+                BodyCode = @"BEGIN
+    VAR_TEMP
+        temp_Status : BOOL;
+        temp_Error : BOOL;
+    END_VAR
+    
+    VAR_CONSTANT
+        const_MaxRetries : INT := 3;
+    END_VAR
+    
+    ""Inst_FB_MainControl__Inst1""(
+        IN := TRUE,
+        OUT => #temp_Status
+    );
+    
+    IF #temp_Error THEN
+        // Error handling
+    END_IF;
+END_ORGANIZATION_BLOCK"
+            };
+
+            if (ExecuteTest(test4Data, "OB structure correct with VAR sections outside BEGIN",
+                (content) => content.Contains("VAR_TEMP") &&
+                             content.Contains("VAR CONSTANT") &&
+                             Regex.IsMatch(content, @"BEGIN\s+""Inst_", RegexOptions.Singleline)))
+                testsPassed++;
+            else
+                testsFailed++;
+
+            // =====================================================================
+            // TEST CASE 5: Case normalization
+            // =====================================================================
+            Console.WriteLine("\n[TEST 5] Case normalization (var_input, var_temp, var_constant)");
+            Console.WriteLine(new string('-', 80));
+
+            var test5Data = new BlockData
+            {
+                Name = "TEST_FB_CaseIssues",
+                Type = "FUNCTION_BLOCK",
+                Description = "Test case normalization",
+                Variables = new List<VariableInfo>
+        {
+            new VariableInfo { Name = "i_Signal", DataType = "BOOL", Direction = "var_input", Description = "Input" },
+            new VariableInfo { Name = "q_Output", DataType = "INT", Direction = "VAR_output", Description = "Output" },
+            new VariableInfo { Name = "temp_Var", DataType = "REAL", Direction = "var_TEMP", Description = "Temp" },
+            new VariableInfo { Name = "const_Val", DataType = "INT", Direction = "var_constant", Description = "Constant" }
+        },
+                BodyCode = "BEGIN\n    #q_Output := #i_Signal;\nEND_FUNCTION_BLOCK"
+            };
+
+            if (ExecuteTest(test5Data, "All keywords normalized to uppercase",
+                (content) => Regex.IsMatch(content, @"VAR_INPUT", RegexOptions.IgnoreCase) &&
+                             !Regex.IsMatch(content, @"var_input") &&
+                             Regex.IsMatch(content, @"VAR_OUTPUT", RegexOptions.IgnoreCase) &&
+                             content.Contains("VAR CONSTANT")))
+                testsPassed++;
+            else
+                testsFailed++;
+
+            // =====================================================================
+            // TEST CASE 6: Complex mixed case
+            // =====================================================================
+            Console.WriteLine("\n[TEST 6] Complex mixed case: FB with all issues combined");
+            Console.WriteLine(new string('-', 80));
+
+            var test6Data = new BlockData
+            {
+                Name = "TEST_FB_Complex",
+                Type = "FUNCTION_BLOCK",
+                Description = "Complex test",
+                Variables = new List<VariableInfo>
+        {
+            new VariableInfo { Name = "i_Start", DataType = "BOOL", Direction = "VAR_INPUT" }
+        },
+                BodyCode = @"BEGIN
+    VAR
+        stat_Count : INT := 0;
+    END_VAR
+    
+    VAR_TEMP
+        temp_Flag : BOOL;
+    END_VAR
+    
+    VAR_CONSTANT
+        const_Max : INT := 100;
+    END_VAR
+    END_VAR
+    
+    IF #i_Start THEN
+        #stat_Count := #stat_Count + 1;
+    END_IF;
+END_FUNCTION_BLOCK"
+            };
+
+            if (ExecuteTest(test6Data, "Complex case fully corrected",
+                (content) => content.Contains("FUNCTION_BLOCK") &&
+                             content.Contains("VAR_INPUT") &&
+                             content.Contains("VAR") &&
+                             content.Contains("VAR_TEMP") &&
+                             content.Contains("VAR CONSTANT") &&
+                             !Regex.IsMatch(content, @"BEGIN\s+(VAR|VAR_TEMP|VAR_CONSTANT)", RegexOptions.Singleline | RegexOptions.IgnoreCase) &&
+                             !content.Contains("END_VAR\n    END_VAR") &&
+                             content.Contains("#stat_Count := #stat_Count + 1")))
+                testsPassed++;
+            else
+                testsFailed++;
+
+            // =====================================================================
+            // TEST CASE 7: DATA_BLOCK with VAR misplaced
+            // =====================================================================
+            Console.WriteLine("\n[TEST 7] DATA_BLOCK with variables in BodyCode");
+            Console.WriteLine(new string('-', 80));
+
+            var test7Data = new BlockData
+            {
+                Name = "TEST_DB_WithVars",
+                Type = "DATA_BLOCK",
+                Description = "Test data block",
+                Variables = new List<VariableInfo>(),
+                BodyCode = @"BEGIN
+    VAR
+        motorStatus : BOOL;
+        pumpSpeed : INT;
+    END_VAR
+    
+    motorStatus := TRUE;
+    pumpSpeed := 500;
+END_DATA_BLOCK"
+            };
+
+            if (ExecuteTest(test7Data, "DATA_BLOCK variables properly extracted",
+                (content) => content.Contains("DATA_BLOCK") &&
+                             !Regex.IsMatch(content, @"BEGIN\s+VAR", RegexOptions.Singleline | RegexOptions.IgnoreCase)))
+                testsPassed++;
+            else
+                testsFailed++;
+
+            // =====================================================================
+            // TEST CASE 8: Variables with comments inside VAR blocks
+            // =====================================================================
+            Console.WriteLine("\n[TEST 8] VAR blocks with inline comments");
+            Console.WriteLine(new string('-', 80));
+
+            var test8Data = new BlockData
+            {
+                Name = "TEST_FB_WithComments",
+                Type = "FUNCTION_BLOCK",
+                Description = "Test with comments",
+                Variables = new List<VariableInfo>
+        {
+            new VariableInfo { Name = "i_Trigger", DataType = "BOOL", Direction = "VAR_INPUT" }
+        },
+                BodyCode = @"BEGIN
+    VAR
+        temp_Counter : INT;  // Line counter
+        temp_Flag : BOOL;    // Status flag
+    END_VAR
+    
+    // Main logic
+    IF #i_Trigger THEN
+        #temp_Counter := #temp_Counter + 1;
+    END_IF;
+END_FUNCTION_BLOCK"
+            };
+
+            if (ExecuteTest(test8Data, "VAR blocks with comments properly handled",
+                (content) => !Regex.IsMatch(content, @"BEGIN\s+VAR", RegexOptions.Singleline | RegexOptions.IgnoreCase) &&
+                             content.Contains("// Main logic")))
+                testsPassed++;
+            else
+                testsFailed++;
+
+            // =====================================================================
+            // TEST CASE 9: Only VAR blocks with minimal logic
+            // =====================================================================
+            Console.WriteLine("\n[TEST 9] Minimal logic with multiple VAR sections");
+            Console.WriteLine(new string('-', 80));
+
+            var test9Data = new BlockData
+            {
+                Name = "TEST_FB_MinimalLogic",
+                Type = "FUNCTION_BLOCK",
+                Description = "Minimal logic",
+                Variables = new List<VariableInfo>(),
+                BodyCode = @"BEGIN
+    VAR
+        stat_Timer : TON;
+    END_VAR
+    
+    VAR_INPUT
+        i_Start : BOOL;
+    END_VAR
+    
+    VAR_OUTPUT
+        q_Done : BOOL;
+    END_VAR
+    
+    #q_Done := FALSE;
+END_FUNCTION_BLOCK"
+            };
+
+            if (ExecuteTest(test9Data, "Minimal logic extracted correctly",
+                (content) => content.Contains("VAR_INPUT") &&
+                             content.Contains("VAR_OUTPUT") &&
+                             Regex.IsMatch(content, @"BEGIN\s+#q_Done", RegexOptions.Singleline)))
+                testsPassed++;
+            else
+                testsFailed++;
+
+            // =====================================================================
+            // TEST CASE 10: VAR blocks at different positions
+            // =====================================================================
+            Console.WriteLine("\n[TEST 10] VAR blocks at start, middle, and end of code");
+            Console.WriteLine(new string('-', 80));
+
+            var test10Data = new BlockData
+            {
+                Name = "TEST_FB_MultiPosition",
+                Type = "FUNCTION_BLOCK",
+                Description = "Multiple VAR positions",
+                Variables = new List<VariableInfo>
+    {
+        new VariableInfo { Name = "i_Enable", DataType = "BOOL", Direction = "VAR_INPUT" }
+    },
+                BodyCode = @"BEGIN
+    VAR
+        stat_Count1 : INT;
+    END_VAR
+    
+    #stat_Count1 := 0;
+    
+    VAR_TEMP
+        temp_Check : BOOL;
+    END_VAR
+    
+    #temp_Check := #i_Enable;
+    
+    VAR_CONSTANT
+        const_Limit : INT := 100;
+    END_VAR
+    
+    IF #stat_Count1 < const_Limit THEN
+        #stat_Count1 := #stat_Count1 + 1;
+    END_IF;
+END_FUNCTION_BLOCK"
+            };
+
+            if (ExecuteTest(test10Data, "Multiple VAR positions handled correctly",
+                (content) => !Regex.IsMatch(content, @"BEGIN\s+(VAR|VAR_TEMP|VAR_CONSTANT)", RegexOptions.Singleline | RegexOptions.IgnoreCase) &&
+                             content.Contains("VAR") &&
+                             content.Contains("VAR_TEMP") &&
+                             content.Contains("VAR CONSTANT") &&
+                             !content.Contains("END_VAR\n    END_VAR")))
+                testsPassed++;
+            else
+                testsFailed++;
+            // =====================================================================
+            // TEST CASE 11: Nested indentation in VAR blocks
+            // =====================================================================
+            Console.WriteLine("\n[TEST 11] Indented VAR blocks");
+            Console.WriteLine(new string('-', 80));
+
+            var test11Data = new BlockData
+            {
+                Name = "TEST_FB_Indented",
+                Type = "FUNCTION_BLOCK",
+                Description = "Indented code",
+                Variables = new List<VariableInfo>
+        {
+            new VariableInfo { Name = "i_Signal", DataType = "BOOL", Direction = "VAR_INPUT" }
+        },
+                BodyCode = @"BEGIN
+        VAR
+            temp_Value : INT;
+        END_VAR
+        
+        IF #i_Signal THEN
+            #temp_Value := 1;
+        END_IF;
+END_FUNCTION_BLOCK"
+            };
+
+            if (ExecuteTest(test11Data, "Indented VAR blocks extracted",
+                (content) => !Regex.IsMatch(content, @"BEGIN\s+\s+VAR", RegexOptions.Singleline | RegexOptions.IgnoreCase)))
+                testsPassed++;
+            else
+                testsFailed++;
+
+            // =====================================================================
+            // TEST CASE 12: Empty VAR blocks
+            // =====================================================================
+            Console.WriteLine("\n[TEST 12] Empty or malformed VAR blocks");
+            Console.WriteLine(new string('-', 80));
+
+            var test12Data = new BlockData
+            {
+                Name = "TEST_FB_EmptyVars",
+                Type = "FUNCTION_BLOCK",
+                Description = "Empty VAR block",
+                Variables = new List<VariableInfo>
+        {
+            new VariableInfo { Name = "i_Test", DataType = "BOOL", Direction = "VAR_INPUT" }
+        },
+                BodyCode = @"BEGIN
+    VAR
+    END_VAR
+    
+    #i_Test := TRUE;
+END_FUNCTION_BLOCK"
+            };
+
+            if (ExecuteTest(test12Data, "Empty VAR blocks handled gracefully",
+                (content) => !Regex.IsMatch(content, @"BEGIN\s+VAR", RegexOptions.Singleline | RegexOptions.IgnoreCase)))
+                testsPassed++;
+            else
+                testsFailed++;
+
+            // =====================================================================
+            // SUMMARY
+            // =====================================================================
+            Console.WriteLine("\n" + new string('=', 80));
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"TEST RESULTS: {testsPassed} PASSED, {testsFailed} FAILED (Total: {testsPassed + testsFailed})");
+            Console.ResetColor();
+            Console.WriteLine(new string('=', 80));
+
+            if (testsFailed == 0)
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("✓ ALL TESTS PASSED - SclSyntaxCorrector integration working correctly!");
+                Console.ResetColor();
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"✗ {testsFailed} test(s) failed - review the corrector logic");
+                Console.ResetColor();
+            }
+
+            Console.WriteLine("\nGenerated files saved to: " + OutputPaths.GetGeneratedDir());
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("Press any key to continue...");
+            Console.ResetColor();
+            Console.ReadKey();
+        }
+
+        // =====================================================================
+        // HELPER METHOD: Execute test and verify
+        // =====================================================================
+        private static bool ExecuteTest(BlockData testData, string testDescription, Func<string, bool> verificationLogic)
+        {
+            try
+            {
+                SCLGenerator.GenerateAndSave(testData);
+
+                string genFile = Path.Combine(OutputPaths.GetGeneratedDir(), testData.Name + ".scl");
+                if (File.Exists(genFile))
+                {
+                    string content = File.ReadAllText(genFile);
+
+                    if (verificationLogic(content))
+                    {
+                        Console.ForegroundColor = ConsoleColor.Green;
+                        Console.WriteLine($"  ✓ PASSED: {testDescription}");
+                        Console.ResetColor();
+                        return true;
+                    }
+                    else
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine($"  ✗ FAILED: {testDescription}");
+                        Console.ResetColor();
+                        return false;
+                    }
+                }
+                else
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"  ✗ FAILED: Generated file not found");
+                    Console.ResetColor();
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"  ✗ FAILED: {ex.Message}");
+                Console.ResetColor();
+                return false;
             }
         }
     }
