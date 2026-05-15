@@ -7,8 +7,13 @@
     <PlatformTarget>x64</PlatformTarget>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
-    <UseWindowsForms>true</UseWindowsForms>    
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>logo_app_DATN.ico</ApplicationIcon>    
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="logo_app_DATN.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.105.0" />
