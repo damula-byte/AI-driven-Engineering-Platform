@@ -1,0 +1,116 @@
+version=1
+
+# This file caches language service data to improve the performance of C# Dev Kit.
+# It is not intended for manual editing. It can safely be deleted and will be
+# regenerated automatically. For more information, see https://aka.ms/lscache
+#
+# To control where cache files are stored, use the following VS Code setting:
+#   "dotnet.projectsystem.cacheInProjectFolder": true
+
+[project]
+language=C#
+primary
+lastDtbSucceeded
+
+[properties]
+AssemblyName=Translator_CLI
+CommandLineArgsForDesignTimeEvaluation=-langversion:latest -define:TRACE
+CompilerGeneratedFilesOutputPath=
+MaxSupportedLangVersion=7.3
+ProjectAssetsFile=<PATH>obj/project.assets.json
+RootNamespace=Translator_CLI
+RunAnalyzers=
+RunAnalyzersDuringLiveAnalysis=
+SolutionPath=<PATH>../Middleware.sln
+TargetFrameworkIdentifier=.NETFramework
+TargetPath=<PATH>bin/Debug/net48/Translator_CLI.exe
+TargetRefPath=
+TemporaryDependencyNodeTargetIdentifier=net48
+
+[commandLineArguments]
+/noconfig
+/unsafe-
+/checked-
+/nowarn:1701,1702,1701,1702
+/fullpaths
+/nostdlib+
+/platform:x64
+/errorreport:prompt
+/warn:4
+/define:TRACE;DEBUG;NETFRAMEWORK;NET48;NET30_OR_GREATER;NET35_OR_GREATER;NET40_OR_GREATER;NET45_OR_GREATER;NET451_OR_GREATER;NET452_OR_GREATER;NET46_OR_GREATER;NET461_OR_GREATER;NET462_OR_GREATER;NET47_OR_GREATER;NET471_OR_GREATER;NET472_OR_GREATER;NET48_OR_GREATER
+/highentropyva+
+/nullable:enable
+/debug+
+/debug:portable
+/filealign:512
+/optimize-
+/out:obj\Debug\net48\Translator_CLI.exe
+/subsystemversion:6.00
+/target:exe
+/warnaserror-
+/utf8output
+/deterministic+
+/langversion:latest
+/warnaserror+:NU1605
+
+[sourceFiles]
+AI Engine/AiEngine.cs
+CommandHandler.cs
+File Formatter/
+ cwc_tia_pipe.cs
+ FileFormatter.cs
+ ReviewWindow.cs
+obj/Debug/net48/
+ .NETFramework,Version=v4.8.AssemblyAttributes.cs
+ Translator_CLI.AssemblyInfo.cs
+ Translator_CLI.GlobalUsings.g.cs
+Program.cs
+SettingManager.cs
+Tag Manager/TagManager.cs
+TIA Portal V20/
+ ScadaScreenModel.cs
+ TIA_V20.cs
+
+[metadataReferences]
+../../../../Program Files/Siemens/Automation/Portal V20/PublicAPI/V20/
+ Siemens.Engineering.dll
+ Siemens.Engineering.Hmi.dll
+<NETFXREF>/v4.8/
+ Facades/netstandard.dll
+ Microsoft.CSharp.dll
+ mscorlib.dll
+ System.Core.dll
+ System.Data.DataSetExtensions.dll
+ System.Data.dll
+ System.dll
+ System.Drawing.dll
+ System.IO.Compression.dll
+ System.IO.Compression.FileSystem.dll
+ System.Net.Http.dll
+ System.Numerics.dll
+ System.Runtime.Serialization.dll
+ System.Windows.Forms.dll
+ System.Xml.dll
+ System.Xml.Linq.dll
+ WindowsBase.dll
+<NUGET>/
+ closedxml.parser/2.0.0/lib/netstandard2.0/ClosedXML.Parser.dll
+ closedxml/0.105.0/lib/netstandard2.0/ClosedXML.dll
+ documentformat.openxml.framework/3.1.1/lib/net46/DocumentFormat.OpenXml.Framework.dll
+ documentformat.openxml/3.1.1/lib/net46/DocumentFormat.OpenXml.dll
+ excelnumberformat/1.1.0/lib/net20/ExcelNumberFormat.dll
+ microsoft.bcl.hashcode/1.1.1/ref/net461/Microsoft.Bcl.HashCode.dll
+ microsoft.web.webview2/1.0.3856.49/lib/net462/
+  Microsoft.Web.WebView2.Core.dll
+  Microsoft.Web.WebView2.WinForms.dll
+  Microsoft.Web.WebView2.Wpf.dll
+ newtonsoft.json/13.0.4/lib/net45/Newtonsoft.Json.dll
+ rbush.signed/4.0.0/lib/net47/RBush.dll
+ sixlabors.fonts/1.0.0/lib/netstandard2.0/SixLabors.Fonts.dll
+ system.buffers/4.5.1/ref/net45/System.Buffers.dll
+ system.memory/4.5.5/lib/net461/System.Memory.dll
+ system.numerics.vectors/4.5.0/ref/net46/System.Numerics.Vectors.dll
+ system.runtime.compilerservices.unsafe/4.7.0/ref/netstandard2.0/System.Runtime.CompilerServices.Unsafe.dll
+
+[analyzerConfigFiles]
+obj/Debug/net48/Translator_CLI.GeneratedMSBuildEditorConfig.editorconfig
