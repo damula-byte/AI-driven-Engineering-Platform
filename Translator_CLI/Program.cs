@@ -831,7 +831,7 @@ namespace TIA_Copilot_CLI
                 string modulePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ModuleCatalog.json");
                 if (!File.Exists(modulePath))
                 {
-                    PrintIcon("X", "Không tìm thấy file ModuleCatalog.json!", ConsoleColor.Red);
+                    PrintIcon("X", "The ModuleCatalog.json file was not found!", ConsoleColor.Red);
                     return;
                 }
 
@@ -875,9 +875,9 @@ namespace TIA_Copilot_CLI
                             moduleIdentifier = $"OrderNumber:{selectedItem.OrderNumber}/{finalVer}";
                         }
                     }
-                    else PrintIcon("!", "Danh mục module cho dòng PLC này đang trống.", ConsoleColor.Yellow);
+                    else PrintIcon("!", "The module catalog for this PLC series is empty.", ConsoleColor.Yellow);
                 }
-                catch (Exception ex) { PrintIcon("X", $"Lỗi Catalog: {ex.Message}", ConsoleColor.Red); }
+                catch (Exception ex) { PrintIcon("X", $"Catalog Error: {ex.Message}", ConsoleColor.Red); }
             }
             else
             {
@@ -895,7 +895,7 @@ namespace TIA_Copilot_CLI
                     moduleIdentifier = $"OrderNumber:{mlfb}/{version}";
                     Console.WriteLine($"[i] Generated Module Identifier: {moduleIdentifier}");
                 }
-                else PrintIcon("X", "Thông tin không được để trống!", ConsoleColor.Red);
+                else PrintIcon("X", "Module information cannot be empty!", ConsoleColor.Red);
             }
 
             // --- PHẦN THỰC THI CHUNG (Dành cho cả 2 chế độ) ---
@@ -907,41 +907,41 @@ namespace TIA_Copilot_CLI
                 string mlfb = moduleIdentifier.Split(':')[1].Split('/')[0];
 
                 Console.WriteLine("\n" + new string('-', 40));
-                Console.WriteLine($"[GỢI Ý VỊ TRÍ CẮM CHO: {mlfb}]");
+                Console.WriteLine($"[SUGGESTED SLOT LOCATIONS FOR: {mlfb}]");
 
                 if (family == "S71200")
                 {
                     if (mlfb.StartsWith("6ES7 241") || mlfb.StartsWith("6GK7"))
                     {
                         // Communication Modules (CM/CP) - Bên TRÁI CPU
-                        PrintIcon("i", "Đây là Module TRUYỀN THÔNG. Quy tắc S7-1200: Cắm bên TRÁI CPU.", ConsoleColor.Cyan);
-                        PrintIcon("!", "Vị trí gợi ý: Slot 101, 102 hoặc 103.", ConsoleColor.Yellow);
+                        PrintIcon("i", "This is a COMMUNICATION MODULE. S7-1200 rule: Insert on the LEFT side of the CPU.", ConsoleColor.Cyan);
+                        PrintIcon("!", "Suggested location: Slot 101, 102 or 103.", ConsoleColor.Yellow);
                     }
                     else if (mlfb.StartsWith("6ES7 221") || mlfb.StartsWith("6ES7 222") || mlfb.StartsWith("6ES7 223") || 
                             mlfb.StartsWith("6ES7 231") || mlfb.StartsWith("6ES7 232") || mlfb.StartsWith("6ES7 234"))
                     {
                         // Signal Modules (SM) - Bên PHẢI CPU
-                        PrintIcon("i", "Đây là Module TÍN HIỆU. Quy tắc S7-1200: Cắm bên PHẢI CPU.", ConsoleColor.Cyan);
-                        PrintIcon("!", "Vị trí gợi ý: Slot 2, 3, 4... (Slot 1 là CPU).", ConsoleColor.Yellow);
+                        PrintIcon("i", "This is a SIGNAL MODULE. S7-1200 rule: Insert on the RIGHT side of the CPU.", ConsoleColor.Cyan);
+                        PrintIcon("!", "Suggested location: Slot 2, 3, 4... (Slot 1 is the CPU).", ConsoleColor.Yellow);
                     }
                     else if (mlfb.Contains("30-0XB0") || mlfb.Contains("32-0XB0")) // Thường là các mã SB cũ/mới
                     {
                         // Signal Boards (SB) - Trên mặt CPU
-                        PrintIcon("i", "Gợi ý: Đây có thể là SIGNAL BOARD. Cắm trực tiếp trên MẶT CPU.", ConsoleColor.Cyan);
-                        PrintIcon("!", "Vị trí gợi ý: Slot 1.", ConsoleColor.Yellow);
+                        PrintIcon("i", "This is a SIGNAL BOARD. S7-1200 rule: Insert directly on the CPU.", ConsoleColor.Cyan);
+                        PrintIcon("!", "Suggested location: Slot 1.", ConsoleColor.Yellow);
                     }
                 }
                 else if (family == "S71500")
                 {
-                    PrintIcon("i", "Quy tắc S7-1500: Slot 1 (Nguồn), Slot 2 (CPU).", ConsoleColor.Cyan);
-                    PrintIcon("!", "Vị trí gợi ý: Slot 3 trở đi cho các Module mở rộng.", ConsoleColor.Yellow);
+                    PrintIcon("i", "S7-1500 rule: Slot 1 (Power Supply), Slot 2 (CPU).", ConsoleColor.Cyan);
+                    PrintIcon("!", "Suggested location: Slots 3 and beyond for expansion modules.", ConsoleColor.Yellow);
                 }
                 Console.WriteLine(new string('-', 40));
 
-                Console.Write($"\nNhập vị trí Slot: ");
+                Console.Write($"\nEnter Slot Location: ");
                 if (int.TryParse(Console.ReadLine(), out int slot))
                 {
-                    PrintIcon("i", $"Đang tiến hành gắn Module vào Slot {slot}...", ConsoleColor.Cyan);
+                    PrintIcon("i", $"The module is currently being installed into the slot. {slot}...", ConsoleColor.Cyan);
                     string result = _tiaEngine.PlugModule(_currentDeviceName, moduleIdentifier, slot);
                     
                     if (result.Contains("SUCCESS"))
@@ -949,7 +949,7 @@ namespace TIA_Copilot_CLI
                     else
                         PrintIcon("X", result, ConsoleColor.Red);
                 }
-                else PrintIcon("X", "Số Slot không hợp lệ!", ConsoleColor.Red);
+                else PrintIcon("X", "Invalid Slot Number!", ConsoleColor.Red);
             }
         }
 
