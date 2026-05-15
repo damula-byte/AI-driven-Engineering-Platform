@@ -135,10 +135,21 @@ namespace TIA_Copilot_CLI
 
             while (true)
             {
-                // 2. TẠO PROMPT DYNAMIC
-                string prompt = $"\u001b[32m{userName}-{appName}-[{mode}]\u001b[0m > ";
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.Write($"{userName}-{appName}");
 
-                string input = ReadLine.Read(prompt);
+                Console.ResetColor();
+                Console.Write("-");
+
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.Write($"[{mode}]");
+
+                Console.ResetColor();
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.Write(" > ");
+                Console.ResetColor();
+
+                string input = ReadLine.Read("");
 
                 if (string.IsNullOrWhiteSpace(input)) continue;
 
