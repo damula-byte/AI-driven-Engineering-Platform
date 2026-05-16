@@ -1966,15 +1966,79 @@ namespace Middleware_console
         #endregion
 
         #region 7. WinCC Unified: Connection & Tag Import
-        public string CreateUnifiedConnectionCombined(string hmiName, string hmiIp, string plcIp)
+        // public string CreateUnifiedConnectionCombined(string hmiName, string hmiIp, string plcIp)
+        // {
+        //     if (_project == null) return "Project not opened.";
+        //     try
+        //     {
+        //         Device hmiDevice = FindDeviceRecursive(_project, hmiName);
+        //         if (hmiDevice == null) return $"[ERROR] Device not found: {hmiName}";
+
+        //         // 1. Lấy HmiSoftware chuẩn Unified
+        //         HmiSoftware hmiSoftware = null;
+        //         foreach (DeviceItem item in hmiDevice.DeviceItems)
+        //         {
+        //             var container = item.GetService<SoftwareContainer>();
+        //             if (container != null && container.Software is HmiSoftware sw)
+        //             {
+        //                 hmiSoftware = sw;
+        //                 break;
+        //             }
+        //         }
+
+        //         if (hmiSoftware == null) return "[ERROR] HMI Software area not found.";
+
+        //         // 2. LOGIC TỰ TĂNG TÊN CONNECTION
+        //         var connections = hmiSoftware.Connections;
+        //         int nextIndex = 1;
+        //         string baseName = "HMI_PLC_Conn_";
+
+        //         // Quét các kết nối hiện có để tìm ID lớn nhất
+        //         foreach (var conn in connections)
+        //         {
+        //             if (conn.Name.StartsWith(baseName))
+        //             {
+        //                 string suffix = conn.Name.Replace(baseName, "");
+        //                 if (int.TryParse(suffix, out int currentId))
+        //                 {
+        //                     if (currentId >= nextIndex) nextIndex = currentId + 1;
+        //                 }
+        //             }
+        //         }
+        //         string finalName = baseName + nextIndex;
+
+        //         // 3. TẠO KẾT NỐI MỚI
+        //         var newConn = connections.Create(finalName);
+        //         newConn.SetAttribute("CommunicationDriver", "SIMATIC S7 1200/1500");
+
+        //         // Thiết lập IP
+        //         try
+        //         {
+        //             newConn.SetAttribute("HostAddress", hmiIp);
+        //             newConn.SetAttribute("PlcAddress", plcIp);
+        //             newConn.SetAttribute("HostAccessPoint", "S7ONLINE");
+        //             newConn.SetAttribute("PlcRack", 0);
+        //             newConn.SetAttribute("PlcExpansionSlot", 1);
+        //         }
+        //         catch { }
+
+        //         _project.Save(); // Lưu để TIA vẽ lại UI
+        //         return finalName; // Trả về tên đã tạo để in ra CLI
+        //     }
+        //     catch (Exception ex) { return $"[ERROR] {ex.Message}"; }
+        // }
+
+      public string CreateUnifiedConnectionDynamic(string hmiName, string driverName, string hmiIp, string plcIp, string accessPoint = "")
         {
             if (_project == null) return "Project not opened.";
+            
             try
             {
+                // 1. Tìm thiết thiết bị HMI Unified trong cấu trúc dự án
                 Device hmiDevice = FindDeviceRecursive(_project, hmiName);
                 if (hmiDevice == null) return $"[ERROR] Device not found: {hmiName}";
 
-                // 1. Lấy HmiSoftware chuẩn Unified
+                // 2. Trích xuất phân vùng HmiSoftware của Unified
                 HmiSoftware hmiSoftware = null;
                 foreach (DeviceItem item in hmiDevice.DeviceItems)
                 {
@@ -1985,48 +2049,100 @@ namespace Middleware_console
                         break;
                     }
                 }
-
                 if (hmiSoftware == null) return "[ERROR] HMI Software area not found.";
 
-                // 2. LOGIC TỰ TĂNG TÊN CONNECTION
+                // 3. Logic tự động tăng chỉ số tên Connection (Auto-increment)
                 var connections = hmiSoftware.Connections;
                 int nextIndex = 1;
                 string baseName = "HMI_PLC_Conn_";
-
-                // Quét các kết nối hiện có để tìm ID lớn nhất
                 foreach (var conn in connections)
                 {
                     if (conn.Name.StartsWith(baseName))
                     {
                         string suffix = conn.Name.Replace(baseName, "");
-                        if (int.TryParse(suffix, out int currentId))
+                        if (int.TryParse(suffix, out int currentId) && currentId >= nextIndex)
                         {
-                            if (currentId >= nextIndex) nextIndex = currentId + 1;
+                            nextIndex = currentId + 1;
                         }
                     }
                 }
                 string finalName = baseName + nextIndex;
 
-                // 3. TẠO KẾT NỐI MỚI
+                // 4. Tạo dòng kết nối phẳng rỗng (Overload 1 tham số chuẩn WinCC Unified)
                 var newConn = connections.Create(finalName);
-                newConn.SetAttribute("CommunicationDriver", "SIMATIC S7 1200/1500");
+                
+                // Gán Driver do người dùng chọn từ Wizard
+                Console.WriteLine($"[i] Injecting Communication Driver: '{driverName}'...");
+                newConn.SetAttribute("CommunicationDriver", driverName);
 
-                // Thiết lập IP
+                // 5. BỘ XỬ LÝ BIỂU MẪU THÔNG MINH (DYNAMIC FORM PROCESSOR)
                 try
                 {
-                    newConn.SetAttribute("HostAddress", hmiIp);
-                    newConn.SetAttribute("PlcAddress", plcIp);
-                    newConn.SetAttribute("HostAccessPoint", "S7ONLINE");
-                    newConn.SetAttribute("PlcRack", 0);
-                    newConn.SetAttribute("PlcExpansionSlot", 1);
-                }
-                catch { }
+                    Console.WriteLine("[i] Analysing dynamic DriverProperty templates for parameter injection...");
+                    
+                    dynamic dynamicConn = newConn;
+                    var driverProps = dynamicConn.DriverProperties;
 
-                _project.Save(); // Lưu để TIA vẽ lại UI
-                return finalName; // Trả về tên đã tạo để in ra CLI
+                    if (driverProps != null)
+                    {
+                        foreach (var propItem in driverProps)
+                        {
+                            var engineeringProp = propItem as Siemens.Engineering.IEngineeringObject;
+                            if (engineeringProp == null) continue;
+
+                            // Đọc Keyword định danh (PropertyName) của ô TextBox
+                            string propName = engineeringProp.GetAttribute("PropertyName") as string;
+                            if (string.IsNullOrEmpty(propName)) continue;
+
+                            // A. MAP GIÁ TRỊ IP CHO HMI DEVICE (Chỉ gán nếu người dùng thực sự nhập)
+                            if (propName.Equals("Physic.LocAddress", StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (!string.IsNullOrEmpty(hmiIp))
+                                {
+                                    engineeringProp.SetAttribute("Value", hmiIp);
+                                    Console.WriteLine($"   [√] Form Intervened -> [{propName}] set to: {hmiIp}");
+                                }
+                            }
+                            // B. MAP GIÁ TRỊ IP CHO PARTNER PLC (Chỉ gán nếu người dùng thực sự nhập)
+                            else if (propName.Equals("Protocol.RemStAddress", StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (!string.IsNullOrEmpty(plcIp))
+                                {
+                                    engineeringProp.SetAttribute("Value", plcIp);
+                                    Console.WriteLine($"   [√] Form Intervened -> [{propName}] set to: {plcIp}");
+                                }
+                            }
+                            // C. MAP GIÁ TRỊ ACCESS POINT ĐỘNG (Xử lý chuỗi rỗng thông minh)
+                            else if (propName.Equals("Physic.LocDeviceName", StringComparison.OrdinalIgnoreCase))
+                            {
+                                // Nếu biến truyền vào từ Wizard bị rỗng hoặc null, lập tức cưỡng bức lấy giá trị mặc định tối cao là S7ONLINE
+                                string apTarget = !string.IsNullOrEmpty(accessPoint) ? accessPoint : "S7ONLINE";
+                                
+                                engineeringProp.SetAttribute("Value", apTarget);
+                                Console.WriteLine($"   [√] Form Intervened -> [{propName}] (Access Point) set to: {apTarget}");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("   [X] Error: DriverProperties collection layer is not accessible.");
+                    }
+                }
+                catch (Exception attEx)
+                {
+                    Console.WriteLine($"   [X] Error during dynamic form parsing: {attEx.Message}");
+                }
+
+                // 6. Commit và đẩy toàn bộ dữ liệu thực xuống Project Database của TIA Portal
+                Console.WriteLine("[i] Committing configuration to TIA Project Database...");    
+                
+                return finalName;
             }
-            catch (Exception ex) { return $"[ERROR] {ex.Message}"; }
-        }     
+            catch (Exception ex)
+            {
+                return $"[ERROR] Critical error in dynamic connection engine: {ex.Message}";
+            }
+        }
 
         public void ImportHmiTagsFromCsv(string hmiName, string csvPath)
         {
