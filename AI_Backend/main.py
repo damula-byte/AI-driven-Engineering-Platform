@@ -627,7 +627,7 @@ def main():
             os.environ["OPENAI_API_KEY"] = custom_api_key
             llm = ChatOpenAI(
                 model="gpt-4o-mini",
-                temperature=0.1,
+                temperature=0.4,
                 api_key=custom_api_key,
                 model_kwargs={"response_format": {"type": "json_object"}},
                 max_retries=0 
