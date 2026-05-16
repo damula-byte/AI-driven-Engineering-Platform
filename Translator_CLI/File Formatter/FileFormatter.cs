@@ -186,7 +186,7 @@ namespace TIA_Copilot_CLI
                 report.SyntaxFixesApplied++;
 
             // Fix 1: VAR_CONSTANT -> VAR CONSTANT
-            if (bodyCode.Contains("VAR_CONSTANT", StringComparison.OrdinalIgnoreCase))
+            if (bodyCode.IndexOf("VAR_CONSTANT", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 beforeCode = bodyCode;
                 bodyCode = Regex.Replace(bodyCode, @"VAR_CONSTANT", "VAR CONSTANT", RegexOptions.IgnoreCase);
