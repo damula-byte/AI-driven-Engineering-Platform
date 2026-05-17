@@ -170,6 +170,16 @@ namespace TIA_Copilot_CLI
             if (string.IsNullOrWhiteSpace(data.BodyCode))
                 return;
 
+            if (data.BodyCode.Contains("\\n") || data.BodyCode.Contains("\\t"))
+            {
+                data.BodyCode = data.BodyCode
+                    .Replace("\\r\\n", "\n")
+                    .Replace("\\n", "\n")
+                    .Replace("\\t", "\t")
+                    .Replace("\\r", "");
+                report.SyntaxFixesApplied++;
+            }
+
             string bodyCode = data.BodyCode;
             string beforeCode;
 
@@ -756,7 +766,8 @@ namespace TIA_Copilot_CLI
             {
                 var info = root["block_info"];
                 data.Name = info["name"]?.ToString(); data.Type = info["type"]?.ToString();
-                data.Description = info["description"]?.ToString(); data.BodyCode = root["body_code"]?.ToString();
+                data.Description = info["description"]?.ToString();
+                data.BodyCode = SanitizeBodyCode(root["body_code"]?.ToString());
 
                 if (root["interface"] != null)
                 {
@@ -796,6 +807,20 @@ namespace TIA_Copilot_CLI
 
             return data;
         }
+        private static string SanitizeBodyCode(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return raw;
+
+            return raw
+                .Replace("\\r\\n", "\n")   // literal \r\n (four chars) → real newline
+                .Replace("\\n", "\n")      // literal \n  (two chars)   → real newline
+                .Replace("\\t", "\t")      // literal \t  (two chars)   → real tab
+                .Replace("\\r", "")        // literal \r  (two chars)   → discard
+                .Replace("\r\n", "\n")     // Windows CRLF → Unix LF
+                .Replace("\r", "\n")       // lone CR      → LF
+                .Replace("\0", "");        // null bytes   → discard
+        }
+
     }
 
     public class VariableInfo
@@ -1415,54 +1440,54 @@ namespace TIA_Copilot_CLI
             string itemName = item.Name ?? "";
             if (Program.capstoneMode == true)
             {
-            // 1. TỰ ĐỘNG PHÂN CỤM (CLUSTER LOGIC)
-            int clusterOffsetX = 0; int clusterOffsetmotorX = 0; int clusterOffsetmotorY = 0;
-            int clusterOffsetTankX = 0;
-            int clusterOffsetTankY = 0;
-            int clusterOffsetPipeX = 0;
-            int clusterOffsetPipeY = 0;
-            int elseTankCounter = 0;
-            int tankSpacingX = 300;
-            int elseValveCounter = 0;
-            int vaelveSpacingX = 210;
-            int elseMotorCounter = 0;
-            int motorSpacingX = 150;
-            int elsePumpCounter = 0;
-            int pumpSpacingX = 150;
-            int elseCircleCounter = 0;
-            int circleSpacingX = 50;
-            int elseButtonCounter = 0;
-            int buttonSpacingX = 110;
-            int elseTextCounter = 0;
-            int textSpacingX = 120;
-            int elseGraphicCounter = 0;
-            int graphicSpacingX = 110;
-            int elseRectangleCounter = 0;
-            int rectangleSpacingX = 110;
-            if (itemName.Contains("M1") || itemName.Contains("Pump1")) 
-            {
-                clusterOffsetX = 0;
-                clusterOffsetmotorX = 425;
-                clusterOffsetmotorY = 335;
-            }
-            else if (itemName.Contains("M2") || itemName.Contains("Pump2"))
-            {
-                clusterOffsetX = 250;
-                clusterOffsetmotorX = 425;
-                clusterOffsetmotorY = 130;
-            }
-            else if (itemName.Contains("M3") || itemName.Contains("Pump3"))
-            {
-                clusterOffsetX = 500;
-                clusterOffsetmotorX = 935;
-                clusterOffsetmotorY = 295;
-            }
-            else if (itemName.Contains("M4") || itemName.Contains("Pump4"))
-            {
-                clusterOffsetX = 750;
-                clusterOffsetmotorX = 935;
-                clusterOffsetmotorY = 115;
-            }
+                // 1. TỰ ĐỘNG PHÂN CỤM (CLUSTER LOGIC)
+                int clusterOffsetX = 0; int clusterOffsetmotorX = 0; int clusterOffsetmotorY = 0;
+                int clusterOffsetTankX = 0;
+                int clusterOffsetTankY = 0;
+                int clusterOffsetPipeX = 0;
+                int clusterOffsetPipeY = 0;
+                int elseTankCounter = 0;
+                int tankSpacingX = 300;
+                int elseValveCounter = 0;
+                int vaelveSpacingX = 210;
+                int elseMotorCounter = 0;
+                int motorSpacingX = 150;
+                int elsePumpCounter = 0;
+                int pumpSpacingX = 150;
+                int elseCircleCounter = 0;
+                int circleSpacingX = 50;
+                int elseButtonCounter = 0;
+                int buttonSpacingX = 110;
+                int elseTextCounter = 0;
+                int textSpacingX = 120;
+                int elseGraphicCounter = 0;
+                int graphicSpacingX = 110;
+                int elseRectangleCounter = 0;
+                int rectangleSpacingX = 110;
+                if (itemName.Contains("M1") || itemName.Contains("Pump1"))
+                {
+                    clusterOffsetX = 0;
+                    clusterOffsetmotorX = 425;
+                    clusterOffsetmotorY = 335;
+                }
+                else if (itemName.Contains("M2") || itemName.Contains("Pump2"))
+                {
+                    clusterOffsetX = 250;
+                    clusterOffsetmotorX = 425;
+                    clusterOffsetmotorY = 130;
+                }
+                else if (itemName.Contains("M3") || itemName.Contains("Pump3"))
+                {
+                    clusterOffsetX = 500;
+                    clusterOffsetmotorX = 935;
+                    clusterOffsetmotorY = 295;
+                }
+                else if (itemName.Contains("M4") || itemName.Contains("Pump4"))
+                {
+                    clusterOffsetX = 750;
+                    clusterOffsetmotorX = 935;
+                    clusterOffsetmotorY = 115;
+                }
 
                 else if (itemName.Contains("Pipe_1"))
                 {

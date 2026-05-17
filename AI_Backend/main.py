@@ -110,6 +110,73 @@ def clean_json_response(text):
         cleaned = cleaned[:-3]
     return cleaned.strip()
 
+# Fixing \n and \t in the body_code string to ensure they are interpreted correctly by the assembler
+def normalize_body_code(obj):
+    if isinstance(obj, str):
+        return (obj
+                .replace('\\r\\n', '\n')  # literal 4-char sequence \\r\\n → real newline
+                .replace('\\n',    '\n')  # literal 2-char sequence \\n    → real newline
+                .replace('\\t',    '\t')  # literal 2-char sequence \\t    → real tab
+                .replace('\\r',    '')    # lone literal \\r               → discard
+                )
+    elif isinstance(obj, dict):
+        return {k: normalize_body_code(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [normalize_body_code(item) for item in obj]
+    return obj
+
+def detect_model_from_key(api_key: str):
+    if not api_key or not api_key.strip():
+        raise ValueError("API key is empty. Provide a valid key in USER mode.")
+
+    key = api_key.strip()
+
+    # ── Google Gemini ─────────────────────────────────────────────────────────
+    if key.startswith("AIza"):
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        os.environ["GOOGLE_API_KEY"] = key
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash",
+            temperature=0.1,
+            convert_system_message_to_human=True,
+            google_api_key=key,
+            model_kwargs={"response_mime_type": "application/json"},
+        )
+        return llm, "Gemini (gemini-2.5-flash)"
+
+    # ── Anthropic Claude ──────────────────────────────────────────────────────
+    elif key.startswith("sk-ant-"):
+        from langchain_anthropic import ChatAnthropic
+        os.environ["ANTHROPIC_API_KEY"] = key
+        llm = ChatAnthropic(
+            model="claude-3-5-sonnet-20241022",
+            temperature=0.1,
+            api_key=key,
+            max_tokens=8192,  # Claude requires explicit max_tokens
+            max_retries=0,
+        )
+        return llm, "Anthropic (claude-3-5-sonnet-20241022)"
+
+    # ── OpenAI ────────────────────────────────────────────────────────────────
+    elif key.startswith("sk-"):
+        from langchain_openai import ChatOpenAI
+        os.environ["OPENAI_API_KEY"] = key
+        llm = ChatOpenAI(
+            model="gpt-4o-mini",
+            temperature=0.6,
+            api_key=key,
+            model_kwargs={"response_format": {"type": "json_object"}},
+            max_retries=0,
+        )
+        return llm, "OpenAI (gpt-4o-mini)"
+
+    else:
+        raise ValueError(
+            f"Unrecognized API key format (first 12 chars): '{key[:12]}'\n"
+            "Supported prefixes: 'AIza' (Gemini), 'sk-ant-' (Anthropic), 'sk-' (OpenAI)."
+        )
+
+
 def main():
     # SỬA: Dùng 'utf-8-sig' để Python tự gọt BOM nếu C# gửi sang dính kèm
     sys.stdin.reconfigure(encoding='utf-8-sig') 
@@ -619,186 +686,112 @@ def main():
         """
         # endregion
         
-        if system_mode == "USER":
-            # USER MODE: Use ChatGPT 4o mini
-            if not custom_api_key:
-                send_response({"status": "error", "message": "USER mode requires custom_api_key parameter with OpenAI API key"})
-            
-            os.environ["OPENAI_API_KEY"] = custom_api_key
-            llm = ChatOpenAI(
-                model="gpt-4o-mini",
-                temperature=0.1,
-                api_key=custom_api_key,
-                model_kwargs={"response_format": {"type": "json_object"}},
-                max_retries=0 
-            )
-
-            # os.environ["ANTHROPIC_API_KEY"] = custom_api_key
-            # llm = ChatAnthropic(
-            # model="claude-3-5-sonnet-20240620",
-            # temperature=0.1,
-            # api_key=custom_api_key,
-            # # Claude KHÔNG dùng model_kwargs để ép JSON Mode. 
-            # # Thay vào đó, BẮT BUỘC phải cấp max_tokens để tránh bị cắt cụt code
-            # max_tokens=8192, 
-            # max_retries=0 
-            # )
-
-            # os.environ["GOOGLE_API_KEY"] = new_key
-            # llm = ChatGoogleGenerativeAI(
-            #     model="gemini-2.5-flash",
-            #     temperature=0.1,
-            #     convert_system_message_to_human=True,
-            #     google_api_key=new_key,
-            #     model_kwargs={"response_mime_type": "application/json"},
-            # )
-
-        else:
-            # DEV MODE: Use Gemini (existing behavior)
+        # ── Model auto-detection ──────────────────────────────────────────────
+        # DEV mode: always Gemini via app_secrets key pool
+        # USER mode: detect provider from custom_api_key prefix
+        if system_mode == "DEV":
+            dev_key = app_secrets.get_next_api_key()
+            os.environ["GOOGLE_API_KEY"] = dev_key
+            from langchain_google_genai import ChatGoogleGenerativeAI
             llm = ChatGoogleGenerativeAI(
                 model="gemini-2.5-flash",
                 temperature=0.1,
                 convert_system_message_to_human=True,
+                google_api_key=dev_key,
                 model_kwargs={"response_mime_type": "application/json"},
             )
-        
-        # ── Cooldown guard ────────────────────────────────────────────────────
+            provider_name = "Gemini (gemini-2.5-flash) [DEV]"
+        else:
+            try:
+                llm, provider_name = detect_model_from_key(custom_api_key)
+            except ValueError as e:
+                send_response({"status": "error", "message": str(e)})
+                return
+
+        print(f"[AI] Using: {provider_name}", file=sys.stderr, flush=True)
+
+        # ── Cooldown guard (DEV/Gemini only) ──────────────────────────────────
         if system_mode == "DEV":
             app_secrets.enforce_cooldown(min_seconds=5.0)
 
         # ── Retry logic ───────────────────────────────────────────────────────
         # Only 503 and RPM are safe to retry — neither charges RPD quota.
-        #
-        # Error type  | Retry? | Strategy
-        # ------------|--------|------------------------------------------
-        # 503         | YES    | Server overload — wait short, same key ok
-        # RPM         | YES    | Rate limit/min — wait ~60s, rotate key
-        # RPD         | NO     | Daily quota gone — rotate key, tell user
-        # AUTH        | NO     | Bad key — rotate key, tell user
-        # OTHER       | NO     | Unknown — surface immediately
-        #
-        # MAX_RETRIES = 3 means up to 4 total attempts (1 original + 3 retries).
-        # Each retry rotates to a fresh key from the pool.
-        # ─────────────────────────────────────────────────────────────────────
+        # On retry: DEV mode rotates to next key from pool.
+        #           USER mode re-detects from the same custom_api_key (provider unchanged).
         MAX_RETRIES = 3
-        response   = None
-        last_hint  = ""
-        
-        
-        for attempt in range(MAX_RETRIES + 1):  # 0, 1, 2, 3
+        response    = None
+        last_hint   = ""
+        err_type    = "OTHER"
+
+        for attempt in range(MAX_RETRIES + 1):
             try:
                 response = llm.invoke(full_prompt)
                 if system_mode == "DEV":
                     app_secrets.record_api_call()
-                break  # success — exit loop
+                break
 
             except Exception as api_exc:
                 err_type = app_secrets.classify_api_error(api_exc)
 
-                # ── Errors that should NEVER be retried ───────────────────────
-                # if err_type == "RPD":
-                #     last_hint = (
-                #         "Daily quota (RPD) exhausted on this key. "
-                #         "Add more keys to list_keys_gemini or wait until tomorrow."
-                #     )
-                #     # Rotate key for NEXT session — useless for this call
-                #     new_key = app_secrets.get_next_api_key()
-                #     os.environ["GOOGLE_API_KEY"] = new_key
-                #     break
                 if err_type == "RPD":
                     last_hint = (
                         "Daily quota (RPD) exhausted on this key. Rotate keys or wait."
-                        if system_mode == "DEV" else 
+                        if system_mode == "DEV" else
                         "Your API Key has exhausted its daily quota."
                     )
                     break
 
-                # if err_type == "AUTH":
-                #     last_hint = (
-                #         "API key rejected (401/403). "
-                #         "Check your keys in app_secrets.py."
-                #     )
-                #     # Rotate key immediately — this key is invalid
-                #     new_key = app_secrets.get_next_api_key()
-                #     os.environ["GOOGLE_API_KEY"] = new_key
-                #     break  # do not retry
-
                 if err_type == "AUTH":
                     last_hint = (
                         "API key rejected (401/403). Check app_secrets.py."
-                        if system_mode == "DEV" else 
+                        if system_mode == "DEV" else
                         "Your Custom API Key is invalid or expired."
                     )
                     break
-                
+
                 if err_type == "OTHER":
                     last_hint = str(api_exc)
-                    break  # unknown error — surface immediately
-
-                # ── Retryable errors: 503 and RPM ─────────────────────────────
-                if attempt == MAX_RETRIES:
-                    # Exhausted all retries
-                    if err_type == "503":
-                        last_hint = (
-                            f"Gemini servers still overloaded after {MAX_RETRIES} retries. "
-                            "Wait a minute and try again."
-                        )
-                    elif err_type == "RPM":
-                        last_hint = (
-                            f"Rate limit (RPM) still hit after {MAX_RETRIES} retries. "
-                            "Wait ~60 seconds and try again."
-                        )
                     break
 
-                # Rotate key for next attempt
+                # ── Retryable: 503 and RPM ────────────────────────────────────
+                if attempt == MAX_RETRIES:
+                    last_hint = (
+                        f"Servers still overloaded after {MAX_RETRIES} retries. Wait and retry."
+                        if err_type == "503" else
+                        f"Rate limit (RPM) still hit after {MAX_RETRIES} retries. Wait ~60s."
+                    )
+                    break
+
+                # Rotate key and rebuild LLM for next attempt
                 if system_mode == "DEV":
                     new_key = app_secrets.get_next_api_key()
-                    print_action = "Rotated key."
+                    os.environ["GOOGLE_API_KEY"] = new_key
+                    llm = ChatGoogleGenerativeAI(
+                        model="gemini-2.5-flash",
+                        temperature=0.1,
+                        convert_system_message_to_human=True,
+                        google_api_key=new_key,
+                        model_kwargs={"response_mime_type": "application/json"},
+                    )
+                    print_action = f"Rotated to key ...{new_key[-8:]}"
                 else:
-                    new_key = custom_api_key
+                    # USER mode: same key, re-detect (provider unchanged, just rebuild object)
+                    llm, _ = detect_model_from_key(custom_api_key)
                     print_action = "Holding custom key."
 
-                os.environ["GOOGLE_API_KEY"] = new_key
-                llm = ChatGoogleGenerativeAI(
-                    model="gemini-2.5-flash",
-                    temperature=0.1,
-                    convert_system_message_to_human=True,
-                    google_api_key=new_key,
-                    model_kwargs={"response_mime_type": "application/json"},
+                wait = 5 * (attempt + 1) if err_type == "503" else 60
+                print(
+                    f"[RETRY {attempt + 1}/{MAX_RETRIES}] {err_type} — {print_action}. Waiting {wait}s...",
+                    file=sys.stderr, flush=True
                 )
-
-                # if err_type == "503":
-                #     wait = 5 * (attempt + 1)   # 5s, 10s, 15s
-                #     print(
-                #         f"[RETRY {attempt + 1}/{MAX_RETRIES}] 503 — server overload. "
-                #         f"Rotated key. Waiting {wait}s...",
-                #         file=sys.stderr, flush=True
-                #     )
-                # elif err_type == "RPM":
-                #     wait = 60                  # RPM window is always ~60s
-                #     print(
-                #         f"[RETRY {attempt + 1}/{MAX_RETRIES}] RPM limit hit. "
-                #         f"Rotated key. Waiting {wait}s...",
-                #         file=sys.stderr, flush=True
-                #     )
-
-                # time.sleep(wait)
-                if err_type == "503":
-                    wait = 5 * (attempt + 1)
-                    print(f"[RETRY {attempt + 1}/{MAX_RETRIES}] 503 — server overload. {print_action} Waiting {wait}s...", file=sys.stderr, flush=True)
-                elif err_type == "RPM":
-                    wait = 60
-                    print(f"[RETRY {attempt + 1}/{MAX_RETRIES}] RPM limit hit. {print_action} Waiting {wait}s...", file=sys.stderr, flush=True)
-
                 time.sleep(wait)
 
         # Surface error to C# if all attempts failed
         if response is None:
             send_response({
-                    "status":  "error",
-                    "message": f"[API ERROR — {err_type}] {last_hint}"
+                "status":  "error",
+                "message": f"[API ERROR — {err_type}] {last_hint}"
             })
-            
 
         # 2. Gọi AI sinh code (Dùng Langchain)
         final_json_str = clean_json_response(response.content)
@@ -811,7 +804,7 @@ def main():
         input_tokens = 0
         output_tokens = 0
         total_tokens = 0
-        key_display = f"...{CURRENT_KEY[-10:]}"
+        key_display = f"...{CURRENT_KEY[-10:]}" if 'CURRENT_KEY' in dir() else "USER_MODE"
         
         if hasattr(response, 'usage_metadata') and response.usage_metadata:
             usage = response.usage_metadata
@@ -822,10 +815,12 @@ def main():
         # 3. Bóc JSON ra, nhét token_count vào
         try:
             data_dict = json.loads(final_json_str)
+            data_dict = normalize_body_code(data_dict)
             data_dict["input_tokens"] = input_tokens
             data_dict["output_tokens"] = output_tokens
             data_dict["token_usage"] = total_tokens
             data_dict["active_key"] = key_display
+            data_dict["provider"] = provider_name
             final_json_str = json.dumps(data_dict, ensure_ascii=False, indent=2)
         except Exception as e:
             final_json_str = json.dumps({"error": f"Error loading Token: {str(e)}", "raw_output": final_json_str})

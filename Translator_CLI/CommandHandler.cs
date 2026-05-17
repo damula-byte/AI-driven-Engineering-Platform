@@ -652,6 +652,14 @@ namespace TIA_Copilot_CLI
 
                     JObject responseObj = JObject.Parse(jsonResponse);
 
+                    if (responseObj.ContainsKey("provider"))
+                    {
+                        Console.ForegroundColor = ConsoleColor.DarkGreen;
+                        string provider = responseObj["provider"]?.ToString();
+                        Console.WriteLine($"[AI] Using: {provider}");
+                        Console.ResetColor();
+                    }
+
                     if (responseObj.ContainsKey("token_usage"))
                     {
                         Console.ForegroundColor = ConsoleColor.Yellow;
