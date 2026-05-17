@@ -196,7 +196,7 @@ namespace TIA_Copilot_CLI
                 report.SyntaxFixesApplied++;
 
             // Fix 1: VAR_CONSTANT -> VAR CONSTANT
-            if (bodyCode.Contains("VAR_CONSTANT", StringComparison.OrdinalIgnoreCase))
+            if (bodyCode.IndexOf("VAR_CONSTANT", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 beforeCode = bodyCode;
                 bodyCode = Regex.Replace(bodyCode, @"VAR_CONSTANT", "VAR CONSTANT", RegexOptions.IgnoreCase);
@@ -1934,7 +1934,7 @@ namespace TIA_Copilot_CLI
                         return null;
                 }
             }
-            else
+            else // case Program.capstoneMode == false
             {
                 switch (type)
                 {
@@ -1946,8 +1946,8 @@ namespace TIA_Copilot_CLI
                         props["Width"] = 160;
                         props["Height"] = 340;
                         props["LevelTag"] = item.BindTag ?? "";
-                        props["DisplayFillLevel"] = item.Behaviors.Contains("fill_level");
-                        if (item.Behaviors.Contains("fill_level")) props["FillLevelColor"] = "255, 161, 0";
+                        //props["DisplayFillLevel"] = item.Behaviors.Contains("fill_level");
+                        //if (item.Behaviors.Contains("fill_level")) props["FillLevelColor"] = "255, 161, 0";
                         genericTankSlot++;
                         break;
 
@@ -2088,34 +2088,118 @@ namespace TIA_Copilot_CLI
                     //     props["ClockMode"] = item.ClockMode ?? "LocalTime";
                     //     break;
 
-                    case "Button":
-                    case "HmiToggleSwitch":
-                    case "IOField":
-                    case "Clock":
-                        // Dùng CHUNG buttonSlot để xếp hàng dọc từ trên xuống dưới
-                        int sidebarY = SIDEBAR_Y_START + (buttonSlot * (SIDEBAR_BTN_H + SIDEBAR_GAP));
-                        props["Left"] = SIDEBAR_X;
-                        props["Top"] = sidebarY;
+                    // case "Button":
+                    // case "HmiToggleSwitch":
+                    // case "IOField":
+                    // case "Clock":
+                    //     // Dùng CHUNG buttonSlot để xếp hàng dọc từ trên xuống dưới
+                    //     int sidebarY = SIDEBAR_Y_START + (buttonSlot * (SIDEBAR_BTN_H + SIDEBAR_GAP));
+                    //     props["Left"] = SIDEBAR_X;
+                    //     props["Top"] = sidebarY;
 
-                        // Tùy chỉnh kích thước riêng cho từng loại nếu cần
-                        if (type == "IOField")
+                    //     // Tùy chỉnh kích thước riêng cho từng loại nếu cần
+                    //     if (type == "IOField")
+                    //     {
+                    //         props["Width"] = 120;
+                    //         props["Height"] = 40;
+                    //     }
+                    //     else if (type == "HmiToggleSwitch")
+                    //     {
+                    //         props["Width"] = 80;
+                    //         props["Height"] = 40;
+                    //     }
+                    //     else
+                    //     {
+                    //         props["Width"] = SIDEBAR_BTN_W;
+                    //         props["Height"] = SIDEBAR_BTN_H;
+                    //     }
+
+                    //     buttonSlot++; // Tăng bộ đếm chung cho Sidebar
+                    //     break;
+                    case "Button":
                         {
-                            props["Width"] = 120;
-                            props["Height"] = 40;
-                        }
-                        else if (type == "HmiToggleSwitch")
-                        {
-                            props["Width"] = 80;
-                            props["Height"] = 40;
-                        }
-                        else
-                        {
+                            // 1. Tính toán tọa độ dọc tự động dựa trên bộ đếm chung Sidebar
+                            int btnY = SIDEBAR_Y_START + (buttonSlot * (SIDEBAR_BTN_H + SIDEBAR_GAP));
+                            props["Left"] = SIDEBAR_X;
+                            props["Top"] = btnY;
                             props["Width"] = SIDEBAR_BTN_W;
                             props["Height"] = SIDEBAR_BTN_H;
+                            props["Text"] = item.Label ?? item.Name;
+
+                            // 2. Cấu hình Event / Script chuyển Screen hoặc ghi Tag cho Button
+                            var scripts = new JObject();
+                            if (!string.IsNullOrEmpty(item.NavigateTo))
+                            {
+                                scripts["KeyUp"] = $"HMIRuntime.UI.SysFct.ChangeScreen('{item.NavigateTo}', null);";
+                            }
+                            else 
+                            {
+                                if (item.KeydownWrite != null)
+                                    scripts["KeyDown"] = $"Tags(\"{item.KeydownWrite.Tag}\").Write({item.KeydownWrite.Value});";
+                                if (item.KeyupWrite != null)
+                                    scripts["KeyUp"] = $"Tags(\"{item.KeyupWrite.Tag}\").Write({item.KeyupWrite.Value});";
+                            }
+                            props["Scripts"] = scripts;
+
+                            buttonSlot++; // Tăng slot cho phần tử tiếp theo
+                            break;
                         }
 
-                        buttonSlot++; // Tăng bộ đếm chung cho Sidebar
-                        break;
+                    case "HmiToggleSwitch":
+                        {
+                            // 1. Tính toán tọa độ dọc tự động dựa trên bộ đếm chung Sidebar
+                            int switchY = SIDEBAR_Y_START + (buttonSlot * (SIDEBAR_BTN_H + SIDEBAR_GAP));
+                            props["Left"] = SIDEBAR_X;
+                            props["Top"] = switchY;
+                            props["Width"] = 80;  // Kích thước tùy chỉnh riêng cho Toggle Switch
+                            props["Height"] = 40;
+                            
+                            // 2. Cấu hình màu sắc hiển thị và Bind Tag, State thay đổi
+                            props["BackColor"] = !string.IsNullOrEmpty(item.BackColor) ? item.BackColor : "242, 244, 255";
+                            props["AlternateBackColor"] = !string.IsNullOrEmpty(item.AlternateBackColor) ? item.AlternateBackColor : "0, 200, 80";
+                            props["TagColor"] = item.BindTag ?? "";
+                            props["Events"] = new JObject 
+                            { 
+                                ["OnStateChanged"] = !string.IsNullOrEmpty(item.BindTag) ? $"Tags(\"{item.BindTag}\").Write(item.IsAlternateState);" : "" 
+                            };
+
+                            buttonSlot++; // Tăng slot cho phần tử tiếp theo
+                            break;
+                        }
+
+                    case "IOField":
+                        {
+                            // 1. Tính toán tọa độ dọc tự động dựa trên bộ đếm chung Sidebar
+                            int ioY = SIDEBAR_Y_START + (buttonSlot * (SIDEBAR_BTN_H + SIDEBAR_GAP));
+                            props["Left"] = SIDEBAR_X;
+                            props["Top"] = ioY;
+                            props["Width"] = 120; // Kích thước tùy chỉnh riêng cho IOField
+                            props["Height"] = 40;
+                            
+                            // 2. Cấu hình Format hiển thị và liên kết Tag giám sát dữ liệu
+                            props["Format"] = item.Format ?? "{0}";
+                            props["StatusTag"] = item.BindTag ?? "";
+
+                            buttonSlot++; // Tăng slot cho phần tử tiếp theo
+                            break;
+                        }
+
+                    case "Clock":
+                        {
+                            // 1. Tính toán tọa độ dọc tự động dựa trên bộ đếm chung Sidebar
+                            int clockY = SIDEBAR_Y_START + (buttonSlot * (SIDEBAR_BTN_H + SIDEBAR_GAP));
+                            props["Left"] = SIDEBAR_X;
+                            props["Top"] = clockY;
+                            props["Width"] = 200; // Kích thước tùy chỉnh riêng cho Clock
+                            props["Height"] = 50;
+                            
+                            // 2. Cấu hình định dạng thời gian và chế độ hiển thị
+                            props["Format"] = item.Format ?? "{P, hh:mm:ss}";
+                            props["ClockMode"] = item.ClockMode ?? "LocalTime";
+
+                            buttonSlot++; // Tăng slot cho phần tử tiếp theo
+                            break;
+                        }
 
                     case "Gauge":
                         props["Left"] = PROCESS_X + 150 + (genericTankSlot * 100);

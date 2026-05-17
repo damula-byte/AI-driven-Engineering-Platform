@@ -23,7 +23,7 @@ RunAnalyzers=
 RunAnalyzersDuringLiveAnalysis=
 SolutionPath=<PATH>../Middleware.sln
 TargetFrameworkIdentifier=.NETFramework
-TargetPath=<PATH>bin/Release/net48/Translator_CLI.exe
+TargetPath=<PATH>bin/Debug/net48/Translator_CLI.exe
 TargetRefPath=
 TemporaryDependencyNodeTargetIdentifier=net48
 
@@ -37,14 +37,14 @@ TemporaryDependencyNodeTargetIdentifier=net48
 /platform:x64
 /errorreport:prompt
 /warn:4
-/define:TRACE;RELEASE;NETFRAMEWORK;NET48;NET30_OR_GREATER;NET35_OR_GREATER;NET40_OR_GREATER;NET45_OR_GREATER;NET451_OR_GREATER;NET452_OR_GREATER;NET46_OR_GREATER;NET461_OR_GREATER;NET462_OR_GREATER;NET47_OR_GREATER;NET471_OR_GREATER;NET472_OR_GREATER;NET48_OR_GREATER
+/define:TRACE;DEBUG;NETFRAMEWORK;NET48;NET30_OR_GREATER;NET35_OR_GREATER;NET40_OR_GREATER;NET45_OR_GREATER;NET451_OR_GREATER;NET452_OR_GREATER;NET46_OR_GREATER;NET461_OR_GREATER;NET462_OR_GREATER;NET47_OR_GREATER;NET471_OR_GREATER;NET472_OR_GREATER;NET48_OR_GREATER
 /highentropyva+
 /nullable:enable
-/debug-
+/debug+
 /debug:portable
 /filealign:512
-/optimize+
-/out:obj\Release\net48\Translator_CLI.exe
+/optimize-
+/out:obj\Debug\net48\Translator_CLI.exe
 /subsystemversion:6.00
 /target:exe
 /warnaserror-
@@ -61,7 +61,7 @@ File Formatter/
  cwc_tia_pipe.cs
  FileFormatter.cs
  ReviewWindow.cs
-obj/Release/net48/
+obj/Debug/net48/
  .NETFramework,Version=v4.8.AssemblyAttributes.cs
  Translator_CLI.AssemblyInfo.cs
  Translator_CLI.GlobalUsings.g.cs
@@ -73,7 +73,7 @@ TIA Portal V20/
  TIA_V20.cs
 
 [metadataReferences]
-../../../../../Program Files/Siemens/Automation/Portal V20/PublicAPI/V20/
+../../../../Program Files/Siemens/Automation/Portal V20/PublicAPI/V20/
  Siemens.Engineering.dll
  Siemens.Engineering.Hmi.dll
 <NETFXREF>/v4.8/
@@ -115,4 +115,4 @@ TIA Portal V20/
  system.runtime.compilerservices.unsafe/4.7.0/ref/netstandard2.0/System.Runtime.CompilerServices.Unsafe.dll
 
 [analyzerConfigFiles]
-obj/Release/net48/Translator_CLI.GeneratedMSBuildEditorConfig.editorconfig
+obj/Debug/net48/Translator_CLI.GeneratedMSBuildEditorConfig.editorconfig

@@ -2026,8 +2026,7 @@ namespace Middleware_console
                 return finalName; // Trả về tên đã tạo để in ra CLI
             }
             catch (Exception ex) { return $"[ERROR] {ex.Message}"; }
-        }
-
+        }     
 
         public void ImportHmiTagsFromCsv(string hmiName, string csvPath)
         {
@@ -2319,139 +2318,374 @@ namespace Middleware_console
         #endregion
 
         #region 9. Download, Online & Diagnostic Operations
+        // public string DownloadToPLC(string deviceName, string targetIpAddress, string pgPcInterfaceName)
+        // {
+        //     if (_project == null) return "Error: Project not loaded.";
+
+        //     try
+        //     {
+        //         // 1. Tìm thiết bị và khởi tạo các Service
+        //         Device device = FindDeviceRecursive(_project, deviceName);
+        //         if (device == null) return $"Error: Device not found '{deviceName}'";
+
+        //         var plcItem = GetCpuItem(device);
+        //         var downloadProvider = plcItem?.GetService<Siemens.Engineering.Download.DownloadProvider>();
+        //         var onlineProvider = plcItem?.GetService<Siemens.Engineering.Online.OnlineProvider>();
+
+        //         if (downloadProvider == null) return "Error: DownloadProvider not available.";
+
+        //         // 2. KIỂM TRA THÔNG TUYẾN (PING)
+        //         // Đảm bảo card mạng ảo Siemens PLCSIM đã nhận diện được PLC
+        //         Console.WriteLine($"[i] Checking Ping to {targetIpAddress}...");
+        //         using (System.Net.NetworkInformation.Ping ping = new System.Net.NetworkInformation.Ping())
+        //         {
+        //             try
+        //             {
+        //                 var reply = ping.Send(targetIpAddress, 2000);
+        //                 if (reply.Status != System.Net.NetworkInformation.IPStatus.Success)
+        //                 {
+        //                     return $"FAILED: Cannot reach PLC at {targetIpAddress}. Check PLCSIM Advanced or network adapter {pgPcInterfaceName}!";
+        //                 }
+        //                 Console.WriteLine($"[√] Ping thành công! (Thời gian phản hồi: {reply.RoundtripTime}ms)");
+        //             }
+        //             catch (Exception ex)
+        //             {
+        //                 return $"FAILED: System error when Pinging: {ex.Message}";
+        //             }
+        //         }
+
+        //         // 3. HANDSHAKE BẢO MẬT (Xử lý bảng Trustworthy của V20)
+        //         try
+        //         {
+        //             dynamic dynamicProvider = onlineProvider;
+        //             // Dùng dynamic để "bắt" sự kiện CertificateValidation nếu nó tồn tại
+        //             dynamicProvider.CertificateValidation += new EventHandler<dynamic>((sender, e) =>
+        //             {
+        //                 Console.WriteLine($"   [√] Đã tự động chấp nhận Certificate bảo mật cho {deviceName}");
+        //                 e.Accept(); // Nhấn "Connect" tự động trên bảng Trustworthy
+        //             });
+        //         }
+        //         catch { /* Bỏ qua nếu phiên bản TIA không hỗ trợ event này trực tiếp */ }
+
+        //         // 4. CẤU HÌNH INTERFACE
+        //         var mode = downloadProvider.Configuration.Modes.Find("PN/IE");
+        //         var pcInterface = mode.PcInterfaces.Find(pgPcInterfaceName, 1);
+        //         if (pcInterface == null) return "FAILED: No suitable network card found.";
+
+        //         var targetConf = pcInterface.TargetInterfaces[0];
+
+        //         // Áp cấu hình để mở Socket kết nối
+        //         downloadProvider.Configuration.ApplyConfiguration(targetConf);
+
+        //         // 5. THỰC THI NẠP (DOWNLOAD)
+        //         Console.WriteLine("[i] Starting program download process...");
+        //         var result = downloadProvider.Download(
+        //             targetConf,
+        //             (preConf) => // Xử lý các bảng thông báo trước khi nạp (Stop Modules, Overwrite...)
+        //             {
+        //                 dynamic d = preConf;
+        //                 try
+        //                 {
+        //                     string configName = preConf.GetType().Name;
+        //                     Console.WriteLine($"   => Processing table: {configName}");
+
+        //                     var prop = preConf.GetType().GetProperty("CurrentSelection");
+        //                     if (prop != null)
+        //                     {
+        //                         var enumType = prop.GetValue(preConf).GetType();
+        //                         foreach (var name in Enum.GetNames(enumType))
+        //                         {
+        //                             // Tự động chọn hành động để tiếp tục nạp
+        //                             if (name.Contains("Stop") || name.Contains("Overwrite") || name.Contains("Accept"))
+        //                             {
+        //                                 prop.SetValue(preConf, Enum.Parse(enumType, name));
+        //                                 Console.WriteLine($"      [√] Đã chọn: {name}");
+        //                                 break;
+        //                             }
+        //                         }
+        //                     }
+        //                     // Xác nhận đã xử lý bảng
+        //                     var chk = preConf.GetType().GetProperty("Checked") ?? preConf.GetType().GetProperty("IsChecked");
+        //                     if (chk != null) chk.SetValue(preConf, true);
+        //                 }
+        //                 catch { }
+        //             },
+        //             (postConf) => // Xử lý sau khi nạp (Restart PLC)
+        //             {
+        //                 try
+        //                 {
+        //                     var prop = postConf.GetType().GetProperty("CurrentSelection");
+        //                     if (prop != null)
+        //                     {
+        //                         var enumType = prop.GetValue(postConf).GetType();
+        //                         foreach (var name in Enum.GetNames(enumType))
+        //                         {
+        //                             if (name.Contains("Start"))
+        //                             {
+        //                                 prop.SetValue(postConf, Enum.Parse(enumType, name));
+        //                                 Console.WriteLine("   [√] PLC is restarting (RUN)...");
+        //                                 break;
+        //                             }
+        //                         }
+        //                     }
+        //                 }
+        //                 catch { }
+        //             },
+        //             Siemens.Engineering.Download.DownloadOptions.Hardware | Siemens.Engineering.Download.DownloadOptions.Software
+        //         );
+
+        //         // 6. TRẢ KẾT QUẢ
+        //         if (result.State == Siemens.Engineering.Download.DownloadResultState.Success)
+        //         {
+        //             return "SUCCESS: Program loaded and PLC is running!";
+        //         }
+        //         else
+        //         {
+        //             var errorMsg = result.Messages.FirstOrDefault(m => m.State == Siemens.Engineering.Download.DownloadResultState.Error)?.Message ?? "Unknown Error";
+        //             return $"FAILED: {result.State}. Chi tiết: {errorMsg}";
+        //         }
+        //     }
+        //     catch (Exception ex)
+        //     {
+        //         return $"CRITICAL ERROR: {ex.GetBaseException().Message}";
+        //     }
+        // }
         public string DownloadToPLC(string deviceName, string targetIpAddress, string pgPcInterfaceName)
-        {
-            if (_project == null) return "Error: Project not loaded.";
-
-            try
             {
-                // 1. Tìm thiết bị và khởi tạo các Service
-                Device device = FindDeviceRecursive(_project, deviceName);
-                if (device == null) return $"Error: Device not found '{deviceName}'";
+                if (_project == null) return "Error: Project not loaded.";
 
-                var plcItem = GetCpuItem(device);
-                var downloadProvider = plcItem?.GetService<Siemens.Engineering.Download.DownloadProvider>();
-                var onlineProvider = plcItem?.GetService<Siemens.Engineering.Online.OnlineProvider>();
-
-                if (downloadProvider == null) return "Error: DownloadProvider not available.";
-
-                // 2. KIỂM TRA THÔNG TUYẾN (PING)
-                // Đảm bảo card mạng ảo Siemens PLCSIM đã nhận diện được PLC
-                Console.WriteLine($"[i] Checking Ping to {targetIpAddress}...");
-                using (System.Net.NetworkInformation.Ping ping = new System.Net.NetworkInformation.Ping())
+                try
                 {
+                    // 1. Find device and initialize system core services
+                    Device device = FindDeviceRecursive(_project, deviceName);
+                    if (device == null) return $"Error: Device '{deviceName}' not found.";
+
+                    var plcItem = GetCpuItem(device);
+                    var downloadProvider = plcItem?.GetService<Siemens.Engineering.Download.DownloadProvider>();
+
+                    if (downloadProvider == null) return "Error: DownloadProvider not available.";
+
+                    // 2. Network connectivity check (PING)
+                    Console.WriteLine($"[i] Checking connection to {targetIpAddress}...");
+                    using (System.Net.NetworkInformation.Ping ping = new System.Net.NetworkInformation.Ping())
+                    {
+                        try
+                        {
+                            var reply = ping.Send(targetIpAddress, 2000);
+                            if (reply.Status != System.Net.NetworkInformation.IPStatus.Success)
+                            {
+                                return $"FAILED: Cannot reach PLC at {targetIpAddress}. Check PLCSIM Advanced or network adapter {pgPcInterfaceName}!";
+                            }
+                            Console.WriteLine($"[√] Ping connection successful! (Response time: {reply.RoundtripTime}ms)");
+                        }
+                        catch (Exception ex)
+                        {
+                            return $"FAILED: Network system error during Pinging: {ex.Message}";
+                        }
+                    }
+
+                    // 3. Register security handshake listener (ONLINE LEGITIMATION)
+                    var mode = downloadProvider.Configuration.Modes.Find("PN/IE");
+                    var pcInterface = mode.PcInterfaces.Find(pgPcInterfaceName, 1);
+                    if (pcInterface == null) return "FAILED: No suitable network adapter found.";
+
+                    var targetConf = pcInterface.TargetInterfaces[0];
+
                     try
                     {
-                        var reply = ping.Send(targetIpAddress, 2000);
-                        if (reply.Status != System.Net.NetworkInformation.IPStatus.Success)
+                        var config = downloadProvider.Configuration;
+                        Type configType = config.GetType();
+                        var evOnlineLegitimation = configType.GetEvent("OnlineLegitimation");
+
+                        if (evOnlineLegitimation != null)
                         {
-                            return $"FAILED: Cannot reach PLC at {targetIpAddress}. Check PLCSIM Advanced or network adapter {pgPcInterfaceName}!";
+                            Type delegateType = evOnlineLegitimation.EventHandlerType;
+                            var methodInfo = typeof(TIA_V20).GetMethod(nameof(OnOnlineLegitimationDirectCallback), 
+                                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public);
+
+                            if (methodInfo != null)
+                            {
+                                Delegate officialSiemensHandler = Delegate.CreateDelegate(delegateType, methodInfo);
+                                try { evOnlineLegitimation.RemoveMethod.Invoke(config, new object[] { officialSiemensHandler }); } catch { }
+                                evOnlineLegitimation.AddMethod.Invoke(config, new object[] { officialSiemensHandler });
+                                
+                                Console.WriteLine("[i] Security handshake handshake provider (OnlineConfigurationDelegate) registered successfully.");
+                            }
                         }
-                        Console.WriteLine($"[√] Ping thành công! (Thời gian phản hồi: {reply.RoundtripTime}ms)");
                     }
                     catch (Exception ex)
                     {
-                        return $"FAILED: System error when Pinging: {ex.Message}";
+                        Console.WriteLine($"[!] Security warning: Failed to attach online legitimation listener ({ex.GetBaseException().Message})");
+                    }
+
+                    // 4. Apply connection network socket configuration
+                    downloadProvider.Configuration.ApplyConfiguration(targetConf);
+
+                    // 5. Execute hardware and software download process
+                    Console.WriteLine("[i] Starting program download process... (Resolving deployment dialogs)");
+                    var result = downloadProvider.Download(
+                        targetConf,
+                        (preConf) => // Handling PRE-DOWNLOAD dialog blocks
+                        {
+                            try
+                            {
+                                string configName = preConf.GetType().Name;
+                                Console.WriteLine($"   => Processing Configuration: {configName}");
+
+                                var propSelection = preConf.GetType().GetProperty("CurrentSelection");
+                                if (propSelection != null)
+                                {
+                                    var enumType = propSelection.GetValue(preConf).GetType();
+                                    string targetValue = "";
+
+                                    switch (configName)
+                                    {
+                                        case "StopModules":
+                                            targetValue = "StopAll";
+                                            break;
+                                        case "DifferentTargetConfiguration":
+                                        case "InitializeMemory":
+                                        case "ActiveTestCanBeAborted":
+                                            targetValue = "AcceptAll";
+                                            break;
+                                        case "ProtectionLevelChanged":
+                                            targetValue = "ContinueDownloading";
+                                            break;
+                                        case "OverwriteSystemData":
+                                            targetValue = "Overwrite";
+                                            break;
+                                        case "ExpandDownload":
+                                            targetValue = "Download";
+                                            break;
+                                        case "LoadIdentificationData":
+                                            targetValue = "LoadData";
+                                            break;
+                                        case "ResetModule":
+                                            targetValue = "DeleteAll";
+                                            break;
+                                        default:
+                                            var names = Enum.GetNames(enumType);
+                                            targetValue = names.FirstOrDefault(n => n.Contains("Stop") || n.Contains("Overwrite") || n.Contains("Accept") || n.Contains("Continue")) ?? names.FirstOrDefault();
+                                            break;
+                                    }
+
+                                    if (!string.IsNullOrEmpty(targetValue))
+                                    {
+                                        propSelection.SetValue(preConf, Enum.Parse(enumType, targetValue));
+                                        Console.WriteLine($"      [√] Auto-Selected Value: {targetValue}");
+                                    }
+                                }
+
+                                var propChecked = preConf.GetType().GetProperty("Checked");
+                                if (propChecked != null)
+                                {
+                                    propChecked.SetValue(preConf, true);
+                                    Console.WriteLine($"      [√] Auto-Checked Action: True");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"      [X] Warning: Error processing configuration dialog: {ex.Message}");
+                            }
+                        },
+                        (postConf) => // Handling POST-DOWNLOAD configuration (PLC Mode Restart)
+                        {
+                            try
+                            {
+                                string configName = postConf.GetType().Name;
+                                var prop = postConf.GetType().GetProperty("CurrentSelection");
+                                if (prop != null)
+                                {
+                                    var enumType = prop.GetValue(postConf).GetType();
+                                    
+                                    if (configName == "StartModules" || configName == "StartBackupModules")
+                                    {
+                                        prop.SetValue(postConf, Enum.Parse(enumType, "StartModule"));
+                                        Console.WriteLine("   [√] Post-Action: PLC execution mode changing to RUN.");
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"      [X] Warning: Error processing post-download action: {ex.Message}");
+                            }
+                        },
+                        Siemens.Engineering.Download.DownloadOptions.Hardware | Siemens.Engineering.Download.DownloadOptions.Software
+                    );
+
+                    // 6. Return final evaluation status to CLI shell
+                    if (result.State == Siemens.Engineering.Download.DownloadResultState.Success)
+                    {
+                        return "SUCCESS: Program loaded and PLC is running!";
+                    }
+                    else
+                    {
+                        var errorMsg = result.Messages.FirstOrDefault(m => m.State == Siemens.Engineering.Download.DownloadResultState.Error)?.Message ?? "Unknown Deployment Error";
+                        return $"FAILED: {result.State}. Details: {errorMsg}";
                     }
                 }
-
-                // 3. HANDSHAKE BẢO MẬT (Xử lý bảng Trustworthy của V20)
+                catch (Exception ex)
+                {
+                    return $"CRITICAL ERROR: {ex.GetBaseException().Message}";
+                }
+            }
+        public static void OnOnlineLegitimationDirectCallback(object e)
+            {
+                Console.WriteLine();
+                Console.WriteLine("[SECURITY ALERT] PLC ONLINE LEGITIMATION REQUIRED");
+                
                 try
                 {
-                    dynamic dynamicProvider = onlineProvider;
-                    // Dùng dynamic để "bắt" sự kiện CertificateValidation nếu nó tồn tại
-                    dynamicProvider.CertificateValidation += new EventHandler<dynamic>((sender, e) =>
+                    if (e != null)
                     {
-                        Console.WriteLine($"   [√] Đã tự động chấp nhận Certificate bảo mật cho {deviceName}");
-                        e.Accept(); // Nhấn "Connect" tự động trên bảng Trustworthy
-                    });
-                }
-                catch { /* Bỏ qua nếu phiên bản TIA không hỗ trợ event này trực tiếp */ }
+                        dynamic dynamicArgs = e;
+                        string plcName = dynamicArgs.PlcName ?? "Unknown Station";
+                        string info = dynamicArgs.VerificationInfo ?? "N/A";
+                        Console.WriteLine($" -> Target Station: {plcName}");
+                        Console.WriteLine($" -> Security Status: {info}");
+                    }
+                    
+                    Console.Write("Do you trust this device and allow secure communication establishment? (yes/no): ");
+                    string userResponse = Console.ReadLine()?.Trim().ToLower();
 
-                // 4. CẤU HÌNH INTERFACE
-                var mode = downloadProvider.Configuration.Modes.Find("PN/IE");
-                var pcInterface = mode.PcInterfaces.Find(pgPcInterfaceName, 1);
-                if (pcInterface == null) return "FAILED: No suitable network card found.";
-
-                var targetConf = pcInterface.TargetInterfaces[0];
-
-                // Áp cấu hình để mở Socket kết nối
-                downloadProvider.Configuration.ApplyConfiguration(targetConf);
-
-                // 5. THỰC THI NẠP (DOWNLOAD)
-                Console.WriteLine("[i] Starting program download process...");
-                var result = downloadProvider.Download(
-                    targetConf,
-                    (preConf) => // Xử lý các bảng thông báo trước khi nạp (Stop Modules, Overwrite...)
+                    if (userResponse == "yes" || userResponse == "y" || string.IsNullOrEmpty(userResponse))
                     {
-                        dynamic d = preConf;
-                        try
+                        Console.WriteLine("   [√] Connection response sent to TIA Core: CONNECTION ALLOWED.");
+
+                        if (e != null)
                         {
-                            string configName = preConf.GetType().Name;
-                            Console.WriteLine($"   => Processing table: {configName}");
+                            Type argType = e.GetType();
+                            var propSelection = argType.GetProperty("CurrentSelection");
 
-                            var prop = preConf.GetType().GetProperty("CurrentSelection");
-                            if (prop != null)
+                            if (propSelection != null)
                             {
-                                var enumType = prop.GetValue(preConf).GetType();
-                                foreach (var name in Enum.GetNames(enumType))
+                                Type enumType = propSelection.GetValue(e).GetType();
+                                var enumNames = Enum.GetNames(enumType);
+
+                                string targetEnumName = enumNames.FirstOrDefault(n => n.Contains("Verify") && !n.Contains("Non")) 
+                                                    ?? enumNames.FirstOrDefault(n => n.Contains("Accept") || n.Contains("Allow"))
+                                                    ?? enumNames.FirstOrDefault(n => n != "NonVerified");
+
+                                if (!string.IsNullOrEmpty(targetEnumName))
                                 {
-                                    // Tự động chọn hành động để tiếp tục nạp
-                                    if (name.Contains("Stop") || name.Contains("Overwrite") || name.Contains("Accept"))
-                                    {
-                                        prop.SetValue(preConf, Enum.Parse(enumType, name));
-                                        Console.WriteLine($"      [√] Đã chọn: {name}");
-                                        break;
-                                    }
-                                }
-                            }
-                            // Xác nhận đã xử lý bảng
-                            var chk = preConf.GetType().GetProperty("Checked") ?? preConf.GetType().GetProperty("IsChecked");
-                            if (chk != null) chk.SetValue(preConf, true);
-                        }
-                        catch { }
-                    },
-                    (postConf) => // Xử lý sau khi nạp (Restart PLC)
-                    {
-                        try
-                        {
-                            var prop = postConf.GetType().GetProperty("CurrentSelection");
-                            if (prop != null)
-                            {
-                                var enumType = prop.GetValue(postConf).GetType();
-                                foreach (var name in Enum.GetNames(enumType))
-                                {
-                                    if (name.Contains("Start"))
-                                    {
-                                        prop.SetValue(postConf, Enum.Parse(enumType, name));
-                                        Console.WriteLine("   [√] PLC is restarting (RUN)...");
-                                        break;
-                                    }
+                                    var enumValue = Enum.Parse(enumType, targetEnumName);
+                                    propSelection.SetValue(e, enumValue);
+                                    Console.WriteLine($"   [√] Verification selection updated to: {targetEnumName}");
                                 }
                             }
                         }
-                        catch { }
-                    },
-                    Siemens.Engineering.Download.DownloadOptions.Hardware | Siemens.Engineering.Download.DownloadOptions.Software
-                );
-
-                // 6. TRẢ KẾT QUẢ
-                if (result.State == Siemens.Engineering.Download.DownloadResultState.Success)
-                {
-                    return "SUCCESS: Program loaded and PLC is running!";
+                    }
+                    else
+                    {
+                        Console.WriteLine("   [X] Connection response sent to TIA Core: CONNECTION DENIED.");
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    var errorMsg = result.Messages.FirstOrDefault(m => m.State == Siemens.Engineering.Download.DownloadResultState.Error)?.Message ?? "Unknown Error";
-                    return $"FAILED: {result.State}. Chi tiết: {errorMsg}";
+                    Console.WriteLine($"   [!] Exception handled during secure handshake validation: {ex.Message}");
                 }
+                Console.WriteLine();
             }
-            catch (Exception ex)
-            {
-                return $"CRITICAL ERROR: {ex.GetBaseException().Message}";
-            }
-        }
-
 
         // --- BỔ SUNG: THAY ĐỔI TRẠNG THÁI PLC (RUN/STOP) ---
         // --- FUNCTION: MANUAL START/STOP PLC (FIX LỖI STOP KHI ĐANG RUN) ---
