@@ -523,17 +523,58 @@ namespace TIA_Copilot_CLI
                         PrintIcon("X", "System Error: " + ex.Message, ConsoleColor.Red);
                     }
                     break;
-                case "hmi-conn":
-                    if (args.Length < 4)
+               case "hmi-conn":
+                    PrintIcon("i", "=== WinCC Unified Connection Wizard ===", ConsoleColor.Cyan);
+                    Console.WriteLine("Leave field empty and press [Enter] to skip or apply default value.\n");
+
+                    // 1. NHẬP COMMUNICATION DRIVER
+                    Console.Write("1. Enter Communication Driver [Default: SIMATIC S7 1200/1500]: ");
+                    string inputDriver = Console.ReadLine()?.Trim().Replace("\"", "") ?? "";
+                    if (string.IsNullOrEmpty(inputDriver))
                     {
-                        PrintIcon("!", "Syntax: tia hmi-conn <HMI_IP> <PLC_IP>", ConsoleColor.Yellow);
-                        break;
+                        inputDriver = "SIMATIC S7 1200/1500";
+                        PrintIcon("i", "   -> Applied Default: SIMATIC S7 1200/1500", ConsoleColor.DarkGray);
                     }
 
-                    PrintIcon("i", "Analyzing connection...", ConsoleColor.Cyan);
+                    // 2. NHẬP HMI IP ADDRESS
+                    Console.Write("2. Enter HMI Device IP Address [Default: 192.168.0.2]: ");
+                    string inputHmiIp = Console.ReadLine()?.Trim() ?? "";
+                    if (string.IsNullOrEmpty(inputHmiIp))
+                    {
+                        inputHmiIp = "192.168.0.2";
+                        PrintIcon("i", "   -> Applied Default: 192.168.0.2", ConsoleColor.DarkGray);
+                    }
 
-                    // Call function and receive the actual Connection name created (example: HMI_PLC_Conn_2)
-                    string resultName = _tiaEngine.CreateUnifiedConnectionCombined(_currentDeviceName, args[2], args[3]);
+                    // 🌟 BỔ SUNG: NHẬP HMI ACCESS POINT
+                    Console.Write("3. Enter HMI Access Point [Default: S7ONLINE]: ");
+                    string inputAccessPoint = Console.ReadLine()?.Trim() ?? "";
+                    if (string.IsNullOrEmpty(inputAccessPoint))
+                    {
+                        inputAccessPoint = "S7ONLINE";
+                        PrintIcon("i", "   -> Applied Default: S7ONLINE", ConsoleColor.DarkGray);
+                    }
+
+                    // 3. NHẬP PLC IP ADDRESS
+                    Console.Write("4. Enter Partner PLC IP Address [Default: 192.168.0.1]: ");
+                    string inputPlcIp = Console.ReadLine()?.Trim() ?? "";
+                    if (string.IsNullOrEmpty(inputPlcIp))
+                    {
+                        inputPlcIp = "192.168.0.1";
+                        PrintIcon("i", "   -> Applied Default: 192.168.0.1", ConsoleColor.DarkGray);
+                    }
+
+                    Console.WriteLine();
+                    PrintIcon("i", "Analyzing configuration and generating dynamic connection...", ConsoleColor.Cyan);
+
+                    // 🌟 GỌI HÀM INTERVENE ĐỘNG VỚI CÁC THAM SỐ ĐÃ QUA BỘ LỌC WIZARD
+                    // Nạp thêm biến inputAccessPoint vào tham số thứ 5 (extraParam1) của hàm Engine
+                    string resultName = _tiaEngine.CreateUnifiedConnectionDynamic(
+                        _currentDeviceName, 
+                        inputDriver, 
+                        inputHmiIp, 
+                        inputPlcIp, 
+                        inputAccessPoint
+                    );
 
                     if (resultName.StartsWith("[ERROR]"))
                     {
@@ -542,7 +583,9 @@ namespace TIA_Copilot_CLI
                     else
                     {
                         PrintIcon("√", $"Created connection successfully: {resultName}", ConsoleColor.Green);
-                        PrintIcon("i", $"Address: {args[2]} <-> {args[3]}", ConsoleColor.DarkGray);
+                        PrintIcon("i", $"Protocol  : {inputDriver}", ConsoleColor.DarkGray);
+                        PrintIcon("i", $"Access Pt : {inputAccessPoint}", ConsoleColor.DarkGray);
+                        PrintIcon("i", $"Topology  : {inputHmiIp} <-> {inputPlcIp}", ConsoleColor.DarkGray);
                     }
                     break;
 
@@ -1260,7 +1303,7 @@ namespace TIA_Copilot_CLI
             Console.WriteLine("  tia add-module                : Launch the Module Installation Wizard to plug SM/CM modules into slots.");
             Console.WriteLine("  tia choose <Name>             : Lock target to PLC. Example: tia choose \"PLC_01\"");
             Console.WriteLine("  tia changeip                  : Open network configuration wizard (IP, Subnet, Gateway) for the selected device.");
-            Console.WriteLine("  tia hmi-conn <H_IP> <P_IP>    : Connect HMI-PLC. Example: tia hmi-conn \"192.168.0.2\" \"192.168.0.1\"");
+            Console.WriteLine("  tia hmi-conn                  : Open WinCC Unified Connection Wizard (Interactive step-by-step)");
 
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("\n[9-13: PROGRAMMING & DATA]");
