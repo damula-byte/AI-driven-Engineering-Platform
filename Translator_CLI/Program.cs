@@ -1303,7 +1303,7 @@ namespace TIA_Copilot_CLI
             Console.WriteLine("  tia add-module                : Launch the Module Installation Wizard to plug SM/CM modules into slots.");
             Console.WriteLine("  tia choose <Name>             : Lock target to PLC. Example: tia choose \"PLC_01\"");
             Console.WriteLine("  tia changeip                  : Open network configuration wizard (IP, Subnet, Gateway) for the selected device.");
-            Console.WriteLine("  tia hmi-conn <H_IP> <P_IP>    : Connect HMI-PLC. Example: tia hmi-conn \"192.168.0.2\" \"192.168.0.1\"");
+            Console.WriteLine("  tia hmi-conn                  : Open WinCC Unified Connection Wizard (Interactive step-by-step)");
 
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("\n[9-13: PROGRAMMING & DATA]");
