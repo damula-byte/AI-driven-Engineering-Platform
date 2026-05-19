@@ -186,6 +186,12 @@ namespace TIA_Copilot_CLI
                     HandleTiaCommand(args);
                     return;
                 }
+                
+                if (command == "clear")
+                {
+                    Console.Clear();
+                    return;
+                }
 
                 switch (command)
                 {

@@ -667,7 +667,7 @@ AI_Backend/chat_memory.db
 AI_Backend/__pycache__/
 # 2. CHỈ bỏ qua thư mục ChromaDB nằm trong Translator_CLI
 Translator_CLI/chroma_db_data/
-Translator_CLI/chroma_db_data/chroma.sqlite3
+Translator_CLI/chroma_db_data/chroma.sqlite3s
 tags_cache.txt
 TIA_Copilot_Context_Dump.txt
 *.scl
