@@ -10,6 +10,7 @@ using Middleware_console;
 using System.Windows.Forms;
 using System.Threading;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 
 
@@ -17,6 +18,13 @@ namespace TIA_Copilot_CLI
 {
     public class Program
     {
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr GetConsoleWindow();
+
+        private const int SW_HIDE = 0;
         private static TIA_V20 _tiaEngine = new TIA_V20();
         private static string _currentProjectName = "None";
         private static string _currentProjectPath = "None";
@@ -60,6 +68,63 @@ namespace TIA_Copilot_CLI
                 Console.WriteLine("Press Enter to exit...");
                 Console.ReadLine();
                 return;
+            }
+
+            if (args.Length == 1)
+            {
+                string filePath = args[0];
+                string extension = Path.GetExtension(filePath).ToLower();
+
+                if (File.Exists(filePath) && (extension == ".scl" || extension == ".json"))
+                {
+                    // 1. Giấu hoàn toàn màn hình đen CLI ngay lập tức dưới nền
+                    IntPtr consoleHandle = GetConsoleWindow();
+                    if (consoleHandle != IntPtr.Zero)
+                    {
+                        ShowWindow(consoleHandle, SW_HIDE);
+                    }
+
+                    // Kích hoạt cấu hình giao diện hệ thống (Giữ nguyên của bạn)
+                    Application.EnableVisualStyles();
+                    Application.SetCompatibleTextRenderingDefault(false);
+
+                    // 🌟 GIẢI PHÁP ĐỘC QUYỀN: Tạo bộ giám sát kiểm tra Form sau khi luồng Message Loop bắt đầu
+                    System.Windows.Forms.Timer zombieKillerTimer = new System.Windows.Forms.Timer();
+                    zombieKillerTimer.Interval = 200; // Cứ mỗi 200ms kiểm tra một lần
+                    
+                    bool formHasOpened = false;
+                    int startupGraceTicks = 0;
+
+                    zombieKillerTimer.Tick += (s, e) =>
+                    {
+                        if (Application.OpenForms.Count > 0)
+                        {
+                            formHasOpened = true; // Xác nhận Form đã nạp vào bộ nhớ và hiển thị thành công!
+                        }
+                        else
+                        {
+                            startupGraceTicks++;
+                            // Trường hợp 1: Form đã từng mở lên thành công và bây giờ người dùng bấm [X] tắt đi (Count về 0)
+                            // Trường hợp 2: Quá 3 giây (15 ticks * 200ms) lỗi nạp file không có Form nào thèm lên
+                            if (formHasOpened || startupGraceTicks > 15)
+                            {
+                                zombieKillerTimer.Stop();
+                                Application.Exit();
+                                Environment.Exit(0); // Tiêu diệt triệt để tiến trình ma, giải phóng RAM sạch sẽ!
+                            }
+                        }
+                    };
+                    
+                    // Kích hoạt bộ giám sát chạy ngầm trước
+                    zombieKillerTimer.Start();
+
+                    // 2. Gọi hàm mở giao diện đồ họa Chat View / Reviewer xịn sò (Giữ nguyên của bạn)
+                    ReviewWindow.OpenReviewer(filePath);
+
+                    // 3. Chạy vòng lặp tin nhắn vô điều kiện để nuôi Form sống mượt mà (Giống đoạn code chạy tốt của bạn)
+                    Application.Run();
+                    return; 
+                }
             }
 
             if (args.Length > 0)
@@ -186,7 +251,7 @@ namespace TIA_Copilot_CLI
                     HandleTiaCommand(args);
                     return;
                 }
-                
+
                 if (command == "clear")
                 {
                     Console.Clear();
@@ -375,6 +440,8 @@ namespace TIA_Copilot_CLI
             catch (Exception ex) { PrintIcon("×", $"Lỗi: {ex.Message}", ConsoleColor.Red); }
         }
 
+
+
         public static void HandleTiaCommand(string[] args)
         {
             if (args.Length < 2)
@@ -529,7 +596,7 @@ namespace TIA_Copilot_CLI
                         PrintIcon("X", "System Error: " + ex.Message, ConsoleColor.Red);
                     }
                     break;
-               case "hmi-conn":
+                case "hmi-conn":
                     PrintIcon("i", "=== WinCC Unified Connection Wizard ===", ConsoleColor.Cyan);
                     Console.WriteLine("Leave field empty and press [Enter] to skip or apply default value.\n");
 
@@ -575,10 +642,10 @@ namespace TIA_Copilot_CLI
                     // 🌟 GỌI HÀM INTERVENE ĐỘNG VỚI CÁC THAM SỐ ĐÃ QUA BỘ LỌC WIZARD
                     // Nạp thêm biến inputAccessPoint vào tham số thứ 5 (extraParam1) của hàm Engine
                     string resultName = _tiaEngine.CreateUnifiedConnectionDynamic(
-                        _currentDeviceName, 
-                        inputDriver, 
-                        inputHmiIp, 
-                        inputPlcIp, 
+                        _currentDeviceName,
+                        inputDriver,
+                        inputHmiIp,
+                        inputPlcIp,
                         inputAccessPoint
                     );
 
@@ -1289,6 +1356,7 @@ namespace TIA_Copilot_CLI
             Console.WriteLine("  chat status                                    : Check Session status");
             Console.WriteLine("  chat check-data                                : Check Session data");
             Console.WriteLine("  config                 : Configure AI's api key settings");
+            Console.WriteLine("  clear                  : Clear the console screen");
 
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine("\n[TIA MODULE]");

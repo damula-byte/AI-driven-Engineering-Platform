@@ -8,7 +8,7 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <UseWindowsForms>true</UseWindowsForms>
-    <ApplicationIcon>logo_app_DATN.ico</ApplicationIcon>    
+    <ApplicationIcon>logo_app_DATN.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
