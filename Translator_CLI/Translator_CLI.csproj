@@ -38,10 +38,7 @@
     <Reference Include="Siemens.Engineering.Hmi">
       <HintPath>C:\Program Files\Siemens\Automation\Portal V20\PublicAPI\V20\Siemens.Engineering.Hmi.dll</HintPath>
     </Reference>
-<<<<<<< HEAD
 
-=======
->>>>>>> acfc2d619bc830b9923c2d1605fca3095bdd07f4
     <Reference Include="Siemens.Engineering">
       <HintPath>D:\Program Files\Siemens\Automation\Portal V20\PublicAPI\V20\Siemens.Engineering.dll</HintPath>
     </Reference>
