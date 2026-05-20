@@ -14,6 +14,7 @@ using System.Runtime.InteropServices;
 
 
 
+
 namespace TIA_Copilot_CLI
 {
     public class Program
@@ -35,13 +36,15 @@ namespace TIA_Copilot_CLI
         public static string _currentSessionId = "default";
         public static bool capstoneMode = false;
         private static ModuleCatalogWrapper moduleData;
+        private const int STD_OUTPUT_HANDLE = -11;
+        private const uint ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004;
 
         [STAThread]
         static async Task Main(string[] args)
         {
             // RunSclCorrectorTest();
             // return;
-
+            EnableAnsiColorSupport();
             Console.OutputEncoding = Encoding.UTF8;
             Console.InputEncoding = Encoding.UTF8;
             /*
@@ -1611,6 +1614,35 @@ namespace TIA_Copilot_CLI
             else
             {
                 capstoneMode = false;
+            }
+        }
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr GetStdHandle(int nStdHandle);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
+
+        public static void EnableAnsiColorSupport()
+        {
+            try
+            {
+                // Kiểm tra nếu đang chạy trên hệ điều hành Windows mới xử lý P/Invoke
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    var iStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
+                    if (GetConsoleMode(iStdOut, out uint outConsoleMode))
+                    {
+                        outConsoleMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+                        SetConsoleMode(iStdOut, outConsoleMode);
+                    }
+                }
+            }
+            catch
+            {
+                // Bỏ qua nếu môi trường không hỗ trợ để tránh sập app ẩn
             }
         }
 

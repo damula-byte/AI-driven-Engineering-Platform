@@ -674,3 +674,4 @@ TIA_Copilot_Context_Dump.txt
 *_Tags.csv
 api_cooldown.json
 *.lscache
+.fake
