@@ -25,7 +25,8 @@ namespace TIA_Copilot_CLI
         private static extern IntPtr GetConsoleWindow();
 
         private const int SW_HIDE = 0;
-        private static TIA_V20 _tiaEngine = new TIA_V20();
+        private static TIA_V20 _tiaEngine = null;
+        // private static TIA_V20 _tiaEngine = new TIA_V20();
         private static string _currentProjectName = "None";
         private static string _currentProjectPath = "None";
         private static string _currentDeviceName = "None";
@@ -53,22 +54,6 @@ namespace TIA_Copilot_CLI
                 return;
             }
             */
-            AiEngine.InitializePaths();
-
-            // 2. DEBUG CODE: Print to screen to see how it recognizes the path
-            Console.WriteLine("=== DEBUG PATH ===");
-            Console.WriteLine("C# app running at: " + AppDomain.CurrentDomain.BaseDirectory);
-            Console.WriteLine("Python found at  : " + AiEngine.PYTHON_EXE_PATH);
-            Console.WriteLine("=======================\n");
-
-            // 3. NEW LOGIC: Only check EXE file, do NOT check SCRIPT file anymore
-            if (string.IsNullOrEmpty(AiEngine.PYTHON_EXE_PATH) || !File.Exists(AiEngine.PYTHON_EXE_PATH))
-            {
-                PrintIcon("!", "CONFIGURATION ERROR: Cannot find ai_engine.exe or python.exe!", ConsoleColor.Red);
-                Console.WriteLine("Press Enter to exit...");
-                Console.ReadLine();
-                return;
-            }
 
             if (args.Length == 1)
             {
@@ -126,6 +111,38 @@ namespace TIA_Copilot_CLI
                     return; 
                 }
             }
+            
+            try
+            {
+                // Ép kiểm tra và nạp bộ động cơ Openness ở đây để tránh làm sập luồng xem file bên trên
+                _tiaEngine = new TIA_V20();
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("[CRITICAL] KHÔNG THỂ KHỞI ĐỘNG ĐỘNG CƠ TIA OPENNESS!");
+                Console.WriteLine($"Môi trường hiện tại thiếu phần mềm TIA Portal V20 hoặc chưa cấu hình Quyền bảo mật.");
+                Console.WriteLine($"Chi tiết hệ thống: {ex.Message}\n");
+                Console.ResetColor();
+                Console.WriteLine("Nhấn phím Enter để tiếp tục chạy chế độ giả lập offline...");
+                Console.ReadLine();
+            }
+            AiEngine.InitializePaths();
+
+            // 2. DEBUG CODE: Print to screen to see how it recognizes the path
+            Console.WriteLine("=== DEBUG PATH ===");
+            Console.WriteLine("C# app running at: " + AppDomain.CurrentDomain.BaseDirectory);
+            Console.WriteLine("Python found at  : " + AiEngine.PYTHON_EXE_PATH);
+            Console.WriteLine("=======================\n");
+
+            // 3. NEW LOGIC: Only check EXE file, do NOT check SCRIPT file anymore
+            if (string.IsNullOrEmpty(AiEngine.PYTHON_EXE_PATH) || !File.Exists(AiEngine.PYTHON_EXE_PATH))
+            {
+                PrintIcon("!", "CONFIGURATION ERROR: Cannot find ai_engine.exe or python.exe!", ConsoleColor.Red);
+                Console.WriteLine("Press Enter to exit...");
+                Console.ReadLine();
+                return;
+            }
 
             if (args.Length > 0)
             {
@@ -137,50 +154,6 @@ namespace TIA_Copilot_CLI
             }
         }
 
-        // static async Task RunInteractiveShell()
-        // {
-        //     var setting = SettingsManager.Load();
-        //     string mode = setting.Mode.ToUpper();
-        //     string userName = Environment.UserName;
-        //     string appName = "TIACopilot";
-
-        //     ReadLine.HistoryEnabled = true;
-
-
-        //     Console.Clear();
-        //     Console.ForegroundColor = ConsoleColor.Cyan;
-        //     Console.WriteLine("==========================================================");
-        //     Console.WriteLine($"Welcome to {appName} CLI, {userName}!");
-        //     Console.WriteLine(" Type a command, press [ESC] to exit, or type 'help' for usage.");
-        //     Console.WriteLine("==========================================================\n");
-        //     Console.ResetColor();
-
-        //     while (true)
-        //     {
-        //         Console.ForegroundColor = ConsoleColor.Green;
-        //         Console.Write($"{userName}-{appName}-[{mode}]");
-        //         Console.ResetColor();
-        //         Console.Write(" > ");
-
-        //         string input = ReadLineWithEscape();
-
-        //         if (input == null || input.Trim().ToLower() == "exit")
-        //         {
-        //             PrintIcon("!", "Exit command received. Closing engine...", ConsoleColor.Yellow);
-        //             break;
-        //         }
-
-        //         if (string.IsNullOrWhiteSpace(input)) continue;
-
-        //         string[] cmdArgs = Regex.Matches(input, @"[\""].+?[\""]|[^ ]+")
-        //                                 .Cast<Match>().Select(m => m.Value.Trim('"'))
-        //                                 .ToArray();
-
-        //         await RouteCommand(cmdArgs);
-        //         var settings = SettingsManager.Load();
-        //         mode = settings.Mode.ToUpper();
-        //     }
-        // }
         static async Task RunInteractiveShell()
         {
             var setting = SettingsManager.Load();
