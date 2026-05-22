@@ -81,7 +81,7 @@ namespace TIA_Copilot_CLI
             }
 
             Console.WriteLine($"\n🚀 [START] Generating code for block: {targetType}");
-            Console.WriteLine($"[INFO] Key using: {keytoPass}");
+            //Console.WriteLine($"[INFO] Key using: {keytoPass}");
 
             string userTagsContent = "";
 

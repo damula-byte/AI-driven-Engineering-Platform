@@ -71,8 +71,6 @@ namespace TIA_Copilot_CLI
                     {
                         ShowWindow(consoleHandle, SW_HIDE);
                     }
-
-                    // Kích hoạt cấu hình giao diện hệ thống (Giữ nguyên của bạn)
                     Application.EnableVisualStyles();
                     Application.SetCompatibleTextRenderingDefault(false);
 
