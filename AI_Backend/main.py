@@ -123,8 +123,36 @@ def send_response(data_dict):
 #     sys.stdout.buffer.write(output_bytes)
 #     sys.stdout.buffer.flush()
 
-def clean_json_response(text):
-    cleaned = text.strip()
+# def clean_json_response(text):
+#     cleaned = text.strip()
+#     if cleaned.startswith("```json"):
+#         cleaned = cleaned.replace("```json", "", 1)
+#     if cleaned.startswith("```"):
+#         cleaned = cleaned.replace("```", "", 1)
+#     if cleaned.endswith("```"):
+#         cleaned = cleaned[:-3]
+#     return cleaned.strip()ư
+
+def clean_json_response(content_list):
+    # Phòng hờ trường hợp hệ thống truyền nhầm một chuỗi String vào hàm này
+    if isinstance(content_list, str):
+        return clean_json_response(content_list)
+    if not isinstance(content_list, list):
+        return str(content_list).strip()
+    extracted_fragments = []
+    # Duyệt qua từng phần tử trong danh sách để bóc text an toàn
+    for part in content_list:
+        if isinstance(part, str):
+            extracted_fragments.append(part)
+        elif isinstance(part, dict):
+            extracted_fragments.append(part.get("text", ""))
+        elif hasattr(part, "text"):  # Đánh chặn cấu trúc Block Object của LangChain
+            extracted_fragments.append(getattr(part, "text", ""))
+        elif hasattr(part, "content"): # Dự phòng trường hợp là Message Object
+            extracted_fragments.append(getattr(part, "content", ""))
+    # Gộp toàn bộ các mảnh text lại thành một chuỗi duy nhất
+    full_text = "".join(extracted_fragments)
+    cleaned = full_text.strip()
     if cleaned.startswith("```json"):
         cleaned = cleaned.replace("```json", "", 1)
     if cleaned.startswith("```"):
@@ -132,6 +160,7 @@ def clean_json_response(text):
     if cleaned.endswith("```"):
         cleaned = cleaned[:-3]
     return cleaned.strip()
+
 
 # Fixing \n and \t in the body_code string to ensure they are interpreted correctly by the assembler
 def normalize_body_code(obj):
@@ -159,13 +188,13 @@ def detect_model_from_key(api_key: str):
         from langchain_google_genai import ChatGoogleGenerativeAI
         os.environ["GOOGLE_API_KEY"] = key
         llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+            model="gemini-3.5-flash",
             temperature=0.1,
             convert_system_message_to_human=True,
             google_api_key=key,
             model_kwargs={"response_mime_type": "application/json"},
         )
-        return llm, "Gemini (gemini-2.5-flash)"
+        return llm, "Gemini (gemini-3.5-flash)"
 
     # ── Anthropic Claude ──────────────────────────────────────────────────────
     elif key.startswith("sk-ant-"):
@@ -716,13 +745,13 @@ def main():
                 os.environ["GOOGLE_API_KEY"] = dev_key
                 from langchain_google_genai import ChatGoogleGenerativeAI
                 llm = ChatGoogleGenerativeAI(
-                    model="gemini-2.5-flash",
+                    model="gemini-3.5-flash",
                     temperature=0.1,
                     convert_system_message_to_human=True,
                     google_api_key=dev_key,
                     model_kwargs={"response_mime_type": "application/json"},
                 )
-                provider_name = "Gemini (gemini-2.5-flash) [DEV]"
+                provider_name = "Gemini (gemini-3.5-flash) [DEV]"
             else:
                 try:
                     llm, provider_name = detect_model_from_key(custom_api_key)
@@ -789,7 +818,7 @@ def main():
                         new_key = app_secrets.get_next_api_key()
                         os.environ["GOOGLE_API_KEY"] = new_key
                         llm = ChatGoogleGenerativeAI(
-                            model="gemini-2.5-flash",
+                            model="gemini-3.5-flash",
                             temperature=0.1,
                             convert_system_message_to_human=True,
                             google_api_key=new_key,
