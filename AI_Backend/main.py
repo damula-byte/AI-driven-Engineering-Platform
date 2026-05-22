@@ -163,6 +163,7 @@ def clean_json_response(content_list): #List
         
     return cleaned.strip()
 
+
 # Fixing \n and \t in the body_code string to ensure they are interpreted correctly by the assembler
 def normalize_body_code(obj):
     if isinstance(obj, str):
@@ -190,11 +191,13 @@ def detect_model_from_key(api_key: str):
         os.environ["GOOGLE_API_KEY"] = key
         llm = ChatGoogleGenerativeAI(
             model="gemini-3.5-flash",
+            model="gemini-3.5-flash",
             temperature=0.1,
             convert_system_message_to_human=True,
             google_api_key=key,
             model_kwargs={"response_mime_type": "application/json"},
         )
+        return llm, "Gemini (gemini-3.5-flash)"
         return llm, "Gemini (gemini-3.5-flash)"
 
     # ── Anthropic Claude ──────────────────────────────────────────────────────

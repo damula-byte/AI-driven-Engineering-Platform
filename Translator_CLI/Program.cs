@@ -750,7 +750,43 @@ namespace TIA_Copilot_CLI
                     drawSCADA.Stop();
                     LogPerformance("DrawSCADA", drawSCADA.ElapsedMilliseconds);
                     break;
+                case "draw-hmi":
+{ 
+    Stopwatch drawHMI = new Stopwatch();
+    drawHMI.Start();
+    
+    string[] hmiJsonPaths = GetPathsOrOpenDialogV2(args, 2, "JSON HMI (*.json)|*.json");
 
+    foreach (string path in hmiJsonPaths)
+    {
+        if (!string.IsNullOrEmpty(path))
+        {
+            try
+            {
+                PrintIcon("i", $"Drawing screen from: {Path.GetFileName(path)}...", ConsoleColor.Cyan);
+                
+                // 1. Giải mã cấu trúc file JSON HMI tổng của dự án
+                var projectData = JsonConvert.DeserializeObject<ScadaProjectModel>(File.ReadAllText(path));
+                
+                if (projectData != null)
+                {
+                    // 🌟 2. SỬA DỨT ĐIỂM: Gọi hàm tổng quản lý HMI dành riêng cho Comfort Panel
+                    // Hàm này sẽ tự lo luồng lặp từng Screen và cấu hình SetStartScreenHMI đệ quy động an toàn
+                    _tiaEngine.GenerateHMIProject(projectData, _currentDeviceName);
+                    
+                    PrintIcon("√", $"Completed: {Path.GetFileName(path)}", ConsoleColor.Green);
+                }
+            }
+            catch (Exception ex) 
+            { 
+                PrintIcon("X", $"Drawing error [{Path.GetFileName(path)}]: {ex.Message}", ConsoleColor.Red); 
+            }
+        }
+    }
+    drawHMI.Stop();
+    LogPerformance("DrawHMI", drawHMI.ElapsedMilliseconds);
+    break;
+}
                 case "img": // ADD-ON
                     string[] imgPaths = GetPathsOrOpenDialogV2(args, 2, "Images|*.png;*.jpg;*.svg");
 

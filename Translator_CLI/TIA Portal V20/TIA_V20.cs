@@ -45,6 +45,8 @@ namespace Middleware_console
         private TiaPortal _tiaPortal;
         private Project _project;
         private string _userFilesPath = string.Empty;
+        private static int _globalScreenNumberCounter = 100; // Khởi tạo lần đầu
+        private static bool _hasInitializedCounter = false;
 
         public TIA_V20() { }
 
@@ -1050,6 +1052,633 @@ namespace Middleware_console
         }
         #endregion
 
+        #region HMI comfort: Screen Management
+        public void GenerateHMIProject(ScadaProjectModel projectData, string selectedDeviceFromCli = null)
+{
+    if (_project == null) throw new Exception("Project not connected or opened in TIA Portal.");
+   
+
+    // BƯỚC 0: ƯU TIÊN LẤY TÊN TỪ CLI
+    string rawDeviceName = !string.IsNullOrEmpty(selectedDeviceFromCli)
+                        ? selectedDeviceFromCli
+                        : projectData.DeviceName;
+
+    string targetForDrawing = rawDeviceName.Contains("|")
+                            ? rawDeviceName.Split('|')[0]
+                            : rawDeviceName;
+
+    Console.WriteLine($"\n>>> INITIALIZING COMFORT HMI PROJECT ON DEVICE: {targetForDrawing} <<<");
+
+    // BƯỚC 1: VẼ TOÀN BỘ MÀN HÌNH COMFORT
+    foreach (var screen in projectData.Screens)
+    {
+        try
+        {
+            
+            GenerateHMIScreenFromData(targetForDrawing, screen);
+            Console.WriteLine($"[SUCCESS] Finished drawing Comfort screen: {screen.ScreenName}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[!] Error drawing Comfort screen {screen.ScreenName}: {ex.Message}");
+        }
+    }
+
+    // BƯỚC 2: LƯU DỰ ÁN TRƯỚC KHI GÁN MÀN HÌNH KHỞI ĐỘNG
+    try { _project.Save(); } catch { }
+
+    // BƯỚC 3: CHỈ ĐỊNH MÀN HÌNH CHÍNH (START SCREEN)
+    string startScreenName = !string.IsNullOrEmpty(projectData.StartScreenName)
+                            ? projectData.StartScreenName
+                            : (projectData.Screens.FirstOrDefault()?.ScreenName ?? "Main_Process");
+
+    Console.WriteLine($"[i] Configuring Comfort start screen: {startScreenName}...");
+
+    // 🌟 SỬA ĐỒNG BỘ: Gọi chính xác hàm SetStartScreenHMI chuyên biệt cho Comfort
+    SetStartScreenHMI(targetForDrawing, startScreenName);
+
+    Console.WriteLine("\n>>> ALL COMFORT SCREENS DRAWN AND CONFIGURED SUCCESSFULLY! <<<");
+}
+
+// public void GenerateHMIScreenFromData(string deviceName, ScadaScreenModel screenData)
+// {
+//     // 1. LOCATE THIẾT BỊ
+//     string cleanDeviceName = deviceName.Contains("|") ? deviceName.Split('|')[0].Trim() : deviceName.Trim();
+//     Device targetDevice = null;
+    
+//     List<Device> allProjectDevices = new List<Device>();
+//     foreach (Device dev in _project.Devices) { allProjectDevices.Add(dev); }
+//     GetAllDevicesInGroupsFlattened(_project.DeviceGroups, allProjectDevices);
+
+//     foreach (Device dev in allProjectDevices)
+//     {
+//         if (dev.Name.Equals(cleanDeviceName, StringComparison.OrdinalIgnoreCase)) { targetDevice = dev; break; }
+//     }
+
+//     if (targetDevice == null) throw new Exception($"[CRITICAL] Device '{cleanDeviceName}' not found.");
+
+//     // 2. TRÍCH XUẤT HmiTarget
+//     List<DeviceItem> allItems = new List<DeviceItem>();
+//     GetAllDeviceItemsFlattened(targetDevice.DeviceItems, allItems);
+//     object hmiTargetInstance = null;
+//     foreach (var item in allItems)
+//     {
+//         var container = item.GetService<SoftwareContainer>();
+//         if (container?.Software != null && container.Software.GetType().Name.Equals("HmiTarget", StringComparison.OrdinalIgnoreCase))
+//         {
+//             hmiTargetInstance = container.Software;
+//             break;
+//         }
+//     }
+
+//     dynamic targetHmi = hmiTargetInstance;
+//     var screens = targetHmi.ScreenFolder.Screens;
+
+//     // 3. XỬ LÝ SỐ MÀN HÌNH DUY NHẤT & DỌN DẸP
+//     var existing = screens.Find(screenData.ScreenName);
+//     if (existing != null) existing.Delete();
+
+//     // 🌟 SỬA LỖI: Dùng GetAttribute để lấy Number thay vì thuộc tính s.Number
+//     int maxNum = 100;
+//     foreach (dynamic s in screens) 
+//     { 
+//         try {
+//             int n = Convert.ToInt32(s.GetAttribute("Number")); 
+//             if (n > maxNum) maxNum = n; 
+//         } catch { continue; }
+//     }
+//     int uniqueScreenNumber = maxNum + 1;
+
+//     // 4. QUÉT VÉT CẠN (Flatten) toàn bộ đối tượng từ screenData
+//     List<ScadaItemModel> allFlattenedItems = new List<ScadaItemModel>();
+//     void Flatten(IList<ScadaItemModel> list) {
+//         if (list == null) return;
+//         foreach (var item in list) {
+//             allFlattenedItems.Add(item);
+//             if (item.Properties.ContainsKey("Children")) Flatten(item.Properties["Children"] as IList<ScadaItemModel>);
+//         }
+//     }
+//     Flatten(screenData.Items);
+//     Console.WriteLine($"   [i] Quét thành công {allFlattenedItems.Count} phần tử cho màn hình: {screenData.ScreenName}");
+
+//     // 5. CHUYỂN ĐỔI SANG SIMATICML
+//     string generatedGraphicItemsXml = ConvertJsonItemsToSimaticML(allFlattenedItems);
+
+//     string screenXmlContent = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+// <Document>
+//   <Hmi.Screen.Screen ID=""0"">
+//     <AttributeList>
+//       <Name>{screenData.ScreenName}</Name><Number>{uniqueScreenNumber}</Number>
+//       <Width>{screenData.Width}</Width><Height>{screenData.Height}</Height>
+//     </AttributeList>
+//     <ObjectList>
+//       <Hmi.Screen.ScreenLayer ID=""1"" CompositionName=""Layers"">
+//         <AttributeList><Index>0</Index><Name>Layer_1</Name><VisibleES>true</VisibleES></AttributeList>
+//         <ObjectList>{generatedGraphicItemsXml}</ObjectList>
+//       </Hmi.Screen.ScreenLayer>
+//     </ObjectList>
+//   </Hmi.Screen.Screen>
+// </Document>";
+
+//     string tempXmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"temp_{screenData.ScreenName}.xml");
+//     File.WriteAllText(tempXmlPath, screenXmlContent, System.Text.Encoding.UTF8);
+
+//     // 6. IMPORT AN TOÀN VỚI PING PROJECT
+//     try
+//     {
+//         string pName = _project.Name; // Ping project để kiểm tra trạng thái Project trước khi Import
+//         FileInfo fileInfo = new FileInfo(tempXmlPath);
+//         screens.Import(fileInfo, ImportOptions.Override);
+//         Console.WriteLine($"   [√] Import thành công màn hình '{screenData.ScreenName}' số {uniqueScreenNumber}.");
+//     }
+//     catch (Exception ex)
+//     {
+//         Console.WriteLine($"   [CRITICAL] Lỗi không thể Import: {ex.Message}");
+//     }
+//     finally { if (File.Exists(tempXmlPath)) File.Delete(tempXmlPath); }
+// }
+
+public void GenerateHMIScreenFromData(string deviceName, ScadaScreenModel screenData)
+{
+    // 1. LOCATE THIẾT BỊ
+    string cleanDeviceName = deviceName.Contains("|") ? deviceName.Split('|')[0].Trim() : deviceName.Trim();
+    Device targetDevice = null;
+    
+    // Kiểm tra tính hợp lệ của Project
+    if (!IsProjectValid(_project)) throw new Exception("Project đã bị đóng hoặc không khả dụng.");
+
+    List<Device> allProjectDevices = new List<Device>();
+    foreach (Device dev in _project.Devices) { allProjectDevices.Add(dev); }
+    GetAllDevicesInGroupsFlattened(_project.DeviceGroups, allProjectDevices);
+
+    foreach (Device dev in allProjectDevices)
+    {
+        if (dev.Name.Equals(cleanDeviceName, StringComparison.OrdinalIgnoreCase)) { targetDevice = dev; break; }
+    }
+    if (targetDevice == null) throw new Exception($"[CRITICAL] Device '{cleanDeviceName}' not found.");
+
+    // 2. TRÍCH XUẤT HmiTarget (Khởi tạo biến ở cấp hàm để tránh lỗi scope)
+    object hmiTargetInstance = null;
+    List<DeviceItem> allItems = new List<DeviceItem>();
+    GetAllDeviceItemsFlattened(targetDevice.DeviceItems, allItems);
+    
+    foreach (var item in allItems)
+    {
+        var container = item.GetService<SoftwareContainer>();
+        if (container?.Software != null && container.Software.GetType().Name.Equals("HmiTarget", StringComparison.OrdinalIgnoreCase))
+        {
+            hmiTargetInstance = container.Software;
+            break;
+        }
+    }
+    if (hmiTargetInstance == null) throw new Exception("Không tìm thấy HmiTarget trên thiết bị.");
+
+    dynamic targetHmi = hmiTargetInstance;
+    var screens = targetHmi.ScreenFolder.Screens;
+
+    // 3. DỌN DẸP AN TOÀN - Xóa màn hình trùng tên
+    try 
+    {
+        var existing = screens.Find(screenData.ScreenName);
+        if (existing != null) 
+        {
+            Console.WriteLine($"   [i] Màn hình '{screenData.ScreenName}' tồn tại, đang xóa...");
+            existing.Delete();
+            System.Threading.Thread.Sleep(500); // Đợi TIA giải phóng tài nguyên
+        }
+    } catch { /* Bỏ qua nếu màn hình không thể xóa */ }
+
+    // 3. TỰ ĐỘNG TĂNG SỐ MÀN HÌNH (Dùng biến Global để không bao giờ trùng)
+    if (!_hasInitializedCounter)
+    {
+        int maxNum = 100;
+        foreach (var s in screens)
+        {
+            try {
+                int n = Convert.ToInt32(s.GetAttribute("Number"));
+                if (n > maxNum) maxNum = n;
+            } catch { continue; }
+        }
+        _globalScreenNumberCounter = maxNum;
+        _hasInitializedCounter = true;
+    }
+
+    // Tăng số cho màn hình hiện tại
+    _globalScreenNumberCounter++;
+    int uniqueScreenNumber = _globalScreenNumberCounter;
+    
+    Console.WriteLine($"   [i] Gán số màn hình: {uniqueScreenNumber} (Đã tăng từ bộ đếm)");
+
+    // 5. QUÉT VÉT CẠN (Flatten) dữ liệu JSON
+    List<ScadaItemModel> allFlattenedItems = new List<ScadaItemModel>();
+    void Flatten(IList<ScadaItemModel> list) {
+        if (list == null) return;
+        foreach (var item in list) {
+            allFlattenedItems.Add(item);
+            if (item.Properties.ContainsKey("Children")) Flatten(item.Properties["Children"] as IList<ScadaItemModel>);
+        }
+    }
+    Flatten(screenData.Items);
+
+    // 6. CHUYỂN ĐỔI SIMATICML
+    string generatedGraphicItemsXml = ConvertJsonItemsToSimaticML(allFlattenedItems);
+
+    // 6. TẠO XML & IMPORT
+    string screenXmlContent = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+<Document>
+  <Hmi.Screen.Screen ID=""0"">
+    <AttributeList>
+      <Name>{screenData.ScreenName}</Name>
+      <Number>{uniqueScreenNumber}</Number>
+      <Width>800</Width>
+      <Height>420</Height>
+    </AttributeList>
+    <ObjectList>
+      <Hmi.Screen.ScreenLayer ID=""1"" CompositionName=""Layers"">
+        <AttributeList>
+           <Index>0</Index>
+           <Name>Layer_1</Name>
+        </AttributeList>
+        <ObjectList>{generatedGraphicItemsXml}</ObjectList>
+      </Hmi.Screen.ScreenLayer>
+    </ObjectList>
+  </Hmi.Screen.Screen>
+</Document>";
+
+    string tempXmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"temp_{Guid.NewGuid()}.xml");
+    File.WriteAllText(tempXmlPath, screenXmlContent, System.Text.Encoding.UTF8);
+
+    // 8. IMPORT VÀO TIA PORTAL
+    try
+    {
+        if (!IsProjectValid(_project)) throw new Exception("Project đã bị đóng trong lúc xử lý XML.");
+        
+        screens.Import(new FileInfo(tempXmlPath), ImportOptions.Override);
+        Console.WriteLine($"   [√] Import thành công '{screenData.ScreenName}' với ID: {uniqueScreenNumber}.");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"   [!] Import thất bại: {ex.Message}");
+    }
+    finally { if (File.Exists(tempXmlPath)) File.Delete(tempXmlPath); }
+}
+
+// Hàm bổ trợ kiểm tra Project
+private bool IsProjectValid(Project project)
+{
+    if (project == null) return false;
+    try { string name = project.Name; return true; } catch { return false; }
+}
+private string ConvertJsonItemsToSimaticML(System.Collections.Generic.IList<ScadaItemModel> items)
+{
+    var xmlBuilder = new System.Text.StringBuilder();
+    int idCounter = 100;
+
+    foreach (var item in items)
+    {
+        idCounter += 50;
+        string name = item.Name;
+        string type = item.Type;
+        int left = item.Properties.ContainsKey("Left") ? Convert.ToInt32(item.Properties["Left"]) : 0;
+        int top = item.Properties.ContainsKey("Top") ? Convert.ToInt32(item.Properties["Top"]) : 0;
+        int width = item.Properties.ContainsKey("Width") ? Convert.ToInt32(item.Properties["Width"]) : 80;
+        int height = item.Properties.ContainsKey("Height") ? Convert.ToInt32(item.Properties["Height"]) : 30;
+        string textValue = item.Properties.ContainsKey("Text") ? item.Properties["Text"].ToString() : "Text";
+
+        switch (type.ToUpper())
+        {
+            case "BUTTON":
+                xmlBuilder.AppendLine($@"
+          <Hmi.Screen.Button ID=""{idCounter}"" CompositionName=""ScreenItems"">
+            <AttributeList>
+              <Height>{height}</Height><Left>{left}</Left><ObjectName>{name}</ObjectName><Top>{top}</Top><Width>{width}</Width>
+            </AttributeList>
+            <ObjectList>
+              <MultilingualText ID=""{idCounter + 1}"" CompositionName=""TextOff"">
+                <ObjectList><MultilingualTextItem ID=""{idCounter + 2}"" CompositionName=""Items"">
+                  <AttributeList><Culture>en-US</Culture><Text><body><p>{textValue}</p></body></Text></AttributeList>
+                </MultilingualTextItem></ObjectList>
+              </MultilingualText>
+              <MultilingualText ID=""{idCounter + 3}"" CompositionName=""TextOn"">
+                <ObjectList><MultilingualTextItem ID=""{idCounter + 4}"" CompositionName=""Items"">
+                  <AttributeList><Culture>en-US</Culture><Text><body><p>{textValue}</p></body></Text></AttributeList>
+                </MultilingualTextItem></ObjectList>
+              </MultilingualText>
+            </ObjectList>
+          </Hmi.Screen.Button>");
+                break;
+
+            case "TEXTFIELD":
+            case "HMITEXT":
+                xmlBuilder.AppendLine($@"
+          <Hmi.Screen.TextField ID=""{idCounter}"" CompositionName=""ScreenItems"">
+            <AttributeList>
+              <Height>{height}</Height><Left>{left}</Left><ObjectName>{name}</ObjectName><Top>{top}</Top><Width>{width}</Width>
+            </AttributeList>
+            <ObjectList>
+              <MultilingualText ID=""{idCounter + 1}"" CompositionName=""Text"">
+                <ObjectList><MultilingualTextItem ID=""{idCounter + 2}"" CompositionName=""Items"">
+                  <AttributeList><Culture>en-US</Culture><Text><body><p>{textValue}</p></body></Text></AttributeList>
+                </MultilingualTextItem></ObjectList>
+              </MultilingualText>
+            </ObjectList>
+          </Hmi.Screen.TextField>");
+                break;
+            case "SWITCH":
+    // Định nghĩa nội dung hiển thị cho trạng thái ON và OFF
+    string textOn = "ON";
+    string textOff = "OFF";
+
+    xmlBuilder.AppendLine($@"
+          <Hmi.Screen.Switch ID=""{idCounter}"" CompositionName=""ScreenItems"">
+            <AttributeList>
+              <Height>{height}</Height>
+              <Left>{left}</Left>
+              <ObjectName>{name}</ObjectName>
+              <Top>{top}</Top>
+              <Width>{width}</Width>
+            </AttributeList>
+            <ObjectList>
+              <MultilingualText ID=""{idCounter + 1}"" CompositionName=""TextOff"">
+                <ObjectList>
+                  <MultilingualTextItem ID=""{idCounter + 2}"" CompositionName=""Items"">
+                    <AttributeList><Culture>en-US</Culture><Text><body><p>{textOff}</p></body></Text></AttributeList>
+                  </MultilingualTextItem>
+                </ObjectList>
+              </MultilingualText>
+              <MultilingualText ID=""{idCounter + 3}"" CompositionName=""TextOn"">
+                <ObjectList>
+                  <MultilingualTextItem ID=""{idCounter + 4}"" CompositionName=""Items"">
+                    <AttributeList><Culture>en-US</Culture><Text><body><p>{textOn}</p></body></Text></AttributeList>
+                  </MultilingualTextItem>
+                </ObjectList>
+              </MultilingualText>
+            </ObjectList>
+          </Hmi.Screen.Switch>");
+    break;
+           case "CIRCLE":
+           case "ELLIPSE":
+           case "PUMP":
+           case "MOTOR":
+    // Ép buộc Width bằng Height để đảm bảo tính hình học của hình tròn
+    int diameter = Math.Max(width, height); 
+    xmlBuilder.AppendLine($@"
+          <Hmi.Screen.Circle ID=""{idCounter}"" CompositionName=""ScreenItems"">
+            <AttributeList>
+                <Height>{diameter}</Height>
+                <Left>{left}</Left>
+                <ObjectName>{name}</ObjectName>
+                <Top>{top}</Top>
+                <Width>{diameter}</Width>
+                <BackColor>255, 0, 0</BackColor>
+                <BackFillStyle>Solid</BackFillStyle>
+            </AttributeList>
+          </Hmi.Screen.Circle>");
+    break;
+
+            case "IOFIELD":
+                xmlBuilder.AppendLine($@"
+          <Hmi.Screen.IOField ID=""{idCounter}"" CompositionName=""ScreenItems"">
+            <AttributeList>
+                <Height>{height}</Height><Left>{left}</Left><ObjectName>{name}</ObjectName><Top>{top}</Top><Width>{width}</Width>
+            </AttributeList>           
+          </Hmi.Screen.IOField>");
+                break;
+
+            case "BAR":
+                xmlBuilder.AppendLine($@"
+          <Hmi.Screen.Bar ID=""{idCounter}"" CompositionName=""ScreenItems"">
+            <AttributeList>
+                <Height>{height}</Height><Left>{left}</Left><ObjectName>{name}</ObjectName><Top>{top}</Top><Width>{width}</Width>
+            </AttributeList>      
+          </Hmi.Screen.Bar>");
+                break;
+        case "RECTANGLE":
+        case "BACKGROUND":
+        case "TANK":
+        case "PIPE":
+                xmlBuilder.AppendLine($@"
+          <Hmi.Screen.Rectangle ID=""{idCounter}"" CompositionName=""ScreenItems"">
+            <AttributeList>
+              <Height>{height}</Height>
+              <Left>{left}</Left>
+              <ObjectName>{name}</ObjectName>
+              <Top>{top}</Top>
+              <Width>{width}</Width>
+              <BackColor>200, 200, 200</BackColor>
+              <BackFillStyle>Solid</BackFillStyle>
+            </AttributeList>
+          </Hmi.Screen.Rectangle>");
+                break;                
+        }
+    }
+    return xmlBuilder.ToString();
+}
+// public void DumpCompositionMetadata(object screensObj)
+// {
+//     if (screensObj == null)
+//     {
+//         Console.WriteLine("[\u001b[31mX\u001b[0m] Cannot dump metadata: The provided screens object is Null.");
+//         return;
+//     }
+
+//     Type type = screensObj.GetType();
+//     Console.WriteLine("\n" + new string('=', 90));
+//     Console.WriteLine($"\u001b[36m[📊 REFLECTION MAP] Dump Metadata for Core Type: {type.FullName}\u001b[0m");
+//     Console.WriteLine(new string('-', 90));
+
+//     // 1. QUÉT TOÀN BỘ INTERFACES MÀ CLASS NÀY TRIỂN KHAI
+//     Console.WriteLine("\n[🌐 Implemented Interfaces]:");
+//     var interfaces = type.GetInterfaces();
+//     foreach (var i in interfaces)
+//     {
+//         Console.WriteLine($"   └── Interface: {i.FullName}");
+//     }
+
+//     // 2. QUÉT TOÀN BỘ PHƯƠNG THỨC (METHODS) KHẢ DỤNG
+//     Console.WriteLine("\n[🛠️ Available Methods]:");
+//     var methods = type.GetMethods(System.Reflection.BindingFlags.Public | 
+//                                   System.Reflection.BindingFlags.Instance | 
+//                                   System.Reflection.BindingFlags.Static | 
+//                                   System.Reflection.BindingFlags.FlattenHierarchy);
+    
+//     foreach (var method in methods)
+//     {
+//         // Lấy danh sách các tham số của hàm
+//         var parameters = method.GetParameters();
+//         string paramStr = string.Join(", ", parameters.Select(p => $"{p.ParameterType.Name} {p.Name}"));
+//         Console.WriteLine($"   └── Method: {method.ReturnType.Name} {method.Name}({paramStr})");
+//     }
+
+//     // 3. QUÉT TOÀN BỘ THUỘC TÍNH (PROPERTIES)
+//     Console.WriteLine("\n[⚙️ Available Properties]:");
+//     var properties = type.GetProperties(System.Reflection.BindingFlags.Public | 
+//                                         System.Reflection.BindingFlags.Instance);
+//     foreach (var prop in properties)
+//     {
+//         string access = (prop.CanRead ? "Get" : "") + (prop.CanWrite ? "/Set" : "");
+//         Console.WriteLine($"   └── Property: {prop.PropertyType.Name} {prop.Name} [{access}]");
+//     }
+//     Console.WriteLine(new string('=', 90) + "\n");
+// }
+private void PrintDeviceItemTreeRecursive(Siemens.Engineering.HW.DeviceItemComposition items, int indentLevel)
+{
+    if (items == null) return;
+
+    string indent = new string(' ', indentLevel * 4);
+
+    foreach (Siemens.Engineering.HW.DeviceItem item in items)
+    {
+        string containerStatus = "\u001b[31m[X] No Container\u001b[0m";
+        
+        try
+        {
+            var container = item.GetService<SoftwareContainer>();
+            if (container != null)
+            {
+                if (container.Software is HmiSoftware)
+                {
+                    containerStatus = "\u001b[32m[√] FOUND HMISOFTWARE HERE!\u001b[0m";
+                }
+                else
+                {
+                    containerStatus = $"\u001b[36m[!] Found Software: {container.Software.GetType().Name}\u001b[0m";
+                }
+            }
+        }
+        catch
+        {
+            containerStatus = "\u001b[37m[•] Static Hardware Layer\u001b[0m";
+        }
+
+        // In thông tin chi tiết của DeviceItem hiện tại
+        Console.WriteLine($"{indent}└── [Layer {indentLevel}] Name: {item.Name,-25} | Type: {item.GetType().Name,-15} | Status: {containerStatus}");
+
+        // Nếu có nhánh con, tiếp tục đệ quy lặn sâu để vẽ nhánh cây đồ họa
+        if (item.DeviceItems != null && item.DeviceItems.Count > 0)
+        {
+            PrintDeviceItemTreeRecursive(item.DeviceItems, indentLevel + 1);
+        }
+    }
+}
+private void SetStartScreenHMI(string deviceName, string screenName)
+{
+    try
+    {
+        string cleanDeviceName = deviceName.Contains("|") ? deviceName.Split('|')[0].Trim() : deviceName.Trim();
+        Device targetDevice = null;
+
+        List<Device> allProjectDevices = new List<Device>();
+        foreach (Device dev in _project.Devices) { allProjectDevices.Add(dev); }
+        GetAllDevicesInGroupsFlattened(_project.DeviceGroups, allProjectDevices);
+
+        foreach (Device dev in allProjectDevices)
+        {
+            string currentCombined = GetCombinedDeviceName(dev);
+            if (dev.Name.Equals(cleanDeviceName, StringComparison.OrdinalIgnoreCase) || 
+                dev.Name.IndexOf(cleanDeviceName, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                targetDevice = dev;
+                break;
+            }
+        }
+
+        if (targetDevice == null) return;
+
+        List<DeviceItem> allItems = new List<DeviceItem>();
+        GetAllDeviceItemsFlattened(targetDevice.DeviceItems, allItems);
+
+        // 🌟 BẺ KHÓA RUNTIME SETTINGS: Quét trực tiếp trong cấu trúc cây DeviceItem phần cứng
+        object runtimeSettingsObj = null;
+        foreach (var item in allItems)
+        {
+            if (item.Name.Equals("Runtime settings", StringComparison.OrdinalIgnoreCase))
+            {
+                runtimeSettingsObj = item;
+                break;
+            }
+        }
+
+        if (runtimeSettingsObj != null)
+        {
+            dynamic dynRt = runtimeSettingsObj;
+            // Ép thuộc tính qua cơ chế can thiệp metadata lớp ngoài
+            try
+            {
+                dynRt.SetAttribute("StartScreen", screenName);
+                Console.WriteLine($"   [√] Comfort Runtime Settings: Assigned '{screenName}' as start screen.");
+            }
+            catch
+            {
+                // Fallback cứu cánh cuối cùng nếu Siemens khóa cứng API ghi thông số này trên V20
+                Console.WriteLine($"   [i] Comfort Screen '{screenName}' is deployed. Siemens V20 Openness mandates manual StartScreen selection in project tree.");
+            }
+        }
+        _project.Save();
+    }
+    catch (Exception ex) 
+    { 
+        Console.WriteLine($"[-] Generic Comfort StartScreen assignment error: {ex.Message}"); 
+    }
+}
+// 🌟 HÀM HELPER: QUÉT SÂU ĐỆ QUY TÌM HMI SOFTWARE CHO DÒNG COMFORT PANEL
+private void GetAllDeviceItemsFlattened(Siemens.Engineering.HW.DeviceItemComposition items, List<Siemens.Engineering.HW.DeviceItem> resultList)
+{
+    if (items == null) return;
+    
+    foreach (Siemens.Engineering.HW.DeviceItem item in items)
+    {
+        resultList.Add(item);
+        
+        // Nếu item này có thư mục con hoặc module con, lặn sâu đệ quy để gom tiếp
+        if (item.DeviceItems != null && item.DeviceItems.Count > 0)
+        {
+            GetAllDeviceItemsFlattened(item.DeviceItems, resultList);
+        }
+    }
+}
+private void GetAllDevicesInGroupsFlattened(Siemens.Engineering.HW.DeviceUserGroupComposition groups, List<Siemens.Engineering.HW.Device> resultList)
+{
+    if (groups == null) return;
+    
+    foreach (Siemens.Engineering.HW.DeviceUserGroup group in groups)
+    {
+        foreach (Siemens.Engineering.HW.Device dev in group.Devices)
+        {
+            resultList.Add(dev);
+        }
+        
+        if (group.Groups != null && group.Groups.Count > 0)
+        {
+            GetAllDevicesInGroupsFlattened(group.Groups, resultList);
+        }
+    }
+}
+private Device FindDeviceInGroupsRecursive(DeviceUserGroupComposition groups, string deviceName)
+{
+    foreach (DeviceUserGroup group in groups)
+    {
+        foreach (Device dev in group.Devices)
+        {
+            string combinedName = GetCombinedDeviceName(dev);
+            if (combinedName.Equals(deviceName, StringComparison.OrdinalIgnoreCase) || 
+                combinedName.Contains(deviceName) || 
+                dev.Name.Equals(deviceName, StringComparison.OrdinalIgnoreCase))
+            {
+                return dev;
+            }
+        }
+        
+        // Lặn sâu vào sub-groups
+        if (group.Groups != null && group.Groups.Count > 0)
+        {
+            Device deepDev = FindDeviceInGroupsRecursive(group.Groups, deviceName);
+            if (deepDev != null) return deepDev;
+        }
+    }
+    return null;
+}
+        #endregion
         #region 6. WinCC Unified: Item Rendering & Dynamization
         private void BuildUnifiedItemsRecursive(dynamic composition, List<ScadaItemModel> items)
         {
