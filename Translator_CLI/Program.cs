@@ -1365,6 +1365,13 @@ namespace TIA_Copilot_CLI
             Console.WriteLine(new string('=', 85));
 
             Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("\n[GENERAL COMMANDS]");
+            Console.ResetColor();
+            Console.WriteLine("  agent                  : Call agent to do for you");
+            Console.WriteLine("  config                 : Configure AI's api key settings");
+            Console.WriteLine("  clear                  : Clear the console screen");
+
+            Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine("\n[AI MODULE]");
             Console.ResetColor();
 
@@ -1376,8 +1383,6 @@ namespace TIA_Copilot_CLI
             Console.WriteLine("  chat session                                   : Manage Session");
             Console.WriteLine("  chat status                                    : Check Session status");
             Console.WriteLine("  chat check-data                                : Check Session data");
-            Console.WriteLine("  config                 : Configure AI's api key settings");
-            Console.WriteLine("  clear                  : Clear the console screen");
 
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine("\n[TIA MODULE]");
