@@ -21,7 +21,7 @@
     {
       "Name": "S7-1200 CPU 1211C AC/DC/Rly",
       "OrderNumber": "6ES7 211-1BE40-0XB0",
-      "Version": "V3.0",
+      "Version": "V4.7",
       "AvailableVersions": ["V4.0", "V4.1", "V4.2", "V4.3", "V4.4", "V4.5", "V4.6" , "V4.7"]
     }
   ],
@@ -29,7 +29,7 @@
      {
       "Name": "S7-1500 CPU 1511-1 PN",
       "OrderNumber": "6ES7 511-1AK00-0AB0",
-      "Version": "V2.9",
+      "Version": "V1.8",
       "AvailableVersions": ["V1.0", "V1.1", "V1.5", "V1.6","V1.7","V1.8"]
     },
     {
@@ -47,19 +47,19 @@
     {
       "Name": "S7-1500 CPU 1511-1 PN",
       "OrderNumber": "6ES7 511-1AL03-0AB0",
-      "Version": "V3.0",
+      "Version": "V4.0",
       "AvailableVersions": ["V3.0", "V3.1", "V4.0"]
     },
     {
       "Name": "S7-1500 CPU 1511C-1 PN",
       "OrderNumber": "6ES7 511-1CK00-0AB0",
-      "Version": "V2.8",
+      "Version": "V2.9",
       "AvailableVersions":  ["V1.8", "V2.0", "V2.1","V2.5", "V2.6","V2.8", "V2.9"]
     },
     {
       "Name": "S7-1500 CPU 1511C-1 PN",
       "OrderNumber": "6ES7 511-1CK01-0AB0",
-      "Version": "V2.8",
+      "Version": "V2.9",
       "AvailableVersions":  ["V2.5", "V2.6","V2.8", "V2.9"]
     },
     {

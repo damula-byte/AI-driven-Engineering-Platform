@@ -15,6 +15,7 @@ logging.getLogger("langchain").setLevel(logging.ERROR)
 from langchain_huggingface import HuggingFaceEmbeddings
 import memory
 import app_secrets
+from agent_core import process_agent_query
 
 # ─────────────────────────────────────────────────────────────────
 # GLOBAL SINGLETON CACHES — Initialize once per Python process
@@ -118,11 +119,6 @@ def send_response(data_dict):
     sys.stdout.buffer.flush()
     os._exit(0)
 
-# def send_response(data_dict):
-#     output_bytes = (json.dumps(data_dict, ensure_ascii=False) + "\n").encode('utf-8')
-#     sys.stdout.buffer.write(output_bytes)
-#     sys.stdout.buffer.flush()
-
 # def clean_json_response(text):
 #     cleaned = text.strip()
 #     if cleaned.startswith("```json"):
@@ -131,15 +127,18 @@ def send_response(data_dict):
 #         cleaned = cleaned.replace("```", "", 1)
 #     if cleaned.endswith("```"):
 #         cleaned = cleaned[:-3]
-#     return cleaned.strip()ư
+#     return cleaned.strip()
 
-def clean_json_response(content_list):
+def clean_json_response(content_list): #List
     # Phòng hờ trường hợp hệ thống truyền nhầm một chuỗi String vào hàm này
     if isinstance(content_list, str):
         return clean_json_response(content_list)
+        
     if not isinstance(content_list, list):
         return str(content_list).strip()
+
     extracted_fragments = []
+    
     # Duyệt qua từng phần tử trong danh sách để bóc text an toàn
     for part in content_list:
         if isinstance(part, str):
@@ -150,8 +149,11 @@ def clean_json_response(content_list):
             extracted_fragments.append(getattr(part, "text", ""))
         elif hasattr(part, "content"): # Dự phòng trường hợp là Message Object
             extracted_fragments.append(getattr(part, "content", ""))
+
     # Gộp toàn bộ các mảnh text lại thành một chuỗi duy nhất
     full_text = "".join(extracted_fragments)
+
+    # 🌟 Kế thừa hoàn toàn logic xóa bọc mã Markdown của bạn
     cleaned = full_text.strip()
     if cleaned.startswith("```json"):
         cleaned = cleaned.replace("```json", "", 1)
@@ -159,6 +161,7 @@ def clean_json_response(content_list):
         cleaned = cleaned.replace("```", "", 1)
     if cleaned.endswith("```"):
         cleaned = cleaned[:-3]
+        
     return cleaned.strip()
 
 
@@ -260,7 +263,9 @@ def main():
 
             os.environ["GOOGLE_API_KEY"] = CURRENT_KEY  
 
-            # region XỬ LÝ LỆNH ĐẶC BIỆT (KHÔNG PHẢI CHAT) - LIST SESSIONS, RESET SESSION, UPDATE SPEC, CHECK SPEC
+            # region XỬ LÝ LỆNH ĐẶC BIỆT (KHÔNG PHẢI CHAT) - LIST SESSIONS, RESET SESSION, UPDATE SPEC, CHECK SPE
+
+
             if command_type == "list_sessions":
                 sessions = memory.list_all_sessions()
                 send_response({"status": "success", "sessions": sessions})
@@ -364,6 +369,15 @@ def main():
                     send_response({"status": "error", "message": f"Error deleting Spec: {str(e)}"})
                     return
             
+            elif command_type == "agent_mode":
+                # Gọi thẳng file agent_core.py, nó đã trả về chuỗi JSON xịn rồi
+                agent_response_str = process_agent_query(user_query, CURRENT_KEY)
+                
+                # 🌟 ÉP XẢ ỐNG TRỰC TIẾP: Không dùng send_response để tránh bị bọc JSON kép
+                output_bytes = (agent_response_str + "\n").encode('utf-8')
+                sys.stdout.buffer.write(output_bytes)
+                sys.stdout.buffer.flush()
+                os._exit(0)
             # endregion
             
             # region TRIPPLE-PATH RAG RETRIEVAL — parallel execution, direct ChromaDB client
@@ -404,7 +418,7 @@ def main():
 
                     elif target_block_type == "HMI_SCREEN":
                         collection = persistent_client.get_collection("hmi_standard_kb")
-                        k = 5
+                        k = 8
                         where = None
                         if any(w in query_upper for w in ["TANK","VALVE","MOTOR","PUMP","PIPE","SENSOR","INDICATOR"]):
                             where = {"type": {"$in": ["WIDGET", "LAYOUT"]}}
@@ -415,7 +429,7 @@ def main():
 
                     else:  # SCL — FB / FC / OB
                         collection = persistent_client.get_collection("iec_standard_kb")
-                        k = 8
+                        k = 5
                         where = None
                         if target_block_type in ["FB", "FC", "DB", "FUNCTION_BLOCK", "FUNCTION", "DATA_BLOCK"]:
                             where = {"type": {"$in": ["COMPONENT", "SYNTAX"]}}
@@ -746,10 +760,12 @@ def main():
                 from langchain_google_genai import ChatGoogleGenerativeAI
                 llm = ChatGoogleGenerativeAI(
                     model="gemini-3.5-flash",
+                    # model="gemini-2.5-flash",
                     temperature=0.1,
                     convert_system_message_to_human=True,
+                    # max_tokens=65535,
                     google_api_key=dev_key,
-                    model_kwargs={"response_mime_type": "application/json"},
+                    model_kwargs={"response_mime_type": "application/json"}
                 )
                 provider_name = "Gemini (gemini-3.5-flash) [DEV]"
             else:
@@ -819,10 +835,12 @@ def main():
                         os.environ["GOOGLE_API_KEY"] = new_key
                         llm = ChatGoogleGenerativeAI(
                             model="gemini-3.5-flash",
+                            # model="gemini-2.5-flash",
                             temperature=0.1,
                             convert_system_message_to_human=True,
-                            google_api_key=new_key,
-                            model_kwargs={"response_mime_type": "application/json"},
+                            # max_tokens=65535,
+                            google_api_key=dev_key,
+                            model_kwargs={"response_mime_type": "application/json"}
                         )
                         print_action = f"Rotated to key ...{new_key[-8:]}"
                     else:
