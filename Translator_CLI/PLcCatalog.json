@@ -1,91 +1,67 @@
 {
   "S71200": [
-    {
-      "Name": "S7-1200 CPU 1214C DC/DC/DC",
-      "OrderNumber": "6ES7 214-1AG40-0XB0",
-      "Version": "V4.4",
-      "AvailableVersions": ["V4.0", "V4.1", "V4.2", "V4.3", "V4.4", "V4.5", "V4.6"]
-    },
-    {
-      "Name": "S7-1200 CPU 1211C AC/DC/Rly",
-      "OrderNumber": "6ES7 211-1BD30-0XB0",
-      "Version": "V2.2",
-      "AvailableVersions": ["V2.0", "V2.1", "V2.2"]
-    },
-    {
-      "Name": "S7-1200 CPU 1211C AC/DC/Rly",
-      "OrderNumber": "6ES7 211-1BE31-0XB0",
-      "Version": "V3.0",
-      "AvailableVersions": ["V3.0"]
-    },
-    {
-      "Name": "S7-1200 CPU 1211C AC/DC/Rly",
-      "OrderNumber": "6ES7 211-1BE40-0XB0",
-      "Version": "V4.7",
-      "AvailableVersions": ["V4.0", "V4.1", "V4.2", "V4.3", "V4.4", "V4.5", "V4.6" , "V4.7"]
-    }
+    { "Name": "S7-1200 CPU 1211C AC/DC/Rly", "OrderNumber": "6ES7 211-1BD30-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.0", "V2.1", "V2.2"] },
+    { "Name": "S7-1200 CPU 1211C AC/DC/Rly", "OrderNumber": "6ES7 211-1BE31-0XB0", "Version": "V3.0", "AvailableVersions": ["V3.0"] },
+    { "Name": "S7-1200 CPU 1211C AC/DC/Rly", "OrderNumber": "6ES7 211-1BE40-0XB0", "Version": "V4.7", "AvailableVersions": ["V4.0", "V4.1", "V4.2", "V4.3", "V4.4", "V4.5", "V4.6", "V4.7"] },
+
+    { "Name": "S7-1200 CPU 1211C DC/DC/DC", "OrderNumber": "6ES7 211-1AD30-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.0", "V2.1", "V2.2"] },
+    { "Name": "S7-1200 CPU 1211C DC/DC/DC", "OrderNumber": "6ES7 211-1AE31-0XB0", "Version": "V3.0", "AvailableVersions": ["V3.0"] },
+    { "Name": "S7-1200 CPU 1211C DC/DC/DC", "OrderNumber": "6ES7 211-1AE40-0XB0", "Version": "V4.7", "AvailableVersions": ["V4.0", "V4.1", "V4.2", "V4.3", "V4.4", "V4.5", "V4.6", "V4.7"] },
+
+    { "Name": "S7-1200 CPU 1211C DC/DC/Rly", "OrderNumber": "6ES7 211-1HD30-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.0", "V2.1", "V2.2"] },
+    { "Name": "S7-1200 CPU 1211C DC/DC/Rly", "OrderNumber": "6ES7 211-1HE31-0XB0", "Version": "V3.0", "AvailableVersions": ["V3.0"] },
+    { "Name": "S7-1200 CPU 1211C DC/DC/Rly", "OrderNumber": "6ES7 211-1HE40-0XB0", "Version": "V4.7", "AvailableVersions": ["V4.0", "V4.1", "V4.2", "V4.3", "V4.4", "V4.5", "V4.6", "V4.7"] },
+
+ 
+    { "Name": "S7-1200 CPU 1212C AC/DC/Rly", "OrderNumber": "6ES7 212-1BD30-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.0", "V2.1", "V2.2"] },
+    { "Name": "S7-1200 CPU 1212C AC/DC/Rly", "OrderNumber": "6ES7 212-1BE31-0XB0", "Version": "V3.0", "AvailableVersions": ["V3.0"] },
+    { "Name": "S7-1200 CPU 1212C AC/DC/Rly", "OrderNumber": "6ES7 212-1BE40-0XB0", "Version": "V4.7", "AvailableVersions": ["V4.0", "V4.1", "V4.2", "V4.3", "V4.4", "V4.5", "V4.6", "V4.7"] },
+
+    { "Name": "S7-1200 CPU 1212C DC/DC/DC", "OrderNumber": "6ES7 212-1AD30-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.0", "V2.1", "V2.2"] },
+    { "Name": "S7-1200 CPU 1212C DC/DC/DC", "OrderNumber": "6ES7 212-1AE31-0XB0", "Version": "V3.0", "AvailableVersions": ["V3.0"] },
+    { "Name": "S7-1200 CPU 1212C DC/DC/DC", "OrderNumber": "6ES7 212-1AE40-0XB0", "Version": "V4.7", "AvailableVersions": ["V4.0", "V4.1", "V4.2", "V4.3", "V4.4", "V4.5", "V4.6", "V4.7"] },
+
+    { "Name": "S7-1200 CPU 1212C DC/DC/Rly", "OrderNumber": "6ES7 212-1HD30-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.0", "V2.1", "V2.2"] },
+    { "Name": "S7-1200 CPU 1212C DC/DC/Rly", "OrderNumber": "6ES7 212-1HE31-0XB0", "Version": "V3.0", "AvailableVersions": ["V3.0"] },
+    { "Name": "S7-1200 CPU 1212C DC/DC/Rly", "OrderNumber": "6ES7 212-1HE40-0XB0", "Version": "V4.7", "AvailableVersions": ["V4.0", "V4.1", "V4.2", "V4.3", "V4.4", "V4.5", "V4.6", "V4.7"] },
+
+    { "Name": "S7-1200 CPU 1214C DC/DC/DC", "OrderNumber": "6ES7 214-1AG40-0XB0", "Version": "V4.4", "AvailableVersions": ["V4.0", "V4.1", "V4.2", "V4.3", "V4.4", "V4.5", "V4.6"] }
+    
   ],
+
   "S71500": [
-     {
-      "Name": "S7-1500 CPU 1511-1 PN",
-      "OrderNumber": "6ES7 511-1AK00-0AB0",
-      "Version": "V1.8",
-      "AvailableVersions": ["V1.0", "V1.1", "V1.5", "V1.6","V1.7","V1.8"]
-    },
-    {
-      "Name": "S7-1500 CPU 1511-1 PN",
-      "OrderNumber": "6ES7 511-1AK01-0AB0",
-      "Version": "V2.8",
-      "AvailableVersions": ["V1.8", "V2.0", "V2.1","V2.5", "V2.6","V2.8"]
-    },
-    {
-      "Name": "S7-1500 CPU 1511-1 PN",
-      "OrderNumber": "6ES7 511-1AK02-0AB0",
-      "Version": "V2.9",
-      "AvailableVersions": ["V2.5", "V2.6", "V2.8", "V2.9"]
-    },
-    {
-      "Name": "S7-1500 CPU 1511-1 PN",
-      "OrderNumber": "6ES7 511-1AL03-0AB0",
-      "Version": "V4.0",
-      "AvailableVersions": ["V3.0", "V3.1", "V4.0"]
-    },
-    {
-      "Name": "S7-1500 CPU 1511C-1 PN",
-      "OrderNumber": "6ES7 511-1CK00-0AB0",
-      "Version": "V2.9",
-      "AvailableVersions":  ["V1.8", "V2.0", "V2.1","V2.5", "V2.6","V2.8", "V2.9"]
-    },
-    {
-      "Name": "S7-1500 CPU 1511C-1 PN",
-      "OrderNumber": "6ES7 511-1CK01-0AB0",
-      "Version": "V2.9",
-      "AvailableVersions":  ["V2.5", "V2.6","V2.8", "V2.9"]
-    },
-    {
-      "Name": "S7-1500 CPU 1511C-1 PN",
-      "OrderNumber": "6ES7 511-1CL03-0AB0",
-      "Version": "V4.0",
-      "AvailableVersions":  ["V3.1", "V4.0"]
-    },
-    {
-      "Name": "S7-1500 CPU 1512C-1 PN",
-      "OrderNumber": "6ES7 512-1CK00-0AB0",
-      "Version": "V2.9",
-      "AvailableVersions": ["V1.8", "V2.0", "V2.1","V2.5", "V2.6","V2.8", "V2.9"]
-    },
-    {
-      "Name": "S7-1500 CPU 1512C-1 PN",
-      "OrderNumber": "6ES7 512-1CK01-0AB0",
-      "Version": "V2.9",
-      "AvailableVersions": ["V2.5", "V2.6","V2.8", "V2.9"]
-    },
-    {
-      "Name": "S7-1500 CPU 1512C-1 PN",
-      "OrderNumber": "6ES7 512-1CM03-0AB0",
-      "Version": "V4.0",
-      "AvailableVersions": ["V3.1", "V4.0"]
-    }
+    { "Name": "S7-1500 CPU 1511-1 PN", "OrderNumber": "6ES7 511-1AK00-0AB0", "Version": "V1.8", "AvailableVersions": ["V1.0", "V1.1", "V1.5", "V1.6", "V1.7", "V1.8"] },
+    { "Name": "S7-1500 CPU 1511-1 PN", "OrderNumber": "6ES7 511-1AK01-0AB0", "Version": "V2.8", "AvailableVersions": ["V1.8", "V2.0", "V2.1", "V2.5", "V2.6", "V2.8"] },
+    { "Name": "S7-1500 CPU 1511-1 PN", "OrderNumber": "6ES7 511-1AK02-0AB0", "Version": "V2.9", "AvailableVersions": ["V2.5", "V2.6", "V2.8", "V2.9"] },
+    { "Name": "S7-1500 CPU 1511-1 PN", "OrderNumber": "6ES7 511-1AL03-0AB0", "Version": "V4.0", "AvailableVersions": ["V3.0", "V3.1", "V4.0"] },
+    
+    { "Name": "S7-1500 CPU 1511C-1 PN", "OrderNumber": "6ES7 511-1CK00-0AB0", "Version": "V2.9", "AvailableVersions": ["V1.8", "V2.0", "V2.1", "V2.5", "V2.6", "V2.8", "V2.9"] },
+    { "Name": "S7-1500 CPU 1511C-1 PN", "OrderNumber": "6ES7 511-1CK01-0AB0", "Version": "V2.9", "AvailableVersions": ["V2.5", "V2.6", "V2.8", "V2.9"] },
+    { "Name": "S7-1500 CPU 1511C-1 PN", "OrderNumber": "6ES7 511-1CL03-0AB0", "Version": "V4.0", "AvailableVersions": ["V3.1", "V4.0"] },
+    
+    { "Name": "S7-1500 CPU 1512C-1 PN", "OrderNumber": "6ES7 512-1CK00-0AB0", "Version": "V2.9", "AvailableVersions": ["V1.8", "V2.0", "V2.1", "V2.5", "V2.6", "V2.8", "V2.9"] },
+    { "Name": "S7-1500 CPU 1512C-1 PN", "OrderNumber": "6ES7 512-1CK01-0AB0", "Version": "V2.9", "AvailableVersions": ["V2.5", "V2.6", "V2.8", "V2.9"] },
+    { "Name": "S7-1500 CPU 1512C-1 PN", "OrderNumber": "6ES7 512-1CM03-0AB0", "Version": "V4.0", "AvailableVersions": ["V3.1", "V4.0"] },
+    
+    { "Name": "S7-1500 CPU 1513-1 PN", "OrderNumber": "6ES7 513-1AL00-0AB0", "Version": "V1.8", "AvailableVersions": ["V1.0", "V1.1", "V1.5", "V1.6", "V1.7", "V1.8"] },
+    { "Name": "S7-1500 CPU 1513-1 PN", "OrderNumber": "6ES7 513-1AL01-0AB0", "Version": "V2.9", "AvailableVersions": ["V1.8", "V2.0", "V2.1", "V2.5", "V2.6", "V2.8", "V2.9"] },
+    { "Name": "S7-1500 CPU 1513-1 PN", "OrderNumber": "6ES7 513-1AL02-0AB0", "Version": "V2.9", "AvailableVersions": ["V2.5", "V2.6", "V2.8", "V2.9"] },
+    { "Name": "S7-1500 CPU 1513-1 PN", "OrderNumber": "6ES7 513-1AM03-0AB0", "Version": "V4.0", "AvailableVersions": ["V3.0", "V3.1", "V4.0"] },
+
+    { "Name": "S7-1500 CPU 1515-2 PN", "OrderNumber": "6ES7 515-2AM00-0AB0", "Version": "V1.8", "AvailableVersions": ["V1.5", "V1.6", "V1.7", "V1.8"] },
+    { "Name": "S7-1500 CPU 1515-2 PN", "OrderNumber": "6ES7 515-2AM01-0AB0", "Version": "V2.9", "AvailableVersions": ["V1.8", "V2.0", "V2.1", "V2.5", "V2.6", "V2.8", "V2.9"] },
+    { "Name": "S7-1500 CPU 1515-2 PN", "OrderNumber": "6ES7 515-2AM02-0AB0", "Version": "V2.9", "AvailableVersions": ["V2.8", "V2.9"] },
+    { "Name": "S7-1500 CPU 1515-2 PN", "OrderNumber": "6ES7 515-2AN03-0AB0", "Version": "V4.0", "AvailableVersions": ["V3.0", "V3.1", "V4.0"] },
+  
+    { "Name": "S7-1500 CPU 1516-3 PN/DP", "OrderNumber": "6ES7 516-3AN00-0AB0", "Version": "V1.8", "AvailableVersions": ["V1.0", "V1.1", "V1.5", "V1.6", "V1.7", "V1.8"] },
+    { "Name": "S7-1500 CPU 1516-3 PN/DP", "OrderNumber": "6ES7 516-3AN01-0AB0", "Version": "V2.9", "AvailableVersions": ["V1.8", "V2.0", "V2.1", "V2.5", "V2.6", "V2.8", "V2.9"] },
+    { "Name": "S7-1500 CPU 1516-3 PN/DP", "OrderNumber": "6ES7 516-3AN02-0AB0", "Version": "V2.9", "AvailableVersions": ["V2.8", "V2.9"] },
+    { "Name": "S7-1500 CPU 1516-3 PN/DP", "OrderNumber": "6ES7 516-3AP03-0AB0", "Version": "V4.0", "AvailableVersions": ["V3.0", "V3.1", "V4.0"] },
+
+    { "Name": "S7-1500 CPU 1517-3 PN/DP", "OrderNumber": "6ES7 517-3AQ10-0AB0", "Version": "V4.0", "AvailableVersions": ["V4.0"] },
+
+    { "Name": "S7-1500 CPU 1517-3 PN/DP", "OrderNumber": "6ES7 517-3AP00-0AB0", "Version": "V3.1", "AvailableVersions": ["V1.6", "V1.7", "V1.8", "V2.0", "V2.1", "V2.5", "V2.6", "V2.8", "V2.9", "V3.0", "V3.1"] }
+
   ],
   "WinCC_Unified": [
     {

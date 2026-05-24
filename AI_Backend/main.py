@@ -372,8 +372,18 @@ def main():
             elif command_type == "agent_mode":
                 # Gọi thẳng file agent_core.py, nó đã trả về chuỗi JSON xịn rồi
                 agent_response_str = process_agent_query(user_query, CURRENT_KEY)
-                
-                # 🌟 ÉP XẢ ỐNG TRỰC TIẾP: Không dùng send_response để tránh bị bọc JSON kép
+
+                # DEBUG: AI AGENT RESPONSE LOGGING (uncomment to enable)
+                # try:
+                #     import datetime
+                #     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                #     file_path = f"agent_log_{timestamp}.json"
+        
+                #     with open(file_path, "w", encoding="utf-8") as f:
+                #         f.write(agent_response_str)
+                # except Exception as e:
+                #     sys.stderr.write(f"\n[ERROR] Cannot save log file: {str(e)}\n")
+            
                 output_bytes = (agent_response_str + "\n").encode('utf-8')
                 sys.stdout.buffer.write(output_bytes)
                 sys.stdout.buffer.flush()

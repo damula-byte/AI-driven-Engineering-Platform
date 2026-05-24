@@ -128,39 +128,6 @@ namespace TIA_Copilot_CLI
                 Console.ResetColor();
             }
         }
-
-        private static string LookUpInPlcCatalog(string modelName)
-        {
-            string catalogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PlcCatalog.json");
-            if (!File.Exists(catalogPath)) return null;
-
-            string jsonContent = File.ReadAllText(catalogPath);
-            JObject catalog = JObject.Parse(jsonContent);
-
-            // Chuẩn hóa tên model AI gửi về: xóa hết khoảng trắng, chuyển về chữ thường
-            string normalizedInput = modelName.ToLower().Replace(" ", "").Replace("cpu", "").Replace("pn", "");
-
-            foreach (var property in catalog.Properties())
-            {
-                JArray devices = (JArray)property.Value;
-                foreach (var device in devices)
-                {
-                    string rawName = device["Name"]?.ToString();
-                    // Chuẩn hóa tên trong JSON: xóa hết khoảng trắng, chuyển về chữ thường, bỏ "cpu", "pn"
-                    string normalizedJsonName = rawName.ToLower().Replace(" ", "").Replace("cpu", "").Replace("pn", "");
-
-                    // So sánh xem tên AI gửi có nằm trong tên JSON không
-                    if (normalizedJsonName.Contains(normalizedInput))
-                    {
-                        string orderNumber = device["OrderNumber"]?.ToString();
-                        string version = device["Version"]?.ToString();
-                        return $"OrderNumber:{orderNumber}/{version}";
-                    }
-                }
-            }
-            return null;
-        }
-
         private static async Task ExecuteAction(JObject actionItem, TIA_V20 tiaEngine)
         {
             string action = actionItem["action"]?.ToString();
@@ -180,7 +147,10 @@ namespace TIA_Copilot_CLI
             {
                 case "CREATE_PROJECT":
                     string namec = actionItem["name"]?.ToString();
-                    string pathc = actionItem["path"]?.ToString();
+                    string pathc = SanitizePath(actionItem["path"]?.ToString());
+
+                    Console.WriteLine($"[i] Processing path: {pathc}");
+
                     if (tiaEngine.CreateTIAproject(pathc, namec, true))
                         Console.WriteLine($"✅ [SUCCESS] {action} {namec} thành công!");
                     else
@@ -189,7 +159,9 @@ namespace TIA_Copilot_CLI
 
                 case "OPEN_PROJECT":
                     string nameo = actionItem["name"]?.ToString();
-                    string patho = actionItem["path"]?.ToString();
+                    string patho = SanitizePath(actionItem["path"]?.ToString());
+                    Console.WriteLine($"[i] Processing path: {patho}");
+
                     if (tiaEngine.CreateTIAproject(patho, nameo, false))
                         Console.WriteLine($"✅ [SUCCESS] {action} {nameo} thành công!");
                     else
@@ -691,6 +663,56 @@ namespace TIA_Copilot_CLI
             }
         }
 
+        private static string LookUpInPlcCatalog(string modelName)
+        {
+            string catalogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PlcCatalog.json");
+            if (!File.Exists(catalogPath)) return null;
+
+            try
+            {
+                string jsonContent = File.ReadAllText(catalogPath);
+                JObject catalog = JObject.Parse(jsonContent);
+
+                // Chuẩn hóa input: Chỉ xóa khoảng trắng, giữ nguyên các từ khóa quan trọng để phân biệt
+                string normalizedInput = modelName.ToLower().Replace(" ", "").Replace("-", "");
+
+                string bestMatch = null;
+                string bestTid = null;
+
+                foreach (var property in catalog.Properties())
+                {
+                    JArray devices = (JArray)property.Value;
+                    foreach (var device in devices)
+                    {
+                        string rawName = device["Name"]?.ToString() ?? "";
+                        string orderNumber = device["OrderNumber"]?.ToString() ?? "";
+                        string version = device["Version"]?.ToString() ?? "V1.0";
+
+                        // Chuẩn hóa tên JSON: Chỉ xóa khoảng trắng, giữ nguyên cấu trúc để so khớp
+                        string normalizedJsonName = rawName.ToLower().Replace(" ", "").Replace("-", "");
+                        string normalizedOrder = orderNumber.ToLower().Replace(" ", "").Replace("-", "");
+
+                        // Logic so khớp:
+                        // 1. Nếu khớp chính xác 100% OrderNumber -> Trả về ngay lập tức (Ưu tiên cao nhất)
+                        if (normalizedOrder == normalizedInput)
+                            return $"OrderNumber:{orderNumber}/{version}";
+
+                        // 2. Nếu tên khớp một phần, lưu lại để so sánh (Phòng trường hợp có nhiều kết quả)
+                        if (normalizedJsonName.Contains(normalizedInput) || normalizedInput.Contains(normalizedJsonName))
+                        {
+                            bestMatch = $"OrderNumber:{orderNumber}/{version}";
+                        }
+                    }
+                }
+                return bestMatch; // Trả về kết quả khớp tốt nhất tìm được
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"⚠️ [PLC CATALOG ERROR]: {ex.Message}");
+            }
+            return null;
+        }
+
         private static string LookUpModuleInCatalog(string modelName, string family)
         {
             string catalogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ModuleCatalog.json");
@@ -779,6 +801,27 @@ namespace TIA_Copilot_CLI
 
             return generatedDir;
         }
+
+        private static string SanitizePath(string inputPath)
+        {
+            if (string.IsNullOrWhiteSpace(inputPath)) return string.Empty;
+
+            // 1. Loại bỏ các dấu gạch chéo đôi (do AI sinh ra dư thừa)
+            // 2. Tự động chuyển đổi định dạng hệ thống sang chuẩn của Windows
+            string cleanPath = inputPath.Replace("\\\\", "\\").Replace("/", "\\");
+
+            // 3. Sử dụng Path.GetFullPath để loại bỏ các ký tự lạ và chuẩn hóa về dạng đầy đủ
+            try
+            {
+                return Path.GetFullPath(cleanPath);
+            }
+            catch
+            {
+                return cleanPath; // Trả về đường dẫn gốc nếu Path bị lỗi định dạng nghiêm trọng
+            }
+        }
+
+
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         public static async Task HandleLoadTagsAsync(string tagFilePath)
         {

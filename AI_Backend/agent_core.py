@@ -519,12 +519,14 @@
 #     except Exception as e:
 #         return json.dumps({"status": "error", "message": str(e)})
 
+
 import json
+import sys
 from langchain_core.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 # ======================================================================
-# 1. ĐỊNH NGHĨA SUPER TOOL DUY NHẤT (THE ORCHESTRATOR)
+# 1. SUPER TOOL — handles both str and list from Gemini
 # ======================================================================
 
 @tool
@@ -534,33 +536,39 @@ def execute_pipeline_tool(actions_list: str):
     HOẶC CHUỖI HÀNH ĐỘNG NÀO TRÊN TIA PORTAL.
     - actions_list: Chuỗi JSON định dạng mảng chứa các hành động cần thực hiện tuần tự.
     """
+    # Gemini sometimes passes a Python list directly instead of a JSON string.
+    # Handle both cases defensively.
+    if isinstance(actions_list, list):
+        actions = actions_list
+    elif isinstance(actions_list, str):
+        actions = json.loads(actions_list)
+    else:
+        actions = []
+
     return json.dumps({
         "type": "multi_action",
-        "actions": json.loads(actions_list)
-    })
+        "actions": actions
+    }, ensure_ascii=False)
 
-# Chỉ cấp đúng 1 công cụ này cho AI, không cấp các hàm con để tránh AI bị phân tâm
 AGENT_TOOLS = [execute_pipeline_tool]
 
 # ======================================================================
-# 2. HÀM XỬ LÝ ĐIỀU PHỐI CHÍNH
+# 2. MAIN DISPATCHER
 # ======================================================================
 
 def process_agent_query(user_query: str, api_key: str):
-    debug_logs = []
     try:
         llm = ChatGoogleGenerativeAI(
             model="gemini-3.5-flash",
             temperature=0.0,
             google_api_key=api_key
         )
-        
-        # 🌟 TỪ ĐIỂN HÀNH ĐỘNG: Định nghĩa tất cả các tính năng cho AI đọc hiểu
+
         system_instruction = (
             "Bạn là trợ lý AI điều phối kịch bản tự động hóa TIA Portal v20.\n"
             "Nhiệm vụ của bạn là phân tích câu lệnh người dùng và dịch nó thành một chuỗi mảng JSON "
             "chứa các hành động tuần tự, rồi truyền vào công cụ 'execute_pipeline_tool'.\n\n"
-            
+
             "DANH SÁCH CÁC HÀNH ĐỘNG HỢP LỆ ĐỂ ĐƯA VÀO MẢNG JSON:\n"
             "- {'action': 'CONNECT_TIA'}: Kết nối với phần mềm TIA Portal. Luôn đặt lên đầu tiên nếu lệnh yêu cầu cấu hình/nạp phần cứng/phần mềm.\n"
             "- {'action': 'CREATE_PROJECT', 'name': '...', 'path': '...'}: Khởi tạo dự án mới hoàn toàn.\n"
@@ -575,78 +583,52 @@ def process_agent_query(user_query: str, api_key: str):
             "- {'action': 'IMPORT_HMI_TAGS', 'file_names': '...'}: Nạp bảng biến CSV vào trạm WinCC Unified/HMI.\n"
             "- {'action': 'CREATE_HMI_CONNECTION', 'driver': '...', 'hmi_ip': '...', 'plc_ip': '...', 'access_point': '...'}: Tạo kết nối truyền thông HMI-PLC. Luôn đặt trước import_hmi_tags_tool.\n"
             "- {'action': 'DRAW_SCADA', 'file_names': '...'}: Dựng màn hình SCADA/HMI từ file JSON.\n"
-            "- {'action': 'CHANGE_IP', 'ip': '...', 'subnet': '...', 'gateway': '...'}: Thay đổi thông số IP mạng của thiết bị.\n\n"
+            "- {'action': 'CHANGE_IP', 'ip': '...', 'subnet': '...', 'gateway': '...'}: Thay đổi thông số IP mạng của thiết bị.\n"
             "- {'action': 'COMPILE', 'mode': '...', 'rebuild': bool}: Biên dịch thiết bị đang chọn.\n"
-            "  + 'mode' bắt buộc là: 'hw' (chỉ biên dịch phần cứng), 'sw' (chỉ biên dịch phần mềm), hoặc 'both' (biên dịch cả hai). Mặc định là 'both'.\n"
-            "  + 'rebuild' là kiểu boolean (true/false). Nếu người dùng nói từ khóa 'rebuild' hoặc 'biên dịch lại toàn bộ', gán là true. Mặc định là false.\n\n"
-            "- {'action': 'ADD_MODULE', 'model_name': '...', 'slot': int}: Gắn thêm module mở rộng (DI, DQ, AI, AQ, CM, CP) vào Rack phần cứng.\n"
-            "  + 'model_name': Phải dựa theo ModuleCatalog để trích xuất chính xác Tên hoặc Mã OrderNumber (MLFB) và phiên bản (Ví dụ: 'DI 16x24VDC' hoặc '6ES7 521-1BH10-0AA0').\n"
-            "  + 'slot': Số thứ tự Slot cắm vật lý trên Rack. (Nếu người dùng bảo cắm module truyền thông CP/CM của S7-1200, hãy tự đặt vào các slot bên trái CPU như 101, 102. Nếu là module DI/DQ/AI/AQ, hãy cắm vào các slot bên phải như slot 2, 3, 4).\n\n"
-            "- {'action': 'GENERATE_CODE', 'block_type': '...', 'query': '...'}: Kích hoạt mô hình AI sinh mã nguồn tự động dựa trên yêu cầu công nghệ.\n"
-            "  + 'block_type': Bắt buộc phải chuẩn hóa về các chuỗi sau: 'ORGANIZATION_BLOCK', 'FUNCTION_BLOCK', 'FUNCTION', 'DATA_BLOCK', 'HMI_SCREEN', 'CWC_SCREEN'.\n"
-            "  + 'query': Nội dung mô tả chi tiết thuật toán logic mà người dùng muốn AI lập trình.\n\n"
-            
-            "QUY TẮC: Khi người dùng yêu cầu add module vào một thiết bị cụ thể, bắt buộc phải tự động chèn lệnh CHOOSE_DEVICE lên ngay phía trước lệnh ADD_MODULE.\n\n"
-            
-            "QUY TẮC: Khi người dùng yêu cầu compile một thiết bị cụ thể, bắt buộc phải chèn lệnh CHOOSE_DEVICE lên ngay trước lệnh COMPILE.\n\n"
-            
-            "QUY TẮC PHÂN BIỆT FILE & THAM SỐ:\n"
-            "1. Đuôi '.csv' của PLC -> IMPORT_PLC_TAGS | Đuôi '.csv' của HMI/WinCC -> IMPORT_HMI_TAGS.\n"
-            "2. Đuôi '.json' -> DRAW_SCADA | Đuôi '.scl' -> IMPORT_OB (nếu tên chứa OB) hoặc IMPORT_FB_FC.\n"
-            "3. Nếu lệnh CHANGE_IP hoặc tạo connection thiếu Subnet Mask, điền mặc định '255.255.255.0'. Nếu thiếu Gateway, điền ''.\n"
-            "4. Khi thực hiện nạp/đổi IP cho một thiết bị cụ thể, bắt buộc tự động chèn hành động CHOOSE_DEVICE lên ngay phía trước nó.\n\n"
-            
-            "VÍ DỤ TƯ DUY 1 (TẠO TRẠM VÀ VẼ MÀN HÌNH):\n"
-            "Yêu cầu: 'create new wincc system and import Main_Process screen'\n"
-            "JSON: [{\"action\": \"CONNECT_TIA\"}, {\"action\": \"CREATE_DEVICE\", \"name\": \"WinCC_PC_1\", \"ip\": \"192.168.0.1\", \"device_model_name\": \"Simatic WinCC Unified PC\"}, {\"action\": \"DRAW_SCADA\", \"file_names\": \"Main_Process.json\"}]\n\n"
-            
-            "VÍ DỤ TƯ DUY 2 (NẠP BIẾN HMI ĐẦY ĐỦ): \n"
-            "Yêu cầu: 'import Main_Process_HMI_Tags into WinCC_PC_1'\n"
-            "JSON: [{\"action\": \"CONNECT_TIA\"}, {\"action\": \"CHOOSE_DEVICE\", \"name\": \"WinCC_PC_1\"}, {\"action\": \"CREATE_HMI_CONNECTION\", \"hmi_ip\": \"192.168.0.2\", \"plc_ip\": \"192.168.0.1\"}, {\"action\": \"IMPORT_HMI_TAGS\", \"file_names\": \"Main_Process_HMI_Tags.csv\"}]\n\n"
-            
-            "VÍ DỤ TƯ DUY 3 (ĐỔI IP PHẦN CỨNG):\n"
-            "Yêu cầu: 'connect TIA then change IP of PLC_1 to 10.10.10.5'\n"
-            "JSON: [{\"action\": \"CONNECT_TIA\"}, {\"action\": \"CHOOSE_DEVICE\", \"name\": \"PLC_1\"}, {\"action\": \"CHANGE_IP\", \"ip\": \"10.10.10.5\", \"subnet\": \"255.255.255.0\", \"gateway\": \"\"}]"
-        
-            "VÍ DỤ TƯ DUY 4 (BIÊN DỊCH PHẦN MỀM THIẾT BỊ):\n"
+            "  + 'mode': 'hw', 'sw', hoặc 'both'. Mặc định là 'both'.\n"
+            "  + 'rebuild': true/false. Mặc định là false.\n"
+            "- {'action': 'ADD_MODULE', 'model_name': '...', 'slot': int}: Gắn thêm module mở rộng vào Rack.\n"
+            "- {'action': 'GENERATE_CODE', 'block_type': '...', 'query': '...'}: Kích hoạt mô hình AI sinh mã nguồn.\n"
+            "  + 'block_type': 'ORGANIZATION_BLOCK', 'FUNCTION_BLOCK', 'FUNCTION', 'DATA_BLOCK', 'HMI_SCREEN', 'CWC_SCREEN'.\n\n"
+
+            "QUY TẮC:\n"
+            "1. Khi nạp/đổi IP cho thiết bị cụ thể → tự động chèn CHOOSE_DEVICE trước.\n"
+            "2. Khi COMPILE hoặc ADD_MODULE cho thiết bị cụ thể → tự động chèn CHOOSE_DEVICE trước.\n"
+            "3. Đuôi .csv của PLC → IMPORT_PLC_TAGS | Đuôi .csv của HMI → IMPORT_HMI_TAGS.\n"
+            "4. Đuôi .json → DRAW_SCADA | Đuôi .scl → IMPORT_OB (nếu tên chứa OB) hoặc IMPORT_FB_FC.\n"
+            "5. Nếu thiếu Subnet Mask → mặc định '255.255.255.0'. Nếu thiếu Gateway → mặc định ''.\n\n"
+
+            "VÍ DỤ:\n"
             "Yêu cầu: 'connect and compile software for PLC_1'\n"
-            "JSON: [{\"action\": \"CONNECT_TIA\"}, {\"action\": \"CHOOSE_DEVICE\", \"name\": \"PLC_1\"}, {\"action\": \"COMPILE\", \"mode\": \"sw\", \"rebuild\": false}]\n\n"
-            
-            "VÍ DỤ TƯ DUY 5 (REBUILD TOÀN BỘ TRẠM HMI):\n"
-            "Yêu cầu: 'rebuild all hardware and software for Wincc_PC_1'\n"
-            "JSON: [{\"action\": \"CONNECT_TIA\"}, {\"action\": \"CHOOSE_DEVICE\", \"name\": \"Wincc_PC_1\"}, {\"action\": \"COMPILE\", \"mode\": \"both\", \"rebuild\": true}]"
-
-            "VÍ DỤ TƯ DUY 6 (GẮN MODULE THEO CATALOG): \n"
-            "Yêu cầu: 'connect TIA, choose PLC_1, and then add signal module DI 16x24VDC into slot 2'\n"
-            "JSON: [{\"action\": \"CONNECT_TIA\"}, {\"action\": \"CHOOSE_DEVICE\", \"name\": \"PLC_1\"}, {\"action\": \"ADD_MODULE\", \"model_name\": \"DI 16x24VDC\", \"slot\": 2}]\n\n"
-            
-            "VÍ DỤ TƯ DUY 7 (GẮN MODULE TRUYỀN THÔNG ĐỘNG PHÍA BÊN TRÁI):\n"
-            "Yêu cầu: 'add communication module CP 1243-1 into PLC_A'\n"
-            "JSON: [{\"action\": \"CONNECT_TIA\"}, {\"action\": \"CHOOSE_DEVICE\", \"name\": \"PLC_A\"}, {\"action\": \"ADD_MODULE\", \"model_name\": \"CP 1243-1\", \"slot\": 101}]"
-
-            "VÍ DỤ TƯ DUY 8 (AI TỰ ĐỘNG VIẾT CODE SCL CHO FB):\n"
-            "Yêu cầu: 'connect to PLC_1 and generate FB code for standard 3-wire motor control logic'\n"
-            "JSON: [{\"action\": \"CONNECT_TIA\"}, {\"action\": \"CHOOSE_DEVICE\", \"name\": \"PLC_1\"}, {\"action\": \"GENERATE_CODE\", \"block_type\": \"FUNCTION_BLOCK\", \"query\": \"standard 3-wire motor control logic\"}]\n\n"
-            
-            "VÍ DỤ TƯ DUY 9 (AI TỰ ĐỘNG LẬP TRÌNH VÒNG QUÉT OB HỆ THỐNG):\n"
-            "Yêu cầu: 'in PLC_A create logic code for OB cyclic interrupt to call calculation function every 10ms'\n"
-            "JSON: [{\"action\": \"CONNECT_TIA\"}, {\"action\": \"CHOOSE_DEVICE\", \"name\": \"PLC_A\"}, {\"action\": \"GENERATE_CODE\", \"block_type\": \"ORGANIZATION_BLOCK\", \"query\": \"cyclic interrupt to call calculation function every 10ms\"}]"
+            "JSON: [{\"action\": \"CONNECT_TIA\"}, {\"action\": \"CHOOSE_DEVICE\", \"name\": \"PLC_1\"}, {\"action\": \"COMPILE\", \"mode\": \"sw\", \"rebuild\": false}]\n"
         )
-        
+
         llm_with_tools = llm.bind_tools(AGENT_TOOLS)
         full_prompt = f"{system_instruction}\n\nNgười dùng yêu cầu: {user_query}"
         response = llm_with_tools.invoke(full_prompt)
-        
+
+        # Handle tool calls
         if response.tool_calls:
-            # Thực thi Super Tool điều phối duy nhất
             tool_call = response.tool_calls[0]
             raw_result = execute_pipeline_tool.invoke(tool_call['args'])
             return raw_result
-        else:
-            return json.dumps({
-                "type": "chat_response",
-                "content": response.content
-            })
+
+        # Handle plain text response (no tool call fired)
+        # response.content may be a string or a list of content blocks (newer Gemini)
+        content = response.content
+        if isinstance(content, list):
+            content = " ".join(
+                block.get("text", "") if isinstance(block, dict) else str(block)
+                for block in content
+            ).strip()
+
+        return json.dumps({
+            "type": "chat_response",
+            "content": content or "Agent did not produce a response."
+        }, ensure_ascii=False)
+
+    except Exception as e:
+        return json.dumps({"status": "error", "message": f"Agent Error: {str(e)}"}, ensure_ascii=False)
             
     except Exception as e:
         return json.dumps({"status": "error", "message": f"Agent Error: {str(e)}"})
