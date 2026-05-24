@@ -13,9 +13,27 @@
     { "Name": "AI 4xRTD", "OrderNumber": "6ES7 231-5PD32-0XB0", "Version": "V2.0", "AvailableVersions": ["V2.0"] },
     { "Name": "AI 4xTC", "OrderNumber": "6ES7 231-5QD32-0XB0", "Version": "V2.0", "AvailableVersions": ["V2.0"] },
     { "Name": "AI 4x13BIT/AQ 2x14BIT", "OrderNumber": "6ES7 234-4HE32-0XB0", "Version": "V2.0", "AvailableVersions": ["V2.0"] },
-    { "Name": "CP 1243-1 (Ethernet)", "OrderNumber": "6GK7 243-1BX30-0XE0", "Version": "V3.2", "AvailableVersions": ["V3.0", "V3.2"] },
+    { "Name": "CP 1243-1", "OrderNumber": "6GK7 243-1BX30-0XE0", "Version": "V3.2", "AvailableVersions": ["V3.0", "V3.2"] },
+    { "Name": "CP 1243-1 DNP3", "OrderNumber": "6GK7 243-1JX30-0XE0", "Version": "V3.2", "AvailableVersions": ["V3.0", "V3.2"] },
+    { "Name": "CP 1243-1 IEC", "OrderNumber": "6GK7 243-1PX30-0XE0", "Version": "V3.2", "AvailableVersions": ["V3.0", "V3.2"] },
+    { "Name": "CP 1242-7", "OrderNumber": "6GK7 242-7KX30-0XE0", "Version": "V3.2", "AvailableVersions": ["V3.0", "V3.2"] },
+    { "Name": "CP 1242-7 GPRS", "OrderNumber": "6GK7 242-7KX31-0XE0", "Version": "V3.2", "AvailableVersions": ["V3.0", "V3.2"] },
+    { "Name": "CP 1243-7 LTE", "OrderNumber": "6GK7 243-7KX30-0XE0", "Version": "V3.2", "AvailableVersions": ["V3.0", "V3.2"] },
+    { "Name": "CP 1243-7 LTE EU", "OrderNumber": "6GK7 243-7SX30-0XE0", "Version": "V3.2", "AvailableVersions": ["V3.0", "V3.2"] },
+    { "Name": "CP 1243-8 IRC", "OrderNumber": "6GK7 243-8RX30-0XE0", "Version": "V3.2", "AvailableVersions": ["V3.0", "V3.2"] },
+    { "Name": "TS Module GSM", "OrderNumber": "6GK7 972-0MG00-0XA0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
+    { "Name": "TS Module ISDN", "OrderNumber": "6ES7 972-0MD00-0XA0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
+    { "Name": "TS Module Modem", "OrderNumber": "6ES7 972-0MM00-0XA0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
+    { "Name": "TS Module RS-232", "OrderNumber": "6ES7 972-0MS00-0XA0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
+    { "Name": "CM 1242-5 (Profibus)", "OrderNumber": "6GK7 242-5DX30-0XE0", "Version": "V2.0",   "AvailableVersions": ["V2.0"] },
+    { "Name": "CM 1243-5 (Profibus)", "OrderNumber": "6GK7 243-5DX30-0XE0", "Version": "V2.0",   "AvailableVersions": ["V2.0"] },
+    { "Name": "CM 1241 (RS232)", "OrderNumber": "6ES7 241-1AH30-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.1", "V2.2"] },
     { "Name": "CM 1241 (RS232)", "OrderNumber": "6ES7 241-1AH32-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.1", "V2.2"] },
-    { "Name": "CM 1241 (RS485)", "OrderNumber": "6ES7 241-1CH32-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.1", "V2.2"] }
+    { "Name": "CM 1241 (RS485)", "OrderNumber": "6ES7 241-1CH30-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.1", "V2.2"] },
+    { "Name": "CM 1241 (RS422/485)", "OrderNumber": "6ES7 241-1CH31-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.1", "V2.2"] },
+    { "Name": "CM 1241 (RS422/485)", "OrderNumber": "6ES7 241-1CH32-0XB0", "Version": "V2.2", "AvailableVersions": ["V2.1", "V2.2"] }
+
+ 
   ],
   "S71500_Modules": [
     { "Name": "DI 16x24VDC BA", "OrderNumber": "6ES7 521-1BH10-0AA0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
@@ -32,8 +50,18 @@
     { "Name": "AI 8xU/I HF", "OrderNumber": "6ES7 531-7NF00-0AB0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
     { "Name": "AQ 4xU/I ST", "OrderNumber": "6ES7 532-5HD00-0AB0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
     { "Name": "AQ 8xU/I HS", "OrderNumber": "6ES7 532-5HF00-0AB0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
+
+    { "Name": "TIM 1531 IRC (Remote Communication)", "OrderNumber": "6GK7 543-1MX00-0XE0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
+    { "Name": "CM 1542-5(PROFIBUS)", "OrderNumber": "6GK7 542-5DX00-0XE0", "Version": "V2.0", "AvailableVersions": ["V1.0", "V2.0"] },
+    { "Name": "CM 1542-5(PROFIBUS)", "OrderNumber": "6GK7 542-5DX10-0XE0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
+    { "Name": "CP 1542-5 (PROFIBUS)", "OrderNumber": "6GK7 542-5FX00-0XE0", "Version": "V2.0", "AvailableVersions": ["V1.0", "V2.0"] },
+    { "Name": "CP 1542-5 (PROFIBUS)", "OrderNumber": "6GK7 542-5FX10-0XE0", "Version": "V1.0", "AvailableVersions": ["V1.0"] },
+    { "Name": "CP 1542-1 (Ethernet)", "OrderNumber": "6GK7 542-1AX00-0XE0", "Version": "V3.0", "AvailableVersions": ["V2.1", "V3.0"] },
+    { "Name": "CP 1542-1 (Ethernet)", "OrderNumber": "6GK7 542-1AX10-0XE0", "Version": "V3.0", "AvailableVersions": ["V2.1", "V3.0"] },
     { "Name": "CP 1543-1 (Ethernet)", "OrderNumber": "6GK7 543-1AX00-0XE0", "Version": "V3.0", "AvailableVersions": ["V2.1", "V3.0"] },
-    { "Name": "CM 1542-5 (PROFIBUS)", "OrderNumber": "6GK7 542-5DX00-0XE0", "Version": "V2.0", "AvailableVersions": ["V1.0", "V2.0"] },
+    { "Name": "CP 1543-1 (Ethernet)", "OrderNumber": "6GK7 543-1AX10-0XE0", "Version": "V3.0", "AvailableVersions": ["V2.1", "V3.0"] },
+    { "Name": "CP 1545-1 (Ethernet)", "OrderNumber": "6GK7 545-1AX00-0XE0", "Version": "V3.0", "AvailableVersions": ["V2.1", "V3.0"] },
+    { "Name": "CP 1545-1 (Ethernet)", "OrderNumber": "6GK7 545-1AX10-0XE0", "Version": "V3.0", "AvailableVersions": ["V2.1", "V3.0"] },
     { "Name": "CM 8xIO-Link master", "OrderNumber": "6ES7 547-1JF00-0AB0", "Version": "V1.0", "AvailableVersions": ["V1.0"] }
   ]
 }
