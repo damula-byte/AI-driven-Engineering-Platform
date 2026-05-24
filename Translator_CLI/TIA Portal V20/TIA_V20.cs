@@ -52,6 +52,7 @@ namespace Middleware_console
 
         public bool IsConnected => _tiaPortal != null && _project != null;
 
+        // Connect TIA
         public void ConnectToTiaPortal()
         {
             if (!ConnectToTIA())
@@ -85,7 +86,7 @@ namespace Middleware_console
             catch { return false; }
         }
 
-        public bool CreateTIAproject(string path, string name, bool createNew)
+        public bool CreateTIAproject(string path, string name, bool createNew) // (path: full path to project folder ; name: project's name ; createNew: true = create new project, false = open existing project)
         {
             try
             {
@@ -282,13 +283,13 @@ namespace Middleware_console
                 // 2. CẤU HÌNH MẠNG NÂNG CAO (IP, Subnet, Gateway)
                 if (newDevice != null && !string.IsNullOrEmpty(ip))
                 {
-                    try 
-                    { 
+                    try
+                    {
                         // Tận dụng hàm UpdateNetworkSettings để đảm bảo logic đồng nhất
-                        UpdateNetworkSettings(devName, ip, subnet, gateway); 
+                        UpdateNetworkSettings(devName, ip, subnet, gateway);
                         Console.WriteLine($"   [Network] Configured: IP={ip}, Subnet={subnet}, GW={gateway}");
-                    } 
-                    catch (Exception exNetwork) 
+                    }
+                    catch (Exception exNetwork)
                     {
                         Console.WriteLine($"   [Warning] Device created but Network Config failed: {exNetwork.Message}");
                     }
@@ -296,60 +297,95 @@ namespace Middleware_console
             }
             catch (Exception ex) { throw new Exception($"Create Failed: {ex.Message}"); }
         }
-        
+
+        // public string PlugModule(string deviceName, string moduleIdentifier, int slotNum)
+        // {
+        //     if (_project == null) CheckProject();
+
+        //     try
+        //     {
+        //         // 1. Tìm thiết bị trong Project
+        //         Device device = _project.Devices.FirstOrDefault(d => d.Name == deviceName);
+        //         if (device == null) return $"FAILED: Device '{deviceName}' not found.";
+
+        //         // 2. Lấy DeviceItem đại diện cho Rack (thường là Item đầu tiên)
+        //         // Đối với S7-1200/1500, chúng ta sẽ Plug vào các Slot của Rack này
+        //         DeviceItem rack = device.DeviceItems[0];
+
+        //         // 3. Kiểm tra và thực hiện Plug
+        //         // moduleIdentifier có định dạng "OrderNumber:6ES7..."
+        //         if (rack.CanPlugNew(moduleIdentifier, "", slotNum))
+        //         {
+        //             rack.PlugNew(moduleIdentifier, "", slotNum);
+        //             return $"SUCCESS: Plugged {moduleIdentifier} into Slot {slotNum}.";
+        //         }
+        //         else
+        //         {
+        //             return $"FAILED: Cannot plug into Slot {slotNum}. Check if slot is occupied or incompatible.";
+        //         }
+        //     }
+        //     catch (Exception ex)
+        //     {
+        //         return $"ERROR: {ex.Message}";
+        //     }
+        // }
         public string PlugModule(string deviceName, string moduleIdentifier, int slotNum)
         {
             if (_project == null) CheckProject();
 
             try
             {
-                // 1. Tìm thiết bị trong Project
-                Device device = _project.Devices.FirstOrDefault(d => d.Name == deviceName);
-                if (device == null) return $"FAILED: Device '{deviceName}' not found.";
+                // 🌟 SỬA QUAN TRỌNG: Sử dụng hàm FindDeviceRecursive đồng bộ của hệ thống để tìm trạm phần cứng
+                // Điều này đảm bảo dù truyền vào tên CPU hay tên Trạm, Openness vẫn định vị chính xác thực thể.
+                Device device = FindDeviceRecursive(_project, deviceName);
 
-                // 2. Lấy DeviceItem đại diện cho Rack (thường là Item đầu tiên)
-                // Đối với S7-1200/1500, chúng ta sẽ Plug vào các Slot của Rack này
-                DeviceItem rack = device.DeviceItems[0]; 
+                if (device == null) return $"FAILED: Hardware Device '{deviceName}' not found in TIA Project.";
 
-                // 3. Kiểm tra và thực hiện Plug
-                // moduleIdentifier có định dạng "OrderNumber:6ES7..."
+                // Kiểm tra an toàn danh sách DeviceItems của Rack phần cứng
+                if (device.DeviceItems == null || device.DeviceItems.Count == 0)
+                    return $"FAILED: Device '{deviceName}' does not contain any valid hardware Rack items.";
+
+                // Lấy DeviceItem đại diện cho Rack (thường là Item đầu tiên [0])
+                DeviceItem rack = device.DeviceItems[0];
+
+                // Thực hiện kiểm tra và Plug Module vào slot vật lý
                 if (rack.CanPlugNew(moduleIdentifier, "", slotNum))
                 {
                     rack.PlugNew(moduleIdentifier, "", slotNum);
-                    return $"SUCCESS: Plugged {moduleIdentifier} into Slot {slotNum}.";
+                    return $"SUCCESS: Plugged {moduleIdentifier} into Slot {slotNum} successfully.";
                 }
                 else
                 {
-                    return $"FAILED: Cannot plug into Slot {slotNum}. Check if slot is occupied or incompatible.";
+                    return $"FAILED: Cannot plug into Slot {slotNum}. Check if slot is occupied or incompatible with hardware rules.";
                 }
             }
             catch (Exception ex)
             {
-                return $"ERROR: {ex.Message}";
+                return $"ERROR: Openness Exception during dynamic hardware plugging: {ex.Message}";
             }
         }
 
         public string GetDeviceFamily(string deviceName)
-{
-    if (_project == null) return "UNKNOWN";
-    var device = _project.Devices.FirstOrDefault(d => d.Name == deviceName);
-    if (device == null) return "UNKNOWN";
+        {
+            if (_project == null) return "UNKNOWN";
+            var device = _project.Devices.FirstOrDefault(d => d.Name == deviceName);
+            if (device == null) return "UNKNOWN";
 
-    // Duyệt qua các item bên trong để tìm CPU
-    foreach (DeviceItem item in device.DeviceItems)
-    {
-        // CPU luôn có mã bắt đầu bằng 6ES7 2... (1200) hoặc 6ES7 5... (1500)
-        // Ta check TypeIdentifier của chính cái Item đó
-        if (item.TypeIdentifier.Contains("6ES7 2")) return "S71200";
-        if (item.TypeIdentifier.Contains("6ES7 5")) return "S71500";
-    }
+            // Duyệt qua các item bên trong để tìm CPU
+            foreach (DeviceItem item in device.DeviceItems)
+            {
+                // CPU luôn có mã bắt đầu bằng 6ES7 2... (1200) hoặc 6ES7 5... (1500)
+                // Ta check TypeIdentifier của chính cái Item đó
+                if (item.TypeIdentifier.Contains("6ES7 2")) return "S71200";
+                if (item.TypeIdentifier.Contains("6ES7 5")) return "S71500";
+            }
 
-    // Fallback: Nếu không tìm thấy trong Item, thử check ở cấp Device
-    if (device.TypeIdentifier.Contains("6ES7 2")) return "S71200";
-    if (device.TypeIdentifier.Contains("6ES7 5")) return "S71500";
+            // Fallback: Nếu không tìm thấy trong Item, thử check ở cấp Device
+            if (device.TypeIdentifier.Contains("6ES7 2")) return "S71200";
+            if (device.TypeIdentifier.Contains("6ES7 5")) return "S71500";
 
-    return "UNKNOWN";
-}
+            return "UNKNOWN";
+        }
 
         public string GetDeviceType(string deviceName)
         {
@@ -403,40 +439,104 @@ namespace Middleware_console
             return plcNames;
         }
 
+        // private string GetCombinedDeviceName(Device device)
+        // {
+        //     // BẢO VỆ 1: Kiểm tra thiết bị hoặc TypeIdentifier có bị rỗng không (tránh lỗi dự án MTS)
+        //     if (device == null || string.IsNullOrEmpty(device.TypeIdentifier))
+        //     {
+        //         return device?.Name ?? "Unknown Device";
+        //     }
+
+        //     try
+        //     {
+        //         // BẢO VỆ 2: Nhận diện trạm PC Station dựa trên TypeIdentifier (không quan tâm tên)
+        //         bool isPcStation = device.TypeIdentifier.Contains("Simatic.PC") ||
+        //                            device.TypeIdentifier.Contains("System:Device.PC");
+
+        //         if (isPcStation)
+        //         {
+        //             string stationName = device.Name; // Ví dụ: Syrup_scada
+        //             string runtimeName = "";
+
+        //             // BẢO VỆ 3: Kiểm tra danh sách DeviceItems trước khi duyệt
+        //             if (device.DeviceItems != null && device.DeviceItems.Count > 0)
+        //             {
+        //                 foreach (DeviceItem item in device.DeviceItems)
+        //                 {
+        //                     if (item == null) continue;
+
+        //                     // Check if this Item contains Software (WinCC Unified / RT Professional)
+        //                     // Kiểm tra xem Item này có chứa Software (WinCC Unified / RT Professional) không
+        //                     var swContainer = item.GetService<SoftwareContainer>();
+
+        //                     if (swContainer != null ||
+        //                         item.Name.Contains("HMI_RT") ||
+        //                         item.Name.Contains("WinCC") ||
+        //                         item.Name.Contains("RT_"))
+        //                     {
+        //                         runtimeName = item.Name;
+        //                         break;
+        //                     }
+        //                 }
+        //             }
+
+        //             // Trả về định dạng gộp: Syrup_scada|HMI_RT_1
+        //             return !string.IsNullOrEmpty(runtimeName) ? $"{stationName}|{runtimeName}" : stationName;
+        //         }
+
+        //         // XỬ LÝ CHO PLC (S7-1500 / S7-1200)
+        //         if (device.DeviceItems != null && device.DeviceItems.Count > 0)
+        //         {
+        //             foreach (DeviceItem item in device.DeviceItems)
+        //             {
+        //                 if (item == null) continue;
+
+        //                 // BẢO VỆ: Chỉ lấy Item nào thực sự là CPU (có chứa SoftwareContainer)
+        //                 var swContainer = item.GetService<SoftwareContainer>();
+        //                 if (swContainer != null)
+        //                 {
+        //                     // Trả về tên CPU (ví dụ: PLC_1)
+        //                     return item.Name;
+        //                 }
+        //             }
+        //         }
+
+        //         return device.Name;
+        //     }
+        //     catch
+        //     {
+        //         // If any error occurs during scanning, return the most basic name to avoid crash
+        //         // Nếu có bất kỳ lỗi phát sinh trong quá trình quét, trả về tên cơ bản nhất để không làm sập ứng dụng
+        //         return device.Name;
+        //     }
+        // }
+
         private string GetCombinedDeviceName(Device device)
         {
-            // BẢO VỆ 1: Kiểm tra thiết bị hoặc TypeIdentifier có bị rỗng không (tránh lỗi dự án MTS)
-            if (device == null || string.IsNullOrEmpty(device.TypeIdentifier))
-            {
-                return device?.Name ?? "Unknown Device";
-            }
+            // BẢO VỆ 1: Kiểm tra thiết bị null
+            if (device == null) return "Unknown Device";
 
             try
             {
-                // BẢO VỆ 2: Nhận diện trạm PC Station dựa trên TypeIdentifier (không quan tâm tên)
-                bool isPcStation = device.TypeIdentifier.Contains("Simatic.PC") ||
-                                   device.TypeIdentifier.Contains("System:Device.PC");
+                // Nhận diện trạm PC Station (Unified / WinCC)
+                bool isPcStation = (device.TypeIdentifier ?? "").Contains("Simatic.PC") ||
+                                   (device.TypeIdentifier ?? "").Contains("System:Device.PC");
 
                 if (isPcStation)
                 {
-                    string stationName = device.Name; // Ví dụ: Syrup_scada
-                    string runtimeName = "";
+                    string stationName = device.Name;
+                    string runtimeName = null;
 
-                    // BẢO VỆ 3: Kiểm tra danh sách DeviceItems trước khi duyệt
-                    if (device.DeviceItems != null && device.DeviceItems.Count > 0)
+                    if (device.DeviceItems != null)
                     {
+                        // Duyệt qua tất cả DeviceItem để tìm phần mềm thực thi (Runtime)
                         foreach (DeviceItem item in device.DeviceItems)
                         {
                             if (item == null) continue;
 
-                            // Check if this Item contains Software (WinCC Unified / RT Professional)
-                            // Kiểm tra xem Item này có chứa Software (WinCC Unified / RT Professional) không
+                            // Ưu tiên tìm SoftwareContainer hợp lệ
                             var swContainer = item.GetService<SoftwareContainer>();
-
-                            if (swContainer != null ||
-                                item.Name.Contains("HMI_RT") ||
-                                item.Name.Contains("WinCC") ||
-                                item.Name.Contains("RT_"))
+                            if (swContainer != null)
                             {
                                 runtimeName = item.Name;
                                 break;
@@ -444,23 +544,23 @@ namespace Middleware_console
                         }
                     }
 
-                    // Trả về định dạng gộp: Syrup_scada|HMI_RT_1
-                    return !string.IsNullOrEmpty(runtimeName) ? $"{stationName}|{runtimeName}" : stationName;
+                    // CHỈ TRẢ VỀ DẠNG GỘP khi runtimeName tồn tại VÀ KHÁC tên trạm (tránh Syrup_scada|Syrup_scada)
+                    if (!string.IsNullOrEmpty(runtimeName) && !runtimeName.Equals(stationName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return $"{stationName}|{runtimeName}";
+                    }
+                    return stationName;
                 }
 
                 // XỬ LÝ CHO PLC (S7-1500 / S7-1200)
-                if (device.DeviceItems != null && device.DeviceItems.Count > 0)
+                // Tìm Item đầu tiên có chứa SoftwareContainer (thường là CPU)
+                if (device.DeviceItems != null)
                 {
                     foreach (DeviceItem item in device.DeviceItems)
                     {
-                        if (item == null) continue;
-
-                        // BẢO VỆ: Chỉ lấy Item nào thực sự là CPU (có chứa SoftwareContainer)
-                        var swContainer = item.GetService<SoftwareContainer>();
-                        if (swContainer != null)
+                        if (item != null && item.GetService<SoftwareContainer>() != null)
                         {
-                            // Trả về tên CPU (ví dụ: PLC_1)
-                            return item.Name;
+                            return item.Name; // Trả về tên CPU (ví dụ: PLC_1)
                         }
                     }
                 }
@@ -469,9 +569,7 @@ namespace Middleware_console
             }
             catch
             {
-                // If any error occurs during scanning, return the most basic name to avoid crash
-                // Nếu có bất kỳ lỗi phát sinh trong quá trình quét, trả về tên cơ bản nhất để không làm sập ứng dụng
-                return device.Name;
+                return device?.Name ?? "Unknown Device";
             }
         }
         public static List<string> GetSystemNetworkAdapters()
@@ -492,10 +590,11 @@ namespace Middleware_console
             catch { }
             return adapterNames;
         }
-        
+
         public string UpdateNetworkSettings(string deviceName, string newIp, string subnet = "255.255.255.0", string gateway = "")
         {
-            try {
+            try
+            {
                 Device device = FindDeviceRecursive(_project, deviceName);
                 var netItem = FindNetworkInterfaceItem(device.DeviceItems);
                 var node = netItem.GetService<Siemens.Engineering.HW.Features.NetworkInterface>().Nodes[0];
@@ -507,21 +606,23 @@ namespace Middleware_console
                 node.SetAttribute("SubnetMask", subnet);
 
                 // 3. Cập nhật Router/Gateway (Nếu có)
-                if (!string.IsNullOrEmpty(gateway)) {
+                if (!string.IsNullOrEmpty(gateway))
+                {
                     node.SetAttribute("UseRouter", true);
                     node.SetAttribute("RouterAddress", gateway);
                 }
 
                 return $"SUCCESS: Network settings updated for {deviceName}.";
             }
-            catch (Exception ex) {
+            catch (Exception ex)
+            {
                 return "FAILED: " + ex.Message;
             }
         }
         #endregion
 
         #region 4. PLC Software & Block Operations
-            public void CreateFBblockFromSource(string targetPlcName, string sourcePath)
+        public void CreateFBblockFromSource(string targetPlcName, string sourcePath)
         {
             if (_project == null) CheckProject();
             Device device = FindDeviceRecursive(_project, targetPlcName);
@@ -650,10 +751,6 @@ namespace Middleware_console
         public string CompileSpecific(string rawDeviceName, bool compileHW, bool compileSW, bool rebuildAll = false)
         {
             if (_project == null) return "Layer 0: Project not connected.";
-
-            // 1. SPLIT NAME GET OUTER LAYER (STATION)
-            // 1. TÁCH TÊN LẤY LỚP NGOÀI (STATION)
-            // Ví dụ: "PC-System_3|HMI_RT_3" -> lấy "PC-System_3"
             string targetStationName = rawDeviceName.Contains("|")
                                     ? rawDeviceName.Split('|')[0]
                                     : rawDeviceName;
@@ -683,9 +780,6 @@ namespace Middleware_console
             if (compileSW)
             {
                 sb.AppendLine("> Scanning SW layer...");
-                // Hàm FindSoftwareInDevice sẽ tự động quét vào các DeviceItems của 'device'
-                // Function FindSoftwareInDevice will auto scan into DeviceItems of 'device'
-                // để tìm HmiSoftware hoặc PlcSoftware.
                 object swTarget = FindSoftwareInDevice(device);
                 if (swTarget != null)
                     sb.AppendLine(InternalInvoke(swTarget, "SW", rebuildAll));
@@ -1054,237 +1148,242 @@ namespace Middleware_console
 
         #region HMI comfort: Screen Management
         public void GenerateHMIProject(ScadaProjectModel projectData, string selectedDeviceFromCli = null)
-{
-    if (_project == null) throw new Exception("Project not connected or opened in TIA Portal.");
-   
-
-    // BƯỚC 0: ƯU TIÊN LẤY TÊN TỪ CLI
-    string rawDeviceName = !string.IsNullOrEmpty(selectedDeviceFromCli)
-                        ? selectedDeviceFromCli
-                        : projectData.DeviceName;
-
-    string targetForDrawing = rawDeviceName.Contains("|")
-                            ? rawDeviceName.Split('|')[0]
-                            : rawDeviceName;
-
-    Console.WriteLine($"\n>>> INITIALIZING COMFORT HMI PROJECT ON DEVICE: {targetForDrawing} <<<");
-
-    // BƯỚC 1: VẼ TOÀN BỘ MÀN HÌNH COMFORT
-    foreach (var screen in projectData.Screens)
-    {
-        try
         {
-            
-            GenerateHMIScreenFromData(targetForDrawing, screen);
-            Console.WriteLine($"[SUCCESS] Finished drawing Comfort screen: {screen.ScreenName}");
+            if (_project == null) throw new Exception("Project not connected or opened in TIA Portal.");
+
+
+            // BƯỚC 0: ƯU TIÊN LẤY TÊN TỪ CLI
+            string rawDeviceName = !string.IsNullOrEmpty(selectedDeviceFromCli)
+                                ? selectedDeviceFromCli
+                                : projectData.DeviceName;
+
+            string targetForDrawing = rawDeviceName.Contains("|")
+                                    ? rawDeviceName.Split('|')[0]
+                                    : rawDeviceName;
+
+            Console.WriteLine($"\n>>> INITIALIZING COMFORT HMI PROJECT ON DEVICE: {targetForDrawing} <<<");
+
+            // BƯỚC 1: VẼ TOÀN BỘ MÀN HÌNH COMFORT
+            foreach (var screen in projectData.Screens)
+            {
+                try
+                {
+
+                    GenerateHMIScreenFromData(targetForDrawing, screen);
+                    Console.WriteLine($"[SUCCESS] Finished drawing Comfort screen: {screen.ScreenName}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[!] Error drawing Comfort screen {screen.ScreenName}: {ex.Message}");
+                }
+            }
+
+            // BƯỚC 2: LƯU DỰ ÁN TRƯỚC KHI GÁN MÀN HÌNH KHỞI ĐỘNG
+            try { _project.Save(); } catch { }
+
+            // BƯỚC 3: CHỈ ĐỊNH MÀN HÌNH CHÍNH (START SCREEN)
+            string startScreenName = !string.IsNullOrEmpty(projectData.StartScreenName)
+                                    ? projectData.StartScreenName
+                                    : (projectData.Screens.FirstOrDefault()?.ScreenName ?? "Main_Process");
+
+            Console.WriteLine($"[i] Configuring Comfort start screen: {startScreenName}...");
+
+            // 🌟 SỬA ĐỒNG BỘ: Gọi chính xác hàm SetStartScreenHMI chuyên biệt cho Comfort
+            SetStartScreenHMI(targetForDrawing, startScreenName);
+
+            Console.WriteLine("\n>>> ALL COMFORT SCREENS DRAWN AND CONFIGURED SUCCESSFULLY! <<<");
         }
-        catch (Exception ex)
+
+        // public void GenerateHMIScreenFromData(string deviceName, ScadaScreenModel screenData)
+        // {
+        //     // 1. LOCATE THIẾT BỊ
+        //     string cleanDeviceName = deviceName.Contains("|") ? deviceName.Split('|')[0].Trim() : deviceName.Trim();
+        //     Device targetDevice = null;
+
+        //     List<Device> allProjectDevices = new List<Device>();
+        //     foreach (Device dev in _project.Devices) { allProjectDevices.Add(dev); }
+        //     GetAllDevicesInGroupsFlattened(_project.DeviceGroups, allProjectDevices);
+
+        //     foreach (Device dev in allProjectDevices)
+        //     {
+        //         if (dev.Name.Equals(cleanDeviceName, StringComparison.OrdinalIgnoreCase)) { targetDevice = dev; break; }
+        //     }
+
+        //     if (targetDevice == null) throw new Exception($"[CRITICAL] Device '{cleanDeviceName}' not found.");
+
+        //     // 2. TRÍCH XUẤT HmiTarget
+        //     List<DeviceItem> allItems = new List<DeviceItem>();
+        //     GetAllDeviceItemsFlattened(targetDevice.DeviceItems, allItems);
+        //     object hmiTargetInstance = null;
+        //     foreach (var item in allItems)
+        //     {
+        //         var container = item.GetService<SoftwareContainer>();
+        //         if (container?.Software != null && container.Software.GetType().Name.Equals("HmiTarget", StringComparison.OrdinalIgnoreCase))
+        //         {
+        //             hmiTargetInstance = container.Software;
+        //             break;
+        //         }
+        //     }
+
+        //     dynamic targetHmi = hmiTargetInstance;
+        //     var screens = targetHmi.ScreenFolder.Screens;
+
+        //     // 3. XỬ LÝ SỐ MÀN HÌNH DUY NHẤT & DỌN DẸP
+        //     var existing = screens.Find(screenData.ScreenName);
+        //     if (existing != null) existing.Delete();
+
+        //     // 🌟 SỬA LỖI: Dùng GetAttribute để lấy Number thay vì thuộc tính s.Number
+        //     int maxNum = 100;
+        //     foreach (dynamic s in screens) 
+        //     { 
+        //         try {
+        //             int n = Convert.ToInt32(s.GetAttribute("Number")); 
+        //             if (n > maxNum) maxNum = n; 
+        //         } catch { continue; }
+        //     }
+        //     int uniqueScreenNumber = maxNum + 1;
+
+        //     // 4. QUÉT VÉT CẠN (Flatten) toàn bộ đối tượng từ screenData
+        //     List<ScadaItemModel> allFlattenedItems = new List<ScadaItemModel>();
+        //     void Flatten(IList<ScadaItemModel> list) {
+        //         if (list == null) return;
+        //         foreach (var item in list) {
+        //             allFlattenedItems.Add(item);
+        //             if (item.Properties.ContainsKey("Children")) Flatten(item.Properties["Children"] as IList<ScadaItemModel>);
+        //         }
+        //     }
+        //     Flatten(screenData.Items);
+        //     Console.WriteLine($"   [i] Quét thành công {allFlattenedItems.Count} phần tử cho màn hình: {screenData.ScreenName}");
+
+        //     // 5. CHUYỂN ĐỔI SANG SIMATICML
+        //     string generatedGraphicItemsXml = ConvertJsonItemsToSimaticML(allFlattenedItems);
+
+        //     string screenXmlContent = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+        // <Document>
+        //   <Hmi.Screen.Screen ID=""0"">
+        //     <AttributeList>
+        //       <Name>{screenData.ScreenName}</Name><Number>{uniqueScreenNumber}</Number>
+        //       <Width>{screenData.Width}</Width><Height>{screenData.Height}</Height>
+        //     </AttributeList>
+        //     <ObjectList>
+        //       <Hmi.Screen.ScreenLayer ID=""1"" CompositionName=""Layers"">
+        //         <AttributeList><Index>0</Index><Name>Layer_1</Name><VisibleES>true</VisibleES></AttributeList>
+        //         <ObjectList>{generatedGraphicItemsXml}</ObjectList>
+        //       </Hmi.Screen.ScreenLayer>
+        //     </ObjectList>
+        //   </Hmi.Screen.Screen>
+        // </Document>";
+
+        //     string tempXmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"temp_{screenData.ScreenName}.xml");
+        //     File.WriteAllText(tempXmlPath, screenXmlContent, System.Text.Encoding.UTF8);
+
+        //     // 6. IMPORT AN TOÀN VỚI PING PROJECT
+        //     try
+        //     {
+        //         string pName = _project.Name; // Ping project để kiểm tra trạng thái Project trước khi Import
+        //         FileInfo fileInfo = new FileInfo(tempXmlPath);
+        //         screens.Import(fileInfo, ImportOptions.Override);
+        //         Console.WriteLine($"   [√] Import thành công màn hình '{screenData.ScreenName}' số {uniqueScreenNumber}.");
+        //     }
+        //     catch (Exception ex)
+        //     {
+        //         Console.WriteLine($"   [CRITICAL] Lỗi không thể Import: {ex.Message}");
+        //     }
+        //     finally { if (File.Exists(tempXmlPath)) File.Delete(tempXmlPath); }
+        // }
+
+        public void GenerateHMIScreenFromData(string deviceName, ScadaScreenModel screenData)
         {
-            Console.WriteLine($"[!] Error drawing Comfort screen {screen.ScreenName}: {ex.Message}");
-        }
-    }
+            // 1. LOCATE THIẾT BỊ
+            string cleanDeviceName = deviceName.Contains("|") ? deviceName.Split('|')[0].Trim() : deviceName.Trim();
+            Device targetDevice = null;
 
-    // BƯỚC 2: LƯU DỰ ÁN TRƯỚC KHI GÁN MÀN HÌNH KHỞI ĐỘNG
-    try { _project.Save(); } catch { }
+            // Kiểm tra tính hợp lệ của Project
+            if (!IsProjectValid(_project)) throw new Exception("Project đã bị đóng hoặc không khả dụng.");
 
-    // BƯỚC 3: CHỈ ĐỊNH MÀN HÌNH CHÍNH (START SCREEN)
-    string startScreenName = !string.IsNullOrEmpty(projectData.StartScreenName)
-                            ? projectData.StartScreenName
-                            : (projectData.Screens.FirstOrDefault()?.ScreenName ?? "Main_Process");
+            List<Device> allProjectDevices = new List<Device>();
+            foreach (Device dev in _project.Devices) { allProjectDevices.Add(dev); }
+            GetAllDevicesInGroupsFlattened(_project.DeviceGroups, allProjectDevices);
 
-    Console.WriteLine($"[i] Configuring Comfort start screen: {startScreenName}...");
+            foreach (Device dev in allProjectDevices)
+            {
+                if (dev.Name.Equals(cleanDeviceName, StringComparison.OrdinalIgnoreCase)) { targetDevice = dev; break; }
+            }
+            if (targetDevice == null) throw new Exception($"[CRITICAL] Device '{cleanDeviceName}' not found.");
 
-    // 🌟 SỬA ĐỒNG BỘ: Gọi chính xác hàm SetStartScreenHMI chuyên biệt cho Comfort
-    SetStartScreenHMI(targetForDrawing, startScreenName);
+            // 2. TRÍCH XUẤT HmiTarget (Khởi tạo biến ở cấp hàm để tránh lỗi scope)
+            object hmiTargetInstance = null;
+            List<DeviceItem> allItems = new List<DeviceItem>();
+            GetAllDeviceItemsFlattened(targetDevice.DeviceItems, allItems);
 
-    Console.WriteLine("\n>>> ALL COMFORT SCREENS DRAWN AND CONFIGURED SUCCESSFULLY! <<<");
-}
+            foreach (var item in allItems)
+            {
+                var container = item.GetService<SoftwareContainer>();
+                if (container?.Software != null && container.Software.GetType().Name.Equals("HmiTarget", StringComparison.OrdinalIgnoreCase))
+                {
+                    hmiTargetInstance = container.Software;
+                    break;
+                }
+            }
+            if (hmiTargetInstance == null) throw new Exception("Không tìm thấy HmiTarget trên thiết bị.");
 
-// public void GenerateHMIScreenFromData(string deviceName, ScadaScreenModel screenData)
-// {
-//     // 1. LOCATE THIẾT BỊ
-//     string cleanDeviceName = deviceName.Contains("|") ? deviceName.Split('|')[0].Trim() : deviceName.Trim();
-//     Device targetDevice = null;
-    
-//     List<Device> allProjectDevices = new List<Device>();
-//     foreach (Device dev in _project.Devices) { allProjectDevices.Add(dev); }
-//     GetAllDevicesInGroupsFlattened(_project.DeviceGroups, allProjectDevices);
+            dynamic targetHmi = hmiTargetInstance;
+            var screens = targetHmi.ScreenFolder.Screens;
 
-//     foreach (Device dev in allProjectDevices)
-//     {
-//         if (dev.Name.Equals(cleanDeviceName, StringComparison.OrdinalIgnoreCase)) { targetDevice = dev; break; }
-//     }
+            // 3. DỌN DẸP AN TOÀN - Xóa màn hình trùng tên
+            try
+            {
+                var existing = screens.Find(screenData.ScreenName);
+                if (existing != null)
+                {
+                    Console.WriteLine($"   [i] Màn hình '{screenData.ScreenName}' tồn tại, đang xóa...");
+                    existing.Delete();
+                    System.Threading.Thread.Sleep(500); // Đợi TIA giải phóng tài nguyên
+                }
+            }
+            catch { /* Bỏ qua nếu màn hình không thể xóa */ }
 
-//     if (targetDevice == null) throw new Exception($"[CRITICAL] Device '{cleanDeviceName}' not found.");
+            // 3. TỰ ĐỘNG TĂNG SỐ MÀN HÌNH (Dùng biến Global để không bao giờ trùng)
+            if (!_hasInitializedCounter)
+            {
+                int maxNum = 100;
+                foreach (var s in screens)
+                {
+                    try
+                    {
+                        int n = Convert.ToInt32(s.GetAttribute("Number"));
+                        if (n > maxNum) maxNum = n;
+                    }
+                    catch { continue; }
+                }
+                _globalScreenNumberCounter = maxNum;
+                _hasInitializedCounter = true;
+            }
 
-//     // 2. TRÍCH XUẤT HmiTarget
-//     List<DeviceItem> allItems = new List<DeviceItem>();
-//     GetAllDeviceItemsFlattened(targetDevice.DeviceItems, allItems);
-//     object hmiTargetInstance = null;
-//     foreach (var item in allItems)
-//     {
-//         var container = item.GetService<SoftwareContainer>();
-//         if (container?.Software != null && container.Software.GetType().Name.Equals("HmiTarget", StringComparison.OrdinalIgnoreCase))
-//         {
-//             hmiTargetInstance = container.Software;
-//             break;
-//         }
-//     }
+            // Tăng số cho màn hình hiện tại
+            _globalScreenNumberCounter++;
+            int uniqueScreenNumber = _globalScreenNumberCounter;
 
-//     dynamic targetHmi = hmiTargetInstance;
-//     var screens = targetHmi.ScreenFolder.Screens;
+            Console.WriteLine($"   [i] Gán số màn hình: {uniqueScreenNumber} (Đã tăng từ bộ đếm)");
 
-//     // 3. XỬ LÝ SỐ MÀN HÌNH DUY NHẤT & DỌN DẸP
-//     var existing = screens.Find(screenData.ScreenName);
-//     if (existing != null) existing.Delete();
+            // 5. QUÉT VÉT CẠN (Flatten) dữ liệu JSON
+            List<ScadaItemModel> allFlattenedItems = new List<ScadaItemModel>();
+            void Flatten(IList<ScadaItemModel> list)
+            {
+                if (list == null) return;
+                foreach (var item in list)
+                {
+                    allFlattenedItems.Add(item);
+                    if (item.Properties.ContainsKey("Children")) Flatten(item.Properties["Children"] as IList<ScadaItemModel>);
+                }
+            }
+            Flatten(screenData.Items);
 
-//     // 🌟 SỬA LỖI: Dùng GetAttribute để lấy Number thay vì thuộc tính s.Number
-//     int maxNum = 100;
-//     foreach (dynamic s in screens) 
-//     { 
-//         try {
-//             int n = Convert.ToInt32(s.GetAttribute("Number")); 
-//             if (n > maxNum) maxNum = n; 
-//         } catch { continue; }
-//     }
-//     int uniqueScreenNumber = maxNum + 1;
+            // 6. CHUYỂN ĐỔI SIMATICML
+            string generatedGraphicItemsXml = ConvertJsonItemsToSimaticML(allFlattenedItems);
 
-//     // 4. QUÉT VÉT CẠN (Flatten) toàn bộ đối tượng từ screenData
-//     List<ScadaItemModel> allFlattenedItems = new List<ScadaItemModel>();
-//     void Flatten(IList<ScadaItemModel> list) {
-//         if (list == null) return;
-//         foreach (var item in list) {
-//             allFlattenedItems.Add(item);
-//             if (item.Properties.ContainsKey("Children")) Flatten(item.Properties["Children"] as IList<ScadaItemModel>);
-//         }
-//     }
-//     Flatten(screenData.Items);
-//     Console.WriteLine($"   [i] Quét thành công {allFlattenedItems.Count} phần tử cho màn hình: {screenData.ScreenName}");
-
-//     // 5. CHUYỂN ĐỔI SANG SIMATICML
-//     string generatedGraphicItemsXml = ConvertJsonItemsToSimaticML(allFlattenedItems);
-
-//     string screenXmlContent = $@"<?xml version=""1.0"" encoding=""utf-8""?>
-// <Document>
-//   <Hmi.Screen.Screen ID=""0"">
-//     <AttributeList>
-//       <Name>{screenData.ScreenName}</Name><Number>{uniqueScreenNumber}</Number>
-//       <Width>{screenData.Width}</Width><Height>{screenData.Height}</Height>
-//     </AttributeList>
-//     <ObjectList>
-//       <Hmi.Screen.ScreenLayer ID=""1"" CompositionName=""Layers"">
-//         <AttributeList><Index>0</Index><Name>Layer_1</Name><VisibleES>true</VisibleES></AttributeList>
-//         <ObjectList>{generatedGraphicItemsXml}</ObjectList>
-//       </Hmi.Screen.ScreenLayer>
-//     </ObjectList>
-//   </Hmi.Screen.Screen>
-// </Document>";
-
-//     string tempXmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"temp_{screenData.ScreenName}.xml");
-//     File.WriteAllText(tempXmlPath, screenXmlContent, System.Text.Encoding.UTF8);
-
-//     // 6. IMPORT AN TOÀN VỚI PING PROJECT
-//     try
-//     {
-//         string pName = _project.Name; // Ping project để kiểm tra trạng thái Project trước khi Import
-//         FileInfo fileInfo = new FileInfo(tempXmlPath);
-//         screens.Import(fileInfo, ImportOptions.Override);
-//         Console.WriteLine($"   [√] Import thành công màn hình '{screenData.ScreenName}' số {uniqueScreenNumber}.");
-//     }
-//     catch (Exception ex)
-//     {
-//         Console.WriteLine($"   [CRITICAL] Lỗi không thể Import: {ex.Message}");
-//     }
-//     finally { if (File.Exists(tempXmlPath)) File.Delete(tempXmlPath); }
-// }
-
-public void GenerateHMIScreenFromData(string deviceName, ScadaScreenModel screenData)
-{
-    // 1. LOCATE THIẾT BỊ
-    string cleanDeviceName = deviceName.Contains("|") ? deviceName.Split('|')[0].Trim() : deviceName.Trim();
-    Device targetDevice = null;
-    
-    // Kiểm tra tính hợp lệ của Project
-    if (!IsProjectValid(_project)) throw new Exception("Project đã bị đóng hoặc không khả dụng.");
-
-    List<Device> allProjectDevices = new List<Device>();
-    foreach (Device dev in _project.Devices) { allProjectDevices.Add(dev); }
-    GetAllDevicesInGroupsFlattened(_project.DeviceGroups, allProjectDevices);
-
-    foreach (Device dev in allProjectDevices)
-    {
-        if (dev.Name.Equals(cleanDeviceName, StringComparison.OrdinalIgnoreCase)) { targetDevice = dev; break; }
-    }
-    if (targetDevice == null) throw new Exception($"[CRITICAL] Device '{cleanDeviceName}' not found.");
-
-    // 2. TRÍCH XUẤT HmiTarget (Khởi tạo biến ở cấp hàm để tránh lỗi scope)
-    object hmiTargetInstance = null;
-    List<DeviceItem> allItems = new List<DeviceItem>();
-    GetAllDeviceItemsFlattened(targetDevice.DeviceItems, allItems);
-    
-    foreach (var item in allItems)
-    {
-        var container = item.GetService<SoftwareContainer>();
-        if (container?.Software != null && container.Software.GetType().Name.Equals("HmiTarget", StringComparison.OrdinalIgnoreCase))
-        {
-            hmiTargetInstance = container.Software;
-            break;
-        }
-    }
-    if (hmiTargetInstance == null) throw new Exception("Không tìm thấy HmiTarget trên thiết bị.");
-
-    dynamic targetHmi = hmiTargetInstance;
-    var screens = targetHmi.ScreenFolder.Screens;
-
-    // 3. DỌN DẸP AN TOÀN - Xóa màn hình trùng tên
-    try 
-    {
-        var existing = screens.Find(screenData.ScreenName);
-        if (existing != null) 
-        {
-            Console.WriteLine($"   [i] Màn hình '{screenData.ScreenName}' tồn tại, đang xóa...");
-            existing.Delete();
-            System.Threading.Thread.Sleep(500); // Đợi TIA giải phóng tài nguyên
-        }
-    } catch { /* Bỏ qua nếu màn hình không thể xóa */ }
-
-    // 3. TỰ ĐỘNG TĂNG SỐ MÀN HÌNH (Dùng biến Global để không bao giờ trùng)
-    if (!_hasInitializedCounter)
-    {
-        int maxNum = 100;
-        foreach (var s in screens)
-        {
-            try {
-                int n = Convert.ToInt32(s.GetAttribute("Number"));
-                if (n > maxNum) maxNum = n;
-            } catch { continue; }
-        }
-        _globalScreenNumberCounter = maxNum;
-        _hasInitializedCounter = true;
-    }
-
-    // Tăng số cho màn hình hiện tại
-    _globalScreenNumberCounter++;
-    int uniqueScreenNumber = _globalScreenNumberCounter;
-    
-    Console.WriteLine($"   [i] Gán số màn hình: {uniqueScreenNumber} (Đã tăng từ bộ đếm)");
-
-    // 5. QUÉT VÉT CẠN (Flatten) dữ liệu JSON
-    List<ScadaItemModel> allFlattenedItems = new List<ScadaItemModel>();
-    void Flatten(IList<ScadaItemModel> list) {
-        if (list == null) return;
-        foreach (var item in list) {
-            allFlattenedItems.Add(item);
-            if (item.Properties.ContainsKey("Children")) Flatten(item.Properties["Children"] as IList<ScadaItemModel>);
-        }
-    }
-    Flatten(screenData.Items);
-
-    // 6. CHUYỂN ĐỔI SIMATICML
-    string generatedGraphicItemsXml = ConvertJsonItemsToSimaticML(allFlattenedItems);
-
-    // 6. TẠO XML & IMPORT
-    string screenXmlContent = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+            // 6. TẠO XML & IMPORT
+            string screenXmlContent = $@"<?xml version=""1.0"" encoding=""utf-8""?>
 <Document>
   <Hmi.Screen.Screen ID=""0"">
     <AttributeList>
@@ -1305,50 +1404,50 @@ public void GenerateHMIScreenFromData(string deviceName, ScadaScreenModel screen
   </Hmi.Screen.Screen>
 </Document>";
 
-    string tempXmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"temp_{Guid.NewGuid()}.xml");
-    File.WriteAllText(tempXmlPath, screenXmlContent, System.Text.Encoding.UTF8);
+            string tempXmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"temp_{Guid.NewGuid()}.xml");
+            File.WriteAllText(tempXmlPath, screenXmlContent, System.Text.Encoding.UTF8);
 
-    // 8. IMPORT VÀO TIA PORTAL
-    try
-    {
-        if (!IsProjectValid(_project)) throw new Exception("Project đã bị đóng trong lúc xử lý XML.");
-        
-        screens.Import(new FileInfo(tempXmlPath), ImportOptions.Override);
-        Console.WriteLine($"   [√] Import thành công '{screenData.ScreenName}' với ID: {uniqueScreenNumber}.");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"   [!] Import thất bại: {ex.Message}");
-    }
-    finally { if (File.Exists(tempXmlPath)) File.Delete(tempXmlPath); }
-}
+            // 8. IMPORT VÀO TIA PORTAL
+            try
+            {
+                if (!IsProjectValid(_project)) throw new Exception("Project đã bị đóng trong lúc xử lý XML.");
 
-// Hàm bổ trợ kiểm tra Project
-private bool IsProjectValid(Project project)
-{
-    if (project == null) return false;
-    try { string name = project.Name; return true; } catch { return false; }
-}
-private string ConvertJsonItemsToSimaticML(System.Collections.Generic.IList<ScadaItemModel> items)
-{
-    var xmlBuilder = new System.Text.StringBuilder();
-    int idCounter = 100;
+                screens.Import(new FileInfo(tempXmlPath), ImportOptions.Override);
+                Console.WriteLine($"   [√] Import thành công '{screenData.ScreenName}' với ID: {uniqueScreenNumber}.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"   [!] Import thất bại: {ex.Message}");
+            }
+            finally { if (File.Exists(tempXmlPath)) File.Delete(tempXmlPath); }
+        }
 
-    foreach (var item in items)
-    {
-        idCounter += 50;
-        string name = item.Name;
-        string type = item.Type;
-        int left = item.Properties.ContainsKey("Left") ? Convert.ToInt32(item.Properties["Left"]) : 0;
-        int top = item.Properties.ContainsKey("Top") ? Convert.ToInt32(item.Properties["Top"]) : 0;
-        int width = item.Properties.ContainsKey("Width") ? Convert.ToInt32(item.Properties["Width"]) : 80;
-        int height = item.Properties.ContainsKey("Height") ? Convert.ToInt32(item.Properties["Height"]) : 30;
-        string textValue = item.Properties.ContainsKey("Text") ? item.Properties["Text"].ToString() : "Text";
-
-        switch (type.ToUpper())
+        // Hàm bổ trợ kiểm tra Project
+        private bool IsProjectValid(Project project)
         {
-            case "BUTTON":
-                xmlBuilder.AppendLine($@"
+            if (project == null) return false;
+            try { string name = project.Name; return true; } catch { return false; }
+        }
+        private string ConvertJsonItemsToSimaticML(System.Collections.Generic.IList<ScadaItemModel> items)
+        {
+            var xmlBuilder = new System.Text.StringBuilder();
+            int idCounter = 100;
+
+            foreach (var item in items)
+            {
+                idCounter += 50;
+                string name = item.Name;
+                string type = item.Type;
+                int left = item.Properties.ContainsKey("Left") ? Convert.ToInt32(item.Properties["Left"]) : 0;
+                int top = item.Properties.ContainsKey("Top") ? Convert.ToInt32(item.Properties["Top"]) : 0;
+                int width = item.Properties.ContainsKey("Width") ? Convert.ToInt32(item.Properties["Width"]) : 80;
+                int height = item.Properties.ContainsKey("Height") ? Convert.ToInt32(item.Properties["Height"]) : 30;
+                string textValue = item.Properties.ContainsKey("Text") ? item.Properties["Text"].ToString() : "Text";
+
+                switch (type.ToUpper())
+                {
+                    case "BUTTON":
+                        xmlBuilder.AppendLine($@"
           <Hmi.Screen.Button ID=""{idCounter}"" CompositionName=""ScreenItems"">
             <AttributeList>
               <Height>{height}</Height><Left>{left}</Left><ObjectName>{name}</ObjectName><Top>{top}</Top><Width>{width}</Width>
@@ -1366,11 +1465,11 @@ private string ConvertJsonItemsToSimaticML(System.Collections.Generic.IList<Scad
               </MultilingualText>
             </ObjectList>
           </Hmi.Screen.Button>");
-                break;
+                        break;
 
-            case "TEXTFIELD":
-            case "HMITEXT":
-                xmlBuilder.AppendLine($@"
+                    case "TEXTFIELD":
+                    case "HMITEXT":
+                        xmlBuilder.AppendLine($@"
           <Hmi.Screen.TextField ID=""{idCounter}"" CompositionName=""ScreenItems"">
             <AttributeList>
               <Height>{height}</Height><Left>{left}</Left><ObjectName>{name}</ObjectName><Top>{top}</Top><Width>{width}</Width>
@@ -1383,13 +1482,13 @@ private string ConvertJsonItemsToSimaticML(System.Collections.Generic.IList<Scad
               </MultilingualText>
             </ObjectList>
           </Hmi.Screen.TextField>");
-                break;
-            case "SWITCH":
-    // Định nghĩa nội dung hiển thị cho trạng thái ON và OFF
-    string textOn = "ON";
-    string textOff = "OFF";
+                        break;
+                    case "SWITCH":
+                        // Định nghĩa nội dung hiển thị cho trạng thái ON và OFF
+                        string textOn = "ON";
+                        string textOff = "OFF";
 
-    xmlBuilder.AppendLine($@"
+                        xmlBuilder.AppendLine($@"
           <Hmi.Screen.Switch ID=""{idCounter}"" CompositionName=""ScreenItems"">
             <AttributeList>
               <Height>{height}</Height>
@@ -1415,14 +1514,14 @@ private string ConvertJsonItemsToSimaticML(System.Collections.Generic.IList<Scad
               </MultilingualText>
             </ObjectList>
           </Hmi.Screen.Switch>");
-    break;
-           case "CIRCLE":
-           case "ELLIPSE":
-           case "PUMP":
-           case "MOTOR":
-    // Ép buộc Width bằng Height để đảm bảo tính hình học của hình tròn
-    int diameter = Math.Max(width, height); 
-    xmlBuilder.AppendLine($@"
+                        break;
+                    case "CIRCLE":
+                    case "ELLIPSE":
+                    case "PUMP":
+                    case "MOTOR":
+                        // Ép buộc Width bằng Height để đảm bảo tính hình học của hình tròn
+                        int diameter = Math.Max(width, height);
+                        xmlBuilder.AppendLine($@"
           <Hmi.Screen.Circle ID=""{idCounter}"" CompositionName=""ScreenItems"">
             <AttributeList>
                 <Height>{diameter}</Height>
@@ -1434,30 +1533,30 @@ private string ConvertJsonItemsToSimaticML(System.Collections.Generic.IList<Scad
                 <BackFillStyle>Solid</BackFillStyle>
             </AttributeList>
           </Hmi.Screen.Circle>");
-    break;
+                        break;
 
-            case "IOFIELD":
-                xmlBuilder.AppendLine($@"
+                    case "IOFIELD":
+                        xmlBuilder.AppendLine($@"
           <Hmi.Screen.IOField ID=""{idCounter}"" CompositionName=""ScreenItems"">
             <AttributeList>
                 <Height>{height}</Height><Left>{left}</Left><ObjectName>{name}</ObjectName><Top>{top}</Top><Width>{width}</Width>
             </AttributeList>           
           </Hmi.Screen.IOField>");
-                break;
+                        break;
 
-            case "BAR":
-                xmlBuilder.AppendLine($@"
+                    case "BAR":
+                        xmlBuilder.AppendLine($@"
           <Hmi.Screen.Bar ID=""{idCounter}"" CompositionName=""ScreenItems"">
             <AttributeList>
                 <Height>{height}</Height><Left>{left}</Left><ObjectName>{name}</ObjectName><Top>{top}</Top><Width>{width}</Width>
             </AttributeList>      
           </Hmi.Screen.Bar>");
-                break;
-        case "RECTANGLE":
-        case "BACKGROUND":
-        case "TANK":
-        case "PIPE":
-                xmlBuilder.AppendLine($@"
+                        break;
+                    case "RECTANGLE":
+                    case "BACKGROUND":
+                    case "TANK":
+                    case "PIPE":
+                        xmlBuilder.AppendLine($@"
           <Hmi.Screen.Rectangle ID=""{idCounter}"" CompositionName=""ScreenItems"">
             <AttributeList>
               <Height>{height}</Height>
@@ -1469,215 +1568,215 @@ private string ConvertJsonItemsToSimaticML(System.Collections.Generic.IList<Scad
               <BackFillStyle>Solid</BackFillStyle>
             </AttributeList>
           </Hmi.Screen.Rectangle>");
-                break;                
-        }
-    }
-    return xmlBuilder.ToString();
-}
-// public void DumpCompositionMetadata(object screensObj)
-// {
-//     if (screensObj == null)
-//     {
-//         Console.WriteLine("[\u001b[31mX\u001b[0m] Cannot dump metadata: The provided screens object is Null.");
-//         return;
-//     }
-
-//     Type type = screensObj.GetType();
-//     Console.WriteLine("\n" + new string('=', 90));
-//     Console.WriteLine($"\u001b[36m[📊 REFLECTION MAP] Dump Metadata for Core Type: {type.FullName}\u001b[0m");
-//     Console.WriteLine(new string('-', 90));
-
-//     // 1. QUÉT TOÀN BỘ INTERFACES MÀ CLASS NÀY TRIỂN KHAI
-//     Console.WriteLine("\n[🌐 Implemented Interfaces]:");
-//     var interfaces = type.GetInterfaces();
-//     foreach (var i in interfaces)
-//     {
-//         Console.WriteLine($"   └── Interface: {i.FullName}");
-//     }
-
-//     // 2. QUÉT TOÀN BỘ PHƯƠNG THỨC (METHODS) KHẢ DỤNG
-//     Console.WriteLine("\n[🛠️ Available Methods]:");
-//     var methods = type.GetMethods(System.Reflection.BindingFlags.Public | 
-//                                   System.Reflection.BindingFlags.Instance | 
-//                                   System.Reflection.BindingFlags.Static | 
-//                                   System.Reflection.BindingFlags.FlattenHierarchy);
-    
-//     foreach (var method in methods)
-//     {
-//         // Lấy danh sách các tham số của hàm
-//         var parameters = method.GetParameters();
-//         string paramStr = string.Join(", ", parameters.Select(p => $"{p.ParameterType.Name} {p.Name}"));
-//         Console.WriteLine($"   └── Method: {method.ReturnType.Name} {method.Name}({paramStr})");
-//     }
-
-//     // 3. QUÉT TOÀN BỘ THUỘC TÍNH (PROPERTIES)
-//     Console.WriteLine("\n[⚙️ Available Properties]:");
-//     var properties = type.GetProperties(System.Reflection.BindingFlags.Public | 
-//                                         System.Reflection.BindingFlags.Instance);
-//     foreach (var prop in properties)
-//     {
-//         string access = (prop.CanRead ? "Get" : "") + (prop.CanWrite ? "/Set" : "");
-//         Console.WriteLine($"   └── Property: {prop.PropertyType.Name} {prop.Name} [{access}]");
-//     }
-//     Console.WriteLine(new string('=', 90) + "\n");
-// }
-private void PrintDeviceItemTreeRecursive(Siemens.Engineering.HW.DeviceItemComposition items, int indentLevel)
-{
-    if (items == null) return;
-
-    string indent = new string(' ', indentLevel * 4);
-
-    foreach (Siemens.Engineering.HW.DeviceItem item in items)
-    {
-        string containerStatus = "\u001b[31m[X] No Container\u001b[0m";
-        
-        try
-        {
-            var container = item.GetService<SoftwareContainer>();
-            if (container != null)
-            {
-                if (container.Software is HmiSoftware)
-                {
-                    containerStatus = "\u001b[32m[√] FOUND HMISOFTWARE HERE!\u001b[0m";
-                }
-                else
-                {
-                    containerStatus = $"\u001b[36m[!] Found Software: {container.Software.GetType().Name}\u001b[0m";
+                        break;
                 }
             }
+            return xmlBuilder.ToString();
         }
-        catch
+        // public void DumpCompositionMetadata(object screensObj)
+        // {
+        //     if (screensObj == null)
+        //     {
+        //         Console.WriteLine("[\u001b[31mX\u001b[0m] Cannot dump metadata: The provided screens object is Null.");
+        //         return;
+        //     }
+
+        //     Type type = screensObj.GetType();
+        //     Console.WriteLine("\n" + new string('=', 90));
+        //     Console.WriteLine($"\u001b[36m[📊 REFLECTION MAP] Dump Metadata for Core Type: {type.FullName}\u001b[0m");
+        //     Console.WriteLine(new string('-', 90));
+
+        //     // 1. QUÉT TOÀN BỘ INTERFACES MÀ CLASS NÀY TRIỂN KHAI
+        //     Console.WriteLine("\n[🌐 Implemented Interfaces]:");
+        //     var interfaces = type.GetInterfaces();
+        //     foreach (var i in interfaces)
+        //     {
+        //         Console.WriteLine($"   └── Interface: {i.FullName}");
+        //     }
+
+        //     // 2. QUÉT TOÀN BỘ PHƯƠNG THỨC (METHODS) KHẢ DỤNG
+        //     Console.WriteLine("\n[🛠️ Available Methods]:");
+        //     var methods = type.GetMethods(System.Reflection.BindingFlags.Public | 
+        //                                   System.Reflection.BindingFlags.Instance | 
+        //                                   System.Reflection.BindingFlags.Static | 
+        //                                   System.Reflection.BindingFlags.FlattenHierarchy);
+
+        //     foreach (var method in methods)
+        //     {
+        //         // Lấy danh sách các tham số của hàm
+        //         var parameters = method.GetParameters();
+        //         string paramStr = string.Join(", ", parameters.Select(p => $"{p.ParameterType.Name} {p.Name}"));
+        //         Console.WriteLine($"   └── Method: {method.ReturnType.Name} {method.Name}({paramStr})");
+        //     }
+
+        //     // 3. QUÉT TOÀN BỘ THUỘC TÍNH (PROPERTIES)
+        //     Console.WriteLine("\n[⚙️ Available Properties]:");
+        //     var properties = type.GetProperties(System.Reflection.BindingFlags.Public | 
+        //                                         System.Reflection.BindingFlags.Instance);
+        //     foreach (var prop in properties)
+        //     {
+        //         string access = (prop.CanRead ? "Get" : "") + (prop.CanWrite ? "/Set" : "");
+        //         Console.WriteLine($"   └── Property: {prop.PropertyType.Name} {prop.Name} [{access}]");
+        //     }
+        //     Console.WriteLine(new string('=', 90) + "\n");
+        // }
+        private void PrintDeviceItemTreeRecursive(Siemens.Engineering.HW.DeviceItemComposition items, int indentLevel)
         {
-            containerStatus = "\u001b[37m[•] Static Hardware Layer\u001b[0m";
-        }
+            if (items == null) return;
 
-        // In thông tin chi tiết của DeviceItem hiện tại
-        Console.WriteLine($"{indent}└── [Layer {indentLevel}] Name: {item.Name,-25} | Type: {item.GetType().Name,-15} | Status: {containerStatus}");
+            string indent = new string(' ', indentLevel * 4);
 
-        // Nếu có nhánh con, tiếp tục đệ quy lặn sâu để vẽ nhánh cây đồ họa
-        if (item.DeviceItems != null && item.DeviceItems.Count > 0)
-        {
-            PrintDeviceItemTreeRecursive(item.DeviceItems, indentLevel + 1);
-        }
-    }
-}
-private void SetStartScreenHMI(string deviceName, string screenName)
-{
-    try
-    {
-        string cleanDeviceName = deviceName.Contains("|") ? deviceName.Split('|')[0].Trim() : deviceName.Trim();
-        Device targetDevice = null;
-
-        List<Device> allProjectDevices = new List<Device>();
-        foreach (Device dev in _project.Devices) { allProjectDevices.Add(dev); }
-        GetAllDevicesInGroupsFlattened(_project.DeviceGroups, allProjectDevices);
-
-        foreach (Device dev in allProjectDevices)
-        {
-            string currentCombined = GetCombinedDeviceName(dev);
-            if (dev.Name.Equals(cleanDeviceName, StringComparison.OrdinalIgnoreCase) || 
-                dev.Name.IndexOf(cleanDeviceName, StringComparison.OrdinalIgnoreCase) >= 0)
+            foreach (Siemens.Engineering.HW.DeviceItem item in items)
             {
-                targetDevice = dev;
-                break;
+                string containerStatus = "\u001b[31m[X] No Container\u001b[0m";
+
+                try
+                {
+                    var container = item.GetService<SoftwareContainer>();
+                    if (container != null)
+                    {
+                        if (container.Software is HmiSoftware)
+                        {
+                            containerStatus = "\u001b[32m[√] FOUND HMISOFTWARE HERE!\u001b[0m";
+                        }
+                        else
+                        {
+                            containerStatus = $"\u001b[36m[!] Found Software: {container.Software.GetType().Name}\u001b[0m";
+                        }
+                    }
+                }
+                catch
+                {
+                    containerStatus = "\u001b[37m[•] Static Hardware Layer\u001b[0m";
+                }
+
+                // In thông tin chi tiết của DeviceItem hiện tại
+                Console.WriteLine($"{indent}└── [Layer {indentLevel}] Name: {item.Name,-25} | Type: {item.GetType().Name,-15} | Status: {containerStatus}");
+
+                // Nếu có nhánh con, tiếp tục đệ quy lặn sâu để vẽ nhánh cây đồ họa
+                if (item.DeviceItems != null && item.DeviceItems.Count > 0)
+                {
+                    PrintDeviceItemTreeRecursive(item.DeviceItems, indentLevel + 1);
+                }
             }
         }
-
-        if (targetDevice == null) return;
-
-        List<DeviceItem> allItems = new List<DeviceItem>();
-        GetAllDeviceItemsFlattened(targetDevice.DeviceItems, allItems);
-
-        // 🌟 BẺ KHÓA RUNTIME SETTINGS: Quét trực tiếp trong cấu trúc cây DeviceItem phần cứng
-        object runtimeSettingsObj = null;
-        foreach (var item in allItems)
+        private void SetStartScreenHMI(string deviceName, string screenName)
         {
-            if (item.Name.Equals("Runtime settings", StringComparison.OrdinalIgnoreCase))
-            {
-                runtimeSettingsObj = item;
-                break;
-            }
-        }
-
-        if (runtimeSettingsObj != null)
-        {
-            dynamic dynRt = runtimeSettingsObj;
-            // Ép thuộc tính qua cơ chế can thiệp metadata lớp ngoài
             try
             {
-                dynRt.SetAttribute("StartScreen", screenName);
-                Console.WriteLine($"   [√] Comfort Runtime Settings: Assigned '{screenName}' as start screen.");
+                string cleanDeviceName = deviceName.Contains("|") ? deviceName.Split('|')[0].Trim() : deviceName.Trim();
+                Device targetDevice = null;
+
+                List<Device> allProjectDevices = new List<Device>();
+                foreach (Device dev in _project.Devices) { allProjectDevices.Add(dev); }
+                GetAllDevicesInGroupsFlattened(_project.DeviceGroups, allProjectDevices);
+
+                foreach (Device dev in allProjectDevices)
+                {
+                    string currentCombined = GetCombinedDeviceName(dev);
+                    if (dev.Name.Equals(cleanDeviceName, StringComparison.OrdinalIgnoreCase) ||
+                        dev.Name.IndexOf(cleanDeviceName, StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        targetDevice = dev;
+                        break;
+                    }
+                }
+
+                if (targetDevice == null) return;
+
+                List<DeviceItem> allItems = new List<DeviceItem>();
+                GetAllDeviceItemsFlattened(targetDevice.DeviceItems, allItems);
+
+                // 🌟 BẺ KHÓA RUNTIME SETTINGS: Quét trực tiếp trong cấu trúc cây DeviceItem phần cứng
+                object runtimeSettingsObj = null;
+                foreach (var item in allItems)
+                {
+                    if (item.Name.Equals("Runtime settings", StringComparison.OrdinalIgnoreCase))
+                    {
+                        runtimeSettingsObj = item;
+                        break;
+                    }
+                }
+
+                if (runtimeSettingsObj != null)
+                {
+                    dynamic dynRt = runtimeSettingsObj;
+                    // Ép thuộc tính qua cơ chế can thiệp metadata lớp ngoài
+                    try
+                    {
+                        dynRt.SetAttribute("StartScreen", screenName);
+                        Console.WriteLine($"   [√] Comfort Runtime Settings: Assigned '{screenName}' as start screen.");
+                    }
+                    catch
+                    {
+                        // Fallback cứu cánh cuối cùng nếu Siemens khóa cứng API ghi thông số này trên V20
+                        Console.WriteLine($"   [i] Comfort Screen '{screenName}' is deployed. Siemens V20 Openness mandates manual StartScreen selection in project tree.");
+                    }
+                }
+                _project.Save();
             }
-            catch
+            catch (Exception ex)
             {
-                // Fallback cứu cánh cuối cùng nếu Siemens khóa cứng API ghi thông số này trên V20
-                Console.WriteLine($"   [i] Comfort Screen '{screenName}' is deployed. Siemens V20 Openness mandates manual StartScreen selection in project tree.");
+                Console.WriteLine($"[-] Generic Comfort StartScreen assignment error: {ex.Message}");
             }
         }
-        _project.Save();
-    }
-    catch (Exception ex) 
-    { 
-        Console.WriteLine($"[-] Generic Comfort StartScreen assignment error: {ex.Message}"); 
-    }
-}
-// 🌟 HÀM HELPER: QUÉT SÂU ĐỆ QUY TÌM HMI SOFTWARE CHO DÒNG COMFORT PANEL
-private void GetAllDeviceItemsFlattened(Siemens.Engineering.HW.DeviceItemComposition items, List<Siemens.Engineering.HW.DeviceItem> resultList)
-{
-    if (items == null) return;
-    
-    foreach (Siemens.Engineering.HW.DeviceItem item in items)
-    {
-        resultList.Add(item);
-        
-        // Nếu item này có thư mục con hoặc module con, lặn sâu đệ quy để gom tiếp
-        if (item.DeviceItems != null && item.DeviceItems.Count > 0)
+        // 🌟 HÀM HELPER: QUÉT SÂU ĐỆ QUY TÌM HMI SOFTWARE CHO DÒNG COMFORT PANEL
+        private void GetAllDeviceItemsFlattened(Siemens.Engineering.HW.DeviceItemComposition items, List<Siemens.Engineering.HW.DeviceItem> resultList)
         {
-            GetAllDeviceItemsFlattened(item.DeviceItems, resultList);
-        }
-    }
-}
-private void GetAllDevicesInGroupsFlattened(Siemens.Engineering.HW.DeviceUserGroupComposition groups, List<Siemens.Engineering.HW.Device> resultList)
-{
-    if (groups == null) return;
-    
-    foreach (Siemens.Engineering.HW.DeviceUserGroup group in groups)
-    {
-        foreach (Siemens.Engineering.HW.Device dev in group.Devices)
-        {
-            resultList.Add(dev);
-        }
-        
-        if (group.Groups != null && group.Groups.Count > 0)
-        {
-            GetAllDevicesInGroupsFlattened(group.Groups, resultList);
-        }
-    }
-}
-private Device FindDeviceInGroupsRecursive(DeviceUserGroupComposition groups, string deviceName)
-{
-    foreach (DeviceUserGroup group in groups)
-    {
-        foreach (Device dev in group.Devices)
-        {
-            string combinedName = GetCombinedDeviceName(dev);
-            if (combinedName.Equals(deviceName, StringComparison.OrdinalIgnoreCase) || 
-                combinedName.Contains(deviceName) || 
-                dev.Name.Equals(deviceName, StringComparison.OrdinalIgnoreCase))
+            if (items == null) return;
+
+            foreach (Siemens.Engineering.HW.DeviceItem item in items)
             {
-                return dev;
+                resultList.Add(item);
+
+                // Nếu item này có thư mục con hoặc module con, lặn sâu đệ quy để gom tiếp
+                if (item.DeviceItems != null && item.DeviceItems.Count > 0)
+                {
+                    GetAllDeviceItemsFlattened(item.DeviceItems, resultList);
+                }
             }
         }
-        
-        // Lặn sâu vào sub-groups
-        if (group.Groups != null && group.Groups.Count > 0)
+        private void GetAllDevicesInGroupsFlattened(Siemens.Engineering.HW.DeviceUserGroupComposition groups, List<Siemens.Engineering.HW.Device> resultList)
         {
-            Device deepDev = FindDeviceInGroupsRecursive(group.Groups, deviceName);
-            if (deepDev != null) return deepDev;
+            if (groups == null) return;
+
+            foreach (Siemens.Engineering.HW.DeviceUserGroup group in groups)
+            {
+                foreach (Siemens.Engineering.HW.Device dev in group.Devices)
+                {
+                    resultList.Add(dev);
+                }
+
+                if (group.Groups != null && group.Groups.Count > 0)
+                {
+                    GetAllDevicesInGroupsFlattened(group.Groups, resultList);
+                }
+            }
         }
-    }
-    return null;
-}
+        private Device FindDeviceInGroupsRecursive(DeviceUserGroupComposition groups, string deviceName)
+        {
+            foreach (DeviceUserGroup group in groups)
+            {
+                foreach (Device dev in group.Devices)
+                {
+                    string combinedName = GetCombinedDeviceName(dev);
+                    if (combinedName.Equals(deviceName, StringComparison.OrdinalIgnoreCase) ||
+                        combinedName.Contains(deviceName) ||
+                        dev.Name.Equals(deviceName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return dev;
+                    }
+                }
+
+                // Lặn sâu vào sub-groups
+                if (group.Groups != null && group.Groups.Count > 0)
+                {
+                    Device deepDev = FindDeviceInGroupsRecursive(group.Groups, deviceName);
+                    if (deepDev != null) return deepDev;
+                }
+            }
+            return null;
+        }
         #endregion
         #region 6. WinCC Unified: Item Rendering & Dynamization
         private void BuildUnifiedItemsRecursive(dynamic composition, List<ScadaItemModel> items)
@@ -2657,10 +2756,10 @@ private Device FindDeviceInGroupsRecursive(DeviceUserGroupComposition groups, st
         //     catch (Exception ex) { return $"[ERROR] {ex.Message}"; }
         // }
 
-      public string CreateUnifiedConnectionDynamic(string hmiName, string driverName, string hmiIp, string plcIp, string accessPoint = "")
+        public string CreateUnifiedConnectionDynamic(string hmiName, string driverName, string hmiIp, string plcIp, string accessPoint = "")
         {
             if (_project == null) return "Project not opened.";
-            
+
             try
             {
                 // 1. Tìm thiết thiết bị HMI Unified trong cấu trúc dự án
@@ -2699,7 +2798,7 @@ private Device FindDeviceInGroupsRecursive(DeviceUserGroupComposition groups, st
 
                 // 4. Tạo dòng kết nối phẳng rỗng (Overload 1 tham số chuẩn WinCC Unified)
                 var newConn = connections.Create(finalName);
-                
+
                 // Gán Driver do người dùng chọn từ Wizard
                 Console.WriteLine($"[i] Injecting Communication Driver: '{driverName}'...");
                 newConn.SetAttribute("CommunicationDriver", driverName);
@@ -2708,7 +2807,7 @@ private Device FindDeviceInGroupsRecursive(DeviceUserGroupComposition groups, st
                 try
                 {
                     Console.WriteLine("[i] Analysing dynamic DriverProperty templates for parameter injection...");
-                    
+
                     dynamic dynamicConn = newConn;
                     var driverProps = dynamicConn.DriverProperties;
 
@@ -2746,7 +2845,7 @@ private Device FindDeviceInGroupsRecursive(DeviceUserGroupComposition groups, st
                             {
                                 // Nếu biến truyền vào từ Wizard bị rỗng hoặc null, lập tức cưỡng bức lấy giá trị mặc định tối cao là S7ONLINE
                                 string apTarget = !string.IsNullOrEmpty(accessPoint) ? accessPoint : "S7ONLINE";
-                                
+
                                 engineeringProp.SetAttribute("Value", apTarget);
                                 Console.WriteLine($"   [√] Form Intervened -> [{propName}] (Access Point) set to: {apTarget}");
                             }
@@ -2763,8 +2862,8 @@ private Device FindDeviceInGroupsRecursive(DeviceUserGroupComposition groups, st
                 }
 
                 // 6. Commit và đẩy toàn bộ dữ liệu thực xuống Project Database của TIA Portal
-                Console.WriteLine("[i] Committing configuration to TIA Project Database...");    
-                
+                Console.WriteLine("[i] Committing configuration to TIA Project Database...");
+
                 return finalName;
             }
             catch (Exception ex)
@@ -3196,241 +3295,241 @@ private Device FindDeviceInGroupsRecursive(DeviceUserGroupComposition groups, st
         //     }
         // }
         public string DownloadToPLC(string deviceName, string targetIpAddress, string pgPcInterfaceName)
+        {
+            if (_project == null) return "Error: Project not loaded.";
+
+            try
             {
-                if (_project == null) return "Error: Project not loaded.";
+                // 1. Find device and initialize system core services
+                Device device = FindDeviceRecursive(_project, deviceName);
+                if (device == null) return $"Error: Device '{deviceName}' not found.";
 
-                try
+                var plcItem = GetCpuItem(device);
+                var downloadProvider = plcItem?.GetService<Siemens.Engineering.Download.DownloadProvider>();
+
+                if (downloadProvider == null) return "Error: DownloadProvider not available.";
+
+                // 2. Network connectivity check (PING)
+                Console.WriteLine($"[i] Checking connection to {targetIpAddress}...");
+                using (System.Net.NetworkInformation.Ping ping = new System.Net.NetworkInformation.Ping())
                 {
-                    // 1. Find device and initialize system core services
-                    Device device = FindDeviceRecursive(_project, deviceName);
-                    if (device == null) return $"Error: Device '{deviceName}' not found.";
-
-                    var plcItem = GetCpuItem(device);
-                    var downloadProvider = plcItem?.GetService<Siemens.Engineering.Download.DownloadProvider>();
-
-                    if (downloadProvider == null) return "Error: DownloadProvider not available.";
-
-                    // 2. Network connectivity check (PING)
-                    Console.WriteLine($"[i] Checking connection to {targetIpAddress}...");
-                    using (System.Net.NetworkInformation.Ping ping = new System.Net.NetworkInformation.Ping())
-                    {
-                        try
-                        {
-                            var reply = ping.Send(targetIpAddress, 2000);
-                            if (reply.Status != System.Net.NetworkInformation.IPStatus.Success)
-                            {
-                                return $"FAILED: Cannot reach PLC at {targetIpAddress}. Check PLCSIM Advanced or network adapter {pgPcInterfaceName}!";
-                            }
-                            Console.WriteLine($"[√] Ping connection successful! (Response time: {reply.RoundtripTime}ms)");
-                        }
-                        catch (Exception ex)
-                        {
-                            return $"FAILED: Network system error during Pinging: {ex.Message}";
-                        }
-                    }
-
-                    // 3. Register security handshake listener (ONLINE LEGITIMATION)
-                    var mode = downloadProvider.Configuration.Modes.Find("PN/IE");
-                    var pcInterface = mode.PcInterfaces.Find(pgPcInterfaceName, 1);
-                    if (pcInterface == null) return "FAILED: No suitable network adapter found.";
-
-                    var targetConf = pcInterface.TargetInterfaces[0];
-
                     try
                     {
-                        var config = downloadProvider.Configuration;
-                        Type configType = config.GetType();
-                        var evOnlineLegitimation = configType.GetEvent("OnlineLegitimation");
-
-                        if (evOnlineLegitimation != null)
+                        var reply = ping.Send(targetIpAddress, 2000);
+                        if (reply.Status != System.Net.NetworkInformation.IPStatus.Success)
                         {
-                            Type delegateType = evOnlineLegitimation.EventHandlerType;
-                            var methodInfo = typeof(TIA_V20).GetMethod(nameof(OnOnlineLegitimationDirectCallback), 
-                                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public);
-
-                            if (methodInfo != null)
-                            {
-                                Delegate officialSiemensHandler = Delegate.CreateDelegate(delegateType, methodInfo);
-                                try { evOnlineLegitimation.RemoveMethod.Invoke(config, new object[] { officialSiemensHandler }); } catch { }
-                                evOnlineLegitimation.AddMethod.Invoke(config, new object[] { officialSiemensHandler });
-                                
-                                Console.WriteLine("[i] Security handshake handshake provider (OnlineConfigurationDelegate) registered successfully.");
-                            }
+                            return $"FAILED: Cannot reach PLC at {targetIpAddress}. Check PLCSIM Advanced or network adapter {pgPcInterfaceName}!";
                         }
+                        Console.WriteLine($"[√] Ping connection successful! (Response time: {reply.RoundtripTime}ms)");
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[!] Security warning: Failed to attach online legitimation listener ({ex.GetBaseException().Message})");
+                        return $"FAILED: Network system error during Pinging: {ex.Message}";
                     }
+                }
 
-                    // 4. Apply connection network socket configuration
-                    downloadProvider.Configuration.ApplyConfiguration(targetConf);
+                // 3. Register security handshake listener (ONLINE LEGITIMATION)
+                var mode = downloadProvider.Configuration.Modes.Find("PN/IE");
+                var pcInterface = mode.PcInterfaces.Find(pgPcInterfaceName, 1);
+                if (pcInterface == null) return "FAILED: No suitable network adapter found.";
 
-                    // 5. Execute hardware and software download process
-                    Console.WriteLine("[i] Starting program download process... (Resolving deployment dialogs)");
-                    var result = downloadProvider.Download(
-                        targetConf,
-                        (preConf) => // Handling PRE-DOWNLOAD dialog blocks
-                        {
-                            try
-                            {
-                                string configName = preConf.GetType().Name;
-                                Console.WriteLine($"   => Processing Configuration: {configName}");
+                var targetConf = pcInterface.TargetInterfaces[0];
 
-                                var propSelection = preConf.GetType().GetProperty("CurrentSelection");
-                                if (propSelection != null)
-                                {
-                                    var enumType = propSelection.GetValue(preConf).GetType();
-                                    string targetValue = "";
+                try
+                {
+                    var config = downloadProvider.Configuration;
+                    Type configType = config.GetType();
+                    var evOnlineLegitimation = configType.GetEvent("OnlineLegitimation");
 
-                                    switch (configName)
-                                    {
-                                        case "StopModules":
-                                            targetValue = "StopAll";
-                                            break;
-                                        case "DifferentTargetConfiguration":
-                                        case "InitializeMemory":
-                                        case "ActiveTestCanBeAborted":
-                                            targetValue = "AcceptAll";
-                                            break;
-                                        case "ProtectionLevelChanged":
-                                            targetValue = "ContinueDownloading";
-                                            break;
-                                        case "OverwriteSystemData":
-                                            targetValue = "Overwrite";
-                                            break;
-                                        case "ExpandDownload":
-                                            targetValue = "Download";
-                                            break;
-                                        case "LoadIdentificationData":
-                                            targetValue = "LoadData";
-                                            break;
-                                        case "ResetModule":
-                                            targetValue = "DeleteAll";
-                                            break;
-                                        default:
-                                            var names = Enum.GetNames(enumType);
-                                            targetValue = names.FirstOrDefault(n => n.Contains("Stop") || n.Contains("Overwrite") || n.Contains("Accept") || n.Contains("Continue")) ?? names.FirstOrDefault();
-                                            break;
-                                    }
-
-                                    if (!string.IsNullOrEmpty(targetValue))
-                                    {
-                                        propSelection.SetValue(preConf, Enum.Parse(enumType, targetValue));
-                                        Console.WriteLine($"      [√] Auto-Selected Value: {targetValue}");
-                                    }
-                                }
-
-                                var propChecked = preConf.GetType().GetProperty("Checked");
-                                if (propChecked != null)
-                                {
-                                    propChecked.SetValue(preConf, true);
-                                    Console.WriteLine($"      [√] Auto-Checked Action: True");
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"      [X] Warning: Error processing configuration dialog: {ex.Message}");
-                            }
-                        },
-                        (postConf) => // Handling POST-DOWNLOAD configuration (PLC Mode Restart)
-                        {
-                            try
-                            {
-                                string configName = postConf.GetType().Name;
-                                var prop = postConf.GetType().GetProperty("CurrentSelection");
-                                if (prop != null)
-                                {
-                                    var enumType = prop.GetValue(postConf).GetType();
-                                    
-                                    if (configName == "StartModules" || configName == "StartBackupModules")
-                                    {
-                                        prop.SetValue(postConf, Enum.Parse(enumType, "StartModule"));
-                                        Console.WriteLine("   [√] Post-Action: PLC execution mode changing to RUN.");
-                                    }
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"      [X] Warning: Error processing post-download action: {ex.Message}");
-                            }
-                        },
-                        Siemens.Engineering.Download.DownloadOptions.Hardware | Siemens.Engineering.Download.DownloadOptions.Software
-                    );
-
-                    // 6. Return final evaluation status to CLI shell
-                    if (result.State == Siemens.Engineering.Download.DownloadResultState.Success)
+                    if (evOnlineLegitimation != null)
                     {
-                        return "SUCCESS: Program loaded and PLC is running!";
-                    }
-                    else
-                    {
-                        var errorMsg = result.Messages.FirstOrDefault(m => m.State == Siemens.Engineering.Download.DownloadResultState.Error)?.Message ?? "Unknown Deployment Error";
-                        return $"FAILED: {result.State}. Details: {errorMsg}";
+                        Type delegateType = evOnlineLegitimation.EventHandlerType;
+                        var methodInfo = typeof(TIA_V20).GetMethod(nameof(OnOnlineLegitimationDirectCallback),
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public);
+
+                        if (methodInfo != null)
+                        {
+                            Delegate officialSiemensHandler = Delegate.CreateDelegate(delegateType, methodInfo);
+                            try { evOnlineLegitimation.RemoveMethod.Invoke(config, new object[] { officialSiemensHandler }); } catch { }
+                            evOnlineLegitimation.AddMethod.Invoke(config, new object[] { officialSiemensHandler });
+
+                            Console.WriteLine("[i] Security handshake handshake provider (OnlineConfigurationDelegate) registered successfully.");
+                        }
                     }
                 }
                 catch (Exception ex)
                 {
-                    return $"CRITICAL ERROR: {ex.GetBaseException().Message}";
+                    Console.WriteLine($"[!] Security warning: Failed to attach online legitimation listener ({ex.GetBaseException().Message})");
                 }
-            }
-        public static void OnOnlineLegitimationDirectCallback(object e)
-            {
-                Console.WriteLine();
-                Console.WriteLine("[SECURITY ALERT] PLC ONLINE LEGITIMATION REQUIRED");
-                
-                try
-                {
-                    if (e != null)
-                    {
-                        dynamic dynamicArgs = e;
-                        string plcName = dynamicArgs.PlcName ?? "Unknown Station";
-                        string info = dynamicArgs.VerificationInfo ?? "N/A";
-                        Console.WriteLine($" -> Target Station: {plcName}");
-                        Console.WriteLine($" -> Security Status: {info}");
-                    }
-                    
-                    Console.Write("Do you trust this device and allow secure communication establishment? (yes/no): ");
-                    string userResponse = Console.ReadLine()?.Trim().ToLower();
 
-                    if (userResponse == "yes" || userResponse == "y" || string.IsNullOrEmpty(userResponse))
-                    {
-                        Console.WriteLine("   [√] Connection response sent to TIA Core: CONNECTION ALLOWED.");
+                // 4. Apply connection network socket configuration
+                downloadProvider.Configuration.ApplyConfiguration(targetConf);
 
-                        if (e != null)
+                // 5. Execute hardware and software download process
+                Console.WriteLine("[i] Starting program download process... (Resolving deployment dialogs)");
+                var result = downloadProvider.Download(
+                    targetConf,
+                    (preConf) => // Handling PRE-DOWNLOAD dialog blocks
+                    {
+                        try
                         {
-                            Type argType = e.GetType();
-                            var propSelection = argType.GetProperty("CurrentSelection");
+                            string configName = preConf.GetType().Name;
+                            Console.WriteLine($"   => Processing Configuration: {configName}");
 
+                            var propSelection = preConf.GetType().GetProperty("CurrentSelection");
                             if (propSelection != null)
                             {
-                                Type enumType = propSelection.GetValue(e).GetType();
-                                var enumNames = Enum.GetNames(enumType);
+                                var enumType = propSelection.GetValue(preConf).GetType();
+                                string targetValue = "";
 
-                                string targetEnumName = enumNames.FirstOrDefault(n => n.Contains("Verify") && !n.Contains("Non")) 
-                                                    ?? enumNames.FirstOrDefault(n => n.Contains("Accept") || n.Contains("Allow"))
-                                                    ?? enumNames.FirstOrDefault(n => n != "NonVerified");
-
-                                if (!string.IsNullOrEmpty(targetEnumName))
+                                switch (configName)
                                 {
-                                    var enumValue = Enum.Parse(enumType, targetEnumName);
-                                    propSelection.SetValue(e, enumValue);
-                                    Console.WriteLine($"   [√] Verification selection updated to: {targetEnumName}");
+                                    case "StopModules":
+                                        targetValue = "StopAll";
+                                        break;
+                                    case "DifferentTargetConfiguration":
+                                    case "InitializeMemory":
+                                    case "ActiveTestCanBeAborted":
+                                        targetValue = "AcceptAll";
+                                        break;
+                                    case "ProtectionLevelChanged":
+                                        targetValue = "ContinueDownloading";
+                                        break;
+                                    case "OverwriteSystemData":
+                                        targetValue = "Overwrite";
+                                        break;
+                                    case "ExpandDownload":
+                                        targetValue = "Download";
+                                        break;
+                                    case "LoadIdentificationData":
+                                        targetValue = "LoadData";
+                                        break;
+                                    case "ResetModule":
+                                        targetValue = "DeleteAll";
+                                        break;
+                                    default:
+                                        var names = Enum.GetNames(enumType);
+                                        targetValue = names.FirstOrDefault(n => n.Contains("Stop") || n.Contains("Overwrite") || n.Contains("Accept") || n.Contains("Continue")) ?? names.FirstOrDefault();
+                                        break;
+                                }
+
+                                if (!string.IsNullOrEmpty(targetValue))
+                                {
+                                    propSelection.SetValue(preConf, Enum.Parse(enumType, targetValue));
+                                    Console.WriteLine($"      [√] Auto-Selected Value: {targetValue}");
+                                }
+                            }
+
+                            var propChecked = preConf.GetType().GetProperty("Checked");
+                            if (propChecked != null)
+                            {
+                                propChecked.SetValue(preConf, true);
+                                Console.WriteLine($"      [√] Auto-Checked Action: True");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"      [X] Warning: Error processing configuration dialog: {ex.Message}");
+                        }
+                    },
+                    (postConf) => // Handling POST-DOWNLOAD configuration (PLC Mode Restart)
+                    {
+                        try
+                        {
+                            string configName = postConf.GetType().Name;
+                            var prop = postConf.GetType().GetProperty("CurrentSelection");
+                            if (prop != null)
+                            {
+                                var enumType = prop.GetValue(postConf).GetType();
+
+                                if (configName == "StartModules" || configName == "StartBackupModules")
+                                {
+                                    prop.SetValue(postConf, Enum.Parse(enumType, "StartModule"));
+                                    Console.WriteLine("   [√] Post-Action: PLC execution mode changing to RUN.");
                                 }
                             }
                         }
-                    }
-                    else
-                    {
-                        Console.WriteLine("   [X] Connection response sent to TIA Core: CONNECTION DENIED.");
-                    }
-                }
-                catch (Exception ex)
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"      [X] Warning: Error processing post-download action: {ex.Message}");
+                        }
+                    },
+                    Siemens.Engineering.Download.DownloadOptions.Hardware | Siemens.Engineering.Download.DownloadOptions.Software
+                );
+
+                // 6. Return final evaluation status to CLI shell
+                if (result.State == Siemens.Engineering.Download.DownloadResultState.Success)
                 {
-                    Console.WriteLine($"   [!] Exception handled during secure handshake validation: {ex.Message}");
+                    return "SUCCESS: Program loaded and PLC is running!";
                 }
-                Console.WriteLine();
+                else
+                {
+                    var errorMsg = result.Messages.FirstOrDefault(m => m.State == Siemens.Engineering.Download.DownloadResultState.Error)?.Message ?? "Unknown Deployment Error";
+                    return $"FAILED: {result.State}. Details: {errorMsg}";
+                }
             }
+            catch (Exception ex)
+            {
+                return $"CRITICAL ERROR: {ex.GetBaseException().Message}";
+            }
+        }
+        public static void OnOnlineLegitimationDirectCallback(object e)
+        {
+            Console.WriteLine();
+            Console.WriteLine("[SECURITY ALERT] PLC ONLINE LEGITIMATION REQUIRED");
+
+            try
+            {
+                if (e != null)
+                {
+                    dynamic dynamicArgs = e;
+                    string plcName = dynamicArgs.PlcName ?? "Unknown Station";
+                    string info = dynamicArgs.VerificationInfo ?? "N/A";
+                    Console.WriteLine($" -> Target Station: {plcName}");
+                    Console.WriteLine($" -> Security Status: {info}");
+                }
+
+                Console.Write("Do you trust this device and allow secure communication establishment? (yes/no): ");
+                string userResponse = Console.ReadLine()?.Trim().ToLower();
+
+                if (userResponse == "yes" || userResponse == "y" || string.IsNullOrEmpty(userResponse))
+                {
+                    Console.WriteLine("   [√] Connection response sent to TIA Core: CONNECTION ALLOWED.");
+
+                    if (e != null)
+                    {
+                        Type argType = e.GetType();
+                        var propSelection = argType.GetProperty("CurrentSelection");
+
+                        if (propSelection != null)
+                        {
+                            Type enumType = propSelection.GetValue(e).GetType();
+                            var enumNames = Enum.GetNames(enumType);
+
+                            string targetEnumName = enumNames.FirstOrDefault(n => n.Contains("Verify") && !n.Contains("Non"))
+                                                ?? enumNames.FirstOrDefault(n => n.Contains("Accept") || n.Contains("Allow"))
+                                                ?? enumNames.FirstOrDefault(n => n != "NonVerified");
+
+                            if (!string.IsNullOrEmpty(targetEnumName))
+                            {
+                                var enumValue = Enum.Parse(enumType, targetEnumName);
+                                propSelection.SetValue(e, enumValue);
+                                Console.WriteLine($"   [√] Verification selection updated to: {targetEnumName}");
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("   [X] Connection response sent to TIA Core: CONNECTION DENIED.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"   [!] Exception handled during secure handshake validation: {ex.Message}");
+            }
+            Console.WriteLine();
+        }
 
         // --- BỔ SUNG: THAY ĐỔI TRẠNG THÁI PLC (RUN/STOP) ---
         // --- FUNCTION: MANUAL START/STOP PLC (FIX LỖI STOP KHI ĐANG RUN) ---
@@ -4034,8 +4133,8 @@ private Device FindDeviceInGroupsRecursive(DeviceUserGroupComposition groups, st
             {
                 File.WriteAllText(outputPath, "{\"FatalError\": \"" + ex.Message + "\"}");
             }
-        }        
-        #endregion        
+        }
+        #endregion
     }
     public class PlcCatalogItem
     {
@@ -4061,8 +4160,8 @@ private Device FindDeviceInGroupsRecursive(DeviceUserGroupComposition groups, st
         public List<PlcCatalogItem> WinCC_Unified { get; set; }
     }
     public class ModuleCatalogWrapper
-{
-    public List<PlcCatalogItem> S71200_Modules { get; set; }
-    public List<PlcCatalogItem> S71500_Modules { get; set; }
-}
+    {
+        public List<PlcCatalogItem> S71200_Modules { get; set; }
+        public List<PlcCatalogItem> S71500_Modules { get; set; }
+    }
 }

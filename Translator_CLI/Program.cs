@@ -27,13 +27,12 @@ namespace TIA_Copilot_CLI
 
         private const int SW_HIDE = 0;
         private static TIA_V20 _tiaEngine = null;
-        // private static TIA_V20 _tiaEngine = new TIA_V20();
         private static string _currentProjectName = "None";
         private static string _currentProjectPath = "None";
-        private static string _currentDeviceName = "None";
-        private static string _currentDeviceType = "None";
-        private static string _currentIp = "0.0.0.0";
-        private static string _lastGeneratedFilePath = "";
+        public static string _currentDeviceName = "None";
+        // private static string _currentDeviceType = "None";
+        public static string _currentIp = "0.0.0.0";
+        // private static string _lastGeneratedFilePath = "";
         public static string _currentSessionId = "default";
         public static bool capstoneMode = false;
         private static ModuleCatalogWrapper moduleData;
@@ -77,7 +76,7 @@ namespace TIA_Copilot_CLI
                     // 🌟 GIẢI PHÁP ĐỘC QUYỀN: Tạo bộ giám sát kiểm tra Form sau khi luồng Message Loop bắt đầu
                     System.Windows.Forms.Timer zombieKillerTimer = new System.Windows.Forms.Timer();
                     zombieKillerTimer.Interval = 200; // Cứ mỗi 200ms kiểm tra một lần
-                    
+
                     bool formHasOpened = false;
                     int startupGraceTicks = 0;
 
@@ -100,7 +99,7 @@ namespace TIA_Copilot_CLI
                             }
                         }
                     };
-                    
+
                     // Kích hoạt bộ giám sát chạy ngầm trước
                     zombieKillerTimer.Start();
 
@@ -109,10 +108,10 @@ namespace TIA_Copilot_CLI
 
                     // 3. Chạy vòng lặp tin nhắn vô điều kiện để nuôi Form sống mượt mà (Giống đoạn code chạy tốt của bạn)
                     Application.Run();
-                    return; 
+                    return;
                 }
             }
-            
+
             try
             {
                 // Ép kiểm tra và nạp bộ động cơ Openness ở đây để tránh làm sập luồng xem file bên trên
@@ -224,6 +223,18 @@ namespace TIA_Copilot_CLI
                 {
                     HandleTiaCommand(args);
                     return;
+                }
+
+                if (command == "agent")
+                {
+                    if (args.Length < 2 || string.IsNullOrEmpty(args[1]))
+                    {
+                        PrintIcon("!", "Usage: agent \"<your instruction>\"", ConsoleColor.Yellow);
+                        return;
+                    }
+                    string agentQuery = args[1];
+                    await CommandHandler.HandleAgentAsync(agentQuery, _currentSessionId, _tiaEngine);
+                    return; // Ngắt dứt khoát, không cho chạy xuống đống if/switch bên dưới nữa
                 }
 
                 if (command == "clear")
@@ -751,42 +762,42 @@ namespace TIA_Copilot_CLI
                     LogPerformance("DrawSCADA", drawSCADA.ElapsedMilliseconds);
                     break;
                 case "draw-hmi":
-{ 
-    Stopwatch drawHMI = new Stopwatch();
-    drawHMI.Start();
-    
-    string[] hmiJsonPaths = GetPathsOrOpenDialogV2(args, 2, "JSON HMI (*.json)|*.json");
+                    {
+                        Stopwatch drawHMI = new Stopwatch();
+                        drawHMI.Start();
 
-    foreach (string path in hmiJsonPaths)
-    {
-        if (!string.IsNullOrEmpty(path))
-        {
-            try
-            {
-                PrintIcon("i", $"Drawing screen from: {Path.GetFileName(path)}...", ConsoleColor.Cyan);
-                
-                // 1. Giải mã cấu trúc file JSON HMI tổng của dự án
-                var projectData = JsonConvert.DeserializeObject<ScadaProjectModel>(File.ReadAllText(path));
-                
-                if (projectData != null)
-                {
-                    // 🌟 2. SỬA DỨT ĐIỂM: Gọi hàm tổng quản lý HMI dành riêng cho Comfort Panel
-                    // Hàm này sẽ tự lo luồng lặp từng Screen và cấu hình SetStartScreenHMI đệ quy động an toàn
-                    _tiaEngine.GenerateHMIProject(projectData, _currentDeviceName);
-                    
-                    PrintIcon("√", $"Completed: {Path.GetFileName(path)}", ConsoleColor.Green);
-                }
-            }
-            catch (Exception ex) 
-            { 
-                PrintIcon("X", $"Drawing error [{Path.GetFileName(path)}]: {ex.Message}", ConsoleColor.Red); 
-            }
-        }
-    }
-    drawHMI.Stop();
-    LogPerformance("DrawHMI", drawHMI.ElapsedMilliseconds);
-    break;
-}
+                        string[] hmiJsonPaths = GetPathsOrOpenDialogV2(args, 2, "JSON HMI (*.json)|*.json");
+
+                        foreach (string path in hmiJsonPaths)
+                        {
+                            if (!string.IsNullOrEmpty(path))
+                            {
+                                try
+                                {
+                                    PrintIcon("i", $"Drawing screen from: {Path.GetFileName(path)}...", ConsoleColor.Cyan);
+
+                                    // 1. Giải mã cấu trúc file JSON HMI tổng của dự án
+                                    var projectData = JsonConvert.DeserializeObject<ScadaProjectModel>(File.ReadAllText(path));
+
+                                    if (projectData != null)
+                                    {
+                                        // 🌟 2. SỬA DỨT ĐIỂM: Gọi hàm tổng quản lý HMI dành riêng cho Comfort Panel
+                                        // Hàm này sẽ tự lo luồng lặp từng Screen và cấu hình SetStartScreenHMI đệ quy động an toàn
+                                        _tiaEngine.GenerateHMIProject(projectData, _currentDeviceName);
+
+                                        PrintIcon("√", $"Completed: {Path.GetFileName(path)}", ConsoleColor.Green);
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    PrintIcon("X", $"Drawing error [{Path.GetFileName(path)}]: {ex.Message}", ConsoleColor.Red);
+                                }
+                            }
+                        }
+                        drawHMI.Stop();
+                        LogPerformance("DrawHMI", drawHMI.ElapsedMilliseconds);
+                        break;
+                    }
                 case "img": // ADD-ON
                     string[] imgPaths = GetPathsOrOpenDialogV2(args, 2, "Images|*.png;*.jpg;*.svg");
 

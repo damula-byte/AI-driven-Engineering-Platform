@@ -1733,7 +1733,7 @@ namespace TIA_Copilot_CLI
                             props["StatusTag"] = item.BindTag ?? "";
                             AddColorScript(props, item);
                         }
-                        else if (itemName.Contains("Faceplate") || itemName.Contains("faceplate") || itemName.Contains("Background") || itemName.Contains("background"))
+                        else if (itemName.Contains("fp") || itemName.Contains("FP") || itemName.Contains("Faceplate") || itemName.Contains("faceplate") || itemName.Contains("Background") || itemName.Contains("background"))
                         {
                             props["Left"] = baseLeft;
                             props["Top"] = FALLBACK_Y;

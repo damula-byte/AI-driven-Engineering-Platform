@@ -15,6 +15,7 @@ logging.getLogger("langchain").setLevel(logging.ERROR)
 from langchain_huggingface import HuggingFaceEmbeddings
 import memory
 import app_secrets
+from agent_core import process_agent_query
 
 # ─────────────────────────────────────────────────────────────────
 # GLOBAL SINGLETON CACHES — Initialize once per Python process
@@ -191,13 +192,11 @@ def detect_model_from_key(api_key: str):
         os.environ["GOOGLE_API_KEY"] = key
         llm = ChatGoogleGenerativeAI(
             model="gemini-3.5-flash",
-            model="gemini-3.5-flash",
             temperature=0.1,
             convert_system_message_to_human=True,
             google_api_key=key,
             model_kwargs={"response_mime_type": "application/json"},
         )
-        return llm, "Gemini (gemini-3.5-flash)"
         return llm, "Gemini (gemini-3.5-flash)"
 
     # ── Anthropic Claude ──────────────────────────────────────────────────────
@@ -264,7 +263,9 @@ def main():
 
             os.environ["GOOGLE_API_KEY"] = CURRENT_KEY  
 
-            # region XỬ LÝ LỆNH ĐẶC BIỆT (KHÔNG PHẢI CHAT) - LIST SESSIONS, RESET SESSION, UPDATE SPEC, CHECK SPEC
+            # region XỬ LÝ LỆNH ĐẶC BIỆT (KHÔNG PHẢI CHAT) - LIST SESSIONS, RESET SESSION, UPDATE SPEC, CHECK SPE
+
+
             if command_type == "list_sessions":
                 sessions = memory.list_all_sessions()
                 send_response({"status": "success", "sessions": sessions})
@@ -368,6 +369,15 @@ def main():
                     send_response({"status": "error", "message": f"Error deleting Spec: {str(e)}"})
                     return
             
+            elif command_type == "agent_mode":
+                # Gọi thẳng file agent_core.py, nó đã trả về chuỗi JSON xịn rồi
+                agent_response_str = process_agent_query(user_query, CURRENT_KEY)
+                
+                # 🌟 ÉP XẢ ỐNG TRỰC TIẾP: Không dùng send_response để tránh bị bọc JSON kép
+                output_bytes = (agent_response_str + "\n").encode('utf-8')
+                sys.stdout.buffer.write(output_bytes)
+                sys.stdout.buffer.flush()
+                os._exit(0)
             # endregion
             
             # region TRIPPLE-PATH RAG RETRIEVAL — parallel execution, direct ChromaDB client

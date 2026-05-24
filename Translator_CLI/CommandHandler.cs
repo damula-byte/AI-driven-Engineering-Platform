@@ -9,6 +9,7 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.Xml;
 using System.Collections.Generic;
+using Middleware_console;
 
 namespace TIA_Copilot_CLI
 {
@@ -29,7 +30,756 @@ namespace TIA_Copilot_CLI
             if (up == "CWC") return "CWC_SCREEN";
             return "AUTO";
         }
+        ///////////////////////////////////// AGENT AI //////////////////////////////////////////////////////////////////////////////////////
+        public static async Task HandleAgentAsync(string query, string sessionId, TIA_V20 tiaEngine)
+        {
+            var settings = SettingsManager.Load();
+            string keytoPass = "";
 
+            if (settings.Mode == "USER")
+            {
+                if (settings.IsKeyMissing)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("\n[API ERROR] You are in USER MODE but no API Key is configured.");
+                    Console.ResetColor();
+                    return;
+                }
+                keytoPass = settings.UserApiKey;
+            }
+
+            Console.WriteLine($"\n🤖 [AGENT MODE] Phân tích yêu cầu");
+
+            // 1. GỌI BACKEND VỚI COMMAND = "agent_mode"
+            var backendTask = AiEngine.CallPythonBackendAsync(
+                query: query,
+                sessionId: sessionId,
+                commandType: "agent_mode", // 🌟 Khóa định tuyến sang LangChain Tools bên Python
+                contextCode: "",
+                specText: "",
+                targetType: "AUTO",
+                userTags: "",
+                systemMode: settings.Mode,
+                customApiKey: keytoPass
+            );
+
+            string jsonResponse = await RunWithSpinner(backendTask, "Agent is thinking & gathering tools...");
+
+            if (string.IsNullOrWhiteSpace(jsonResponse))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("\n[CRITICAL ERROR]: Python backend did not return any response.");
+                Console.ResetColor();
+                return;
+            }
+
+            // 2. BÓC TÁCH VÀ THI HÀNH ÁN
+            try
+            {
+                int startIndex = jsonResponse.IndexOf('{');
+                int endIndex = jsonResponse.LastIndexOf('}');
+                if (startIndex != -1 && endIndex != -1 && endIndex > startIndex)
+                {
+                    jsonResponse = jsonResponse.Substring(startIndex, endIndex - startIndex + 1);
+                }
+
+                JObject jsonResult = JObject.Parse(jsonResponse);
+                string type = jsonResult["type"]?.ToString();
+
+                // KỊCH BẢN: XỬ LÝ DANH SÁCH LỆNH (MULTI-ACTION)
+                if (type == "multi_action")
+                {
+                    JArray actions = (JArray)jsonResult["actions"];
+
+                    // Dòng này cực kỳ quan trọng để kiểm tra số lượng lệnh thực tế từ Python trả về!
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine($"\n[INFO]: System nhận được {actions.Count} hành động từ AI Agent.");
+                    Console.ResetColor();
+
+                    foreach (JObject actionItem in actions)
+                    {
+                        await ExecuteAction(actionItem, tiaEngine);
+                    }
+                }
+                // KỊCH BẢN CŨ: ĐƠN LỆNH
+                else if (type == "agent_action")
+                {
+                    // 🌟 SỬA QUAN TRỌNG: Thêm await ở đây luôn
+                    await ExecuteAction(jsonResult, tiaEngine);
+                }
+                else if (type == "chat_response")
+                {
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine($"\n🤖 [AI Agent]: {jsonResult["content"]}");
+                    Console.ResetColor();
+                }
+                else if (jsonResult["status"]?.ToString() == "error")
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"\n⚠️ [BACKEND ERROR]: {jsonResult["message"]}");
+                    Console.ResetColor();
+                }
+
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"\n⚠️ [PARSE ERROR]: {ex.Message}");
+                Console.ResetColor();
+            }
+        }
+
+        private static string LookUpInPlcCatalog(string modelName)
+        {
+            string catalogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PlcCatalog.json");
+            if (!File.Exists(catalogPath)) return null;
+
+            string jsonContent = File.ReadAllText(catalogPath);
+            JObject catalog = JObject.Parse(jsonContent);
+
+            // Chuẩn hóa tên model AI gửi về: xóa hết khoảng trắng, chuyển về chữ thường
+            string normalizedInput = modelName.ToLower().Replace(" ", "").Replace("cpu", "").Replace("pn", "");
+
+            foreach (var property in catalog.Properties())
+            {
+                JArray devices = (JArray)property.Value;
+                foreach (var device in devices)
+                {
+                    string rawName = device["Name"]?.ToString();
+                    // Chuẩn hóa tên trong JSON: xóa hết khoảng trắng, chuyển về chữ thường, bỏ "cpu", "pn"
+                    string normalizedJsonName = rawName.ToLower().Replace(" ", "").Replace("cpu", "").Replace("pn", "");
+
+                    // So sánh xem tên AI gửi có nằm trong tên JSON không
+                    if (normalizedJsonName.Contains(normalizedInput))
+                    {
+                        string orderNumber = device["OrderNumber"]?.ToString();
+                        string version = device["Version"]?.ToString();
+                        return $"OrderNumber:{orderNumber}/{version}";
+                    }
+                }
+            }
+            return null;
+        }
+
+        private static async Task ExecuteAction(JObject actionItem, TIA_V20 tiaEngine)
+        {
+            string action = actionItem["action"]?.ToString();
+            string generatedDir = GetGeneratedFilesDirectory();
+            Func<string, string[]> GetValidPaths = (rawNames) =>
+            {
+                return rawNames.Split(',').Select(f => f.Trim())
+                    .Select(f => f.EndsWith(".scl") ? f : f + ".scl")
+                    .Select(f => Path.Combine(generatedDir, f))
+                    .Where(p => File.Exists(p)).ToArray();
+            };
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine($"\n⚙️ [SYSTEM]: Đang thực hiện -> [{action}]");
+            Console.ResetColor();
+
+            switch (action)
+            {
+                case "CREATE_PROJECT":
+                    string namec = actionItem["name"]?.ToString();
+                    string pathc = actionItem["path"]?.ToString();
+                    if (tiaEngine.CreateTIAproject(pathc, namec, true))
+                        Console.WriteLine($"✅ [SUCCESS] {action} {namec} thành công!");
+                    else
+                        Console.WriteLine($"❌ [FAILED] Không thể {action}.");
+                    break;
+
+                case "OPEN_PROJECT":
+                    string nameo = actionItem["name"]?.ToString();
+                    string patho = actionItem["path"]?.ToString();
+                    if (tiaEngine.CreateTIAproject(patho, nameo, false))
+                        Console.WriteLine($"✅ [SUCCESS] {action} {nameo} thành công!");
+                    else
+                        Console.WriteLine($"❌ [FAILED] Không thể {action}.");
+                    break;
+
+                case "CONNECT_TIA":
+                    if (tiaEngine.ConnectToTIA()) Console.WriteLine("✅ Đã kết nối TIA.");
+                    else Console.WriteLine("❌ Không tìm thấy TIA.");
+                    break;
+
+                case "SAVE_PROJECT":
+                    if (tiaEngine.SaveProject()) Console.WriteLine("✅ Dự án đã lưu.");
+                    break;
+
+                case "CLOSE_TIA":
+                    tiaEngine.CloseTIA();
+                    Console.WriteLine("✅ TIA đã đóng.");
+                    break;
+
+                case "CREATE_DEVICE":
+                    string dName = actionItem["name"]?.ToString();
+                    string ip = actionItem["ip"]?.ToString();
+                    string mName = actionItem["model_name"]?.ToString();
+                    string tid = LookUpInPlcCatalog(mName);
+
+                    if (!string.IsNullOrEmpty(tid))
+                    {
+                        try
+                        {
+                            Console.WriteLine($"🔍 [INFO]: Found model '{mName}' in catalog with TID: {tid}. Proceeding to create device '{dName}' with IP: {ip}.");
+
+                            // Chạy hàm tạo trên một luồng riêng để không nghẽn Openness
+                            await Task.Run(() => tiaEngine.CreateDev(dName, tid, ip));
+                            Console.WriteLine($"✅ [COMMAND SENT]: Create device command for '{dName}' has been sent to TIA.");
+
+                            // 🌟 SỬA QUAN TRỌNG: Thay Thread.Sleep bằng Task.Delay bất đồng bộ an toàn
+                            await Task.Delay(2000);
+
+                            // Kiểm tra lại thiết bị đã thực sự tồn tại trong danh sách chưa
+                            var devs = tiaEngine.GetPlcList();
+                            if (devs.Any(d => d.Equals(dName, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                SetCurrentDevice(dName, tiaEngine);
+                                Console.WriteLine($"✅ [SUCCESS]: Thiết bị {dName} đã tạo và chọn thành công.");
+                            }
+                            else
+                            {
+                                Console.WriteLine($"⚠️ [WARNING]: Thiết bị đã gửi lệnh tạo nhưng chưa xuất hiện trong danh sách!");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine($"❌ [CREATE DEVICE FAILED]: {ex.Message}");
+                            Console.ResetColor();
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"❌ [CATALOG ERROR]: Không tìm thấy model '{mName}'!");
+                    }
+                    break;
+
+                case "CHOOSE_DEVICE":
+                    string targetName = actionItem["name"]?.ToString();
+
+                    Console.WriteLine($"🔍 [INFO]: Hệ thống đang tiến hành chuyển đổi ngữ cảnh sang thiết bị: '{targetName}'...");
+
+                    bool chooseSuccess = SetCurrentDevice(targetName, tiaEngine);
+
+                    if (chooseSuccess)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Green;
+                        Console.WriteLine($"✅ [SUCCESS]: Đã chuyển ngữ cảnh làm việc thành công!");
+                        Console.WriteLine($"👉 Thiết bị hiện tại: {Program._currentDeviceName} | IP cấu hình: {Program._currentIp}");
+                    }
+                    else
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine($"❌ [FAILED]: Không tìm thấy thiết bị nào khớp với từ khóa '{targetName}' trong cấu trúc dự án TIA Portal.");
+                    }
+                    Console.ResetColor();
+                    break;
+
+                case "GENERATE_CODE":
+                    string blocType = actionItem["block_type"]?.ToString();
+                    string codQuery = actionItem["query"]?.ToString();
+                    Program.CheckCapstoneMode(codQuery);
+                    await HandleChatAsync(blocType, codQuery, Program._currentSessionId);
+                    break;
+
+                case "IMPORT_FB_FC":
+                    string bType = actionItem["block_type"]?.ToString();
+                    string[] fbPaths = GetValidPaths(actionItem["file_names"]?.ToString());
+                    if (fbPaths.Length > 0) Program.TiaImportLogic(bType.ToUpper(), fbPaths);
+                    break;
+
+                case "IMPORT_OB":
+                    string[] obPaths = GetValidPaths(actionItem["file_names"]?.ToString());
+                    if (obPaths.Length > 0) Program.TiaOBImportLogic("OB", obPaths);
+                    break;
+
+                case "IMPORT_PLC_TAGS":
+                    string rawFileNames = actionItem["file_names"]?.ToString();
+                    string generated_Dir = GetGeneratedFilesDirectory();
+
+                    // 🌟 KIỂM TRA NGỮ CẢNH: Đảm bảo đã chọn thiết bị
+                    if (string.IsNullOrEmpty(Program._currentDeviceName) || Program._currentDeviceName == "None")
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine("❌ [ERROR]: Bạn chưa chọn thiết bị (PLC/SCADA) nào để nạp Tags. Hãy dùng 'CHOOSE_DEVICE' trước!");
+                        Console.ResetColor();
+                        break;
+                    }
+
+                    string[] fileList = rawFileNames.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+
+                    foreach (var f in fileList)
+                    {
+                        string fileName = f.Trim();
+                        if (!fileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+                            fileName += ".csv";
+
+                        string fullPath = Path.Combine(generated_Dir, fileName);
+
+                        if (File.Exists(fullPath))
+                        {
+                            try
+                            {
+                                // Gọi API của Siemens
+                                tiaEngine.ImportPlcTagsFromCsv(Program._currentDeviceName, fullPath);
+
+                                Console.ForegroundColor = ConsoleColor.Green;
+                                Console.WriteLine($"✅ [SUCCESS]: Đã nạp Tags từ {fileName} vào thiết bị {Program._currentDeviceName}");
+                                Console.ResetColor();
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.ForegroundColor = ConsoleColor.Red;
+                                // Log chi tiết lỗi từ Siemens API để debug
+                                Console.WriteLine($"❌ [ERROR]: Lỗi Siemens Openness khi nạp {fileName}: {ex.Message}");
+                                Console.ResetColor();
+                            }
+                        }
+                        else
+                        {
+                            Console.ForegroundColor = ConsoleColor.Yellow;
+                            Console.WriteLine($"⚠️ [WARNING]: Không tìm thấy file: {fileName} tại đường dẫn: {fullPath}");
+                            Console.ResetColor();
+                        }
+                    }
+                    break;
+
+                case "DRAW_SCADA":
+                    string rawJsonFiles = actionItem["file_names"]?.ToString();
+                    string scadaDir = GetGeneratedFilesDirectory(); // Hàm lấy thư mục gốc dự án mà bạn đã viết
+
+                    // Kiểm tra xem đã chọn thiết bị (PC Station / HMI Panel) để vẽ giao diện lên chưa
+                    if (string.IsNullOrEmpty(Program._currentDeviceName) || Program._currentDeviceName == "None")
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine("❌ [ERROR]: Chưa chọn thiết bị đích (HMI/SCADA) để vẽ giao diện. Hãy dùng 'CHOOSE_DEVICE' trước!");
+                        Console.ResetColor();
+                        break;
+                    }
+
+                    // Tách danh sách file bằng dấu phẩy
+                    string[] jsonFileList = rawJsonFiles.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+
+                    foreach (var f in jsonFileList)
+                    {
+                        string fileName = f.Trim();
+                        // Tự động bù đuôi .json nếu người dùng quên gõ
+                        if (!fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                            fileName += ".json";
+
+                        string fullPath = Path.Combine(scadaDir, fileName);
+
+                        if (File.Exists(fullPath))
+                        {
+                            try
+                            {
+                                Console.ForegroundColor = ConsoleColor.Cyan;
+                                Console.WriteLine($"⚙️ [SYSTEM]: Đang tiến hành vẽ màn hình từ tệp: {fileName}...");
+                                Console.ResetColor();
+
+                                // Đọc nội dung file JSON và Deserialize cấu trúc đối tượng đồ họa
+                                string jsonContent = File.ReadAllText(fullPath);
+                                var jsonScreen = JsonConvert.DeserializeObject<ScadaProjectModel>(jsonContent);
+
+                                // Gọi API động cơ TIA Portal Openness của bạn để tạo màn hình
+                                tiaEngine.GenerateScadaProject(jsonScreen, Program._currentDeviceName);
+
+                                Console.ForegroundColor = ConsoleColor.Green;
+                                Console.WriteLine($"✅ [SUCCESS]: Đã vẽ hoàn tất giao diện từ file {fileName} vào {Program._currentDeviceName}");
+                                Console.ResetColor();
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.ForegroundColor = ConsoleColor.Red;
+                                Console.WriteLine($"❌ [DRAWING ERROR] Lỗi khi xử lý file {fileName}: {ex.Message}");
+                                Console.ResetColor();
+                            }
+                        }
+                        else
+                        {
+                            Console.ForegroundColor = ConsoleColor.Yellow;
+                            Console.WriteLine($"⚠️ [WARNING]: Không tìm thấy file đồ họa: {fileName} tại đường dẫn: {fullPath}");
+                            Console.ResetColor();
+                        }
+                    }
+                    break;
+
+                case "IMPORT_HMI_TAGS":
+                    string rawHmiFiles = actionItem["file_names"]?.ToString();
+                    string hmiTagDir = GetGeneratedFilesDirectory(); // Lấy đường dẫn gốc thư mục chuẩn
+
+                    // 🌟 KIỂM TRA NGỮ CẢNH: Đảm bảo trạm SCADA/HMI đã được chọn trước
+                    if (string.IsNullOrEmpty(Program._currentDeviceName) || Program._currentDeviceName == "None")
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine("❌ [ERROR]: Bạn chưa chọn trạm HMI/SCADA đích để nạp Tags. Hãy dùng 'CHOOSE_DEVICE' trước!");
+                        Console.ResetColor();
+                        break;
+                    }
+
+                    // Tách danh sách file bằng dấu phẩy
+                    string[] hmiFileList = rawHmiFiles.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+
+                    foreach (var f in hmiFileList)
+                    {
+                        string fileName = f.Trim();
+                        // Tự động bù đuôi .csv nếu AI hoặc người dùng viết thiếu
+                        if (!fileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+                            fileName += ".csv";
+
+                        string fullPath = Path.Combine(hmiTagDir, fileName);
+
+                        if (File.Exists(fullPath))
+                        {
+                            try
+                            {
+                                Console.ForegroundColor = ConsoleColor.Cyan;
+                                Console.WriteLine($"⚙️ [SYSTEM]: Đang tiến hành nạp bảng biến HMI từ tệp: {fileName} vào {Program._currentDeviceName}...");
+                                Console.ResetColor();
+
+                                // Gọi trực tiếp API TIA Portal Openness xử lý tên gộp của bạn
+                                tiaEngine.ImportHmiTagsFromCsv(Program._currentDeviceName, fullPath);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.ForegroundColor = ConsoleColor.Red;
+                                Console.WriteLine($"❌ [HMI TAG ERROR] Lỗi khi nạp file {fileName}: {ex.Message}");
+                                Console.ResetColor();
+                            }
+                        }
+                        else
+                        {
+                            Console.ForegroundColor = ConsoleColor.Yellow;
+                            Console.WriteLine($"⚠️ [WARNING]: Không tìm thấy file dữ liệu: {fileName} tại đường dẫn: {fullPath}");
+                            Console.ResetColor();
+                        }
+                    }
+                    break;
+
+                case "CREATE_HMI_CONNECTION":
+                    string driver = actionItem["driver"]?.ToString() ?? "SIMATIC S7 1200/1500";
+                    string hmiIpAddr = actionItem["hmi_ip"]?.ToString() ?? "192.168.0.2";
+                    string plcIpAddr = actionItem["plc_ip"]?.ToString() ?? "192.168.0.1";
+                    string ap = actionItem["access_point"]?.ToString() ?? "S7ONLINE";
+
+                    // KIỂM TRA NGỮ CẢNH: Phải chọn thiết bị trước
+                    if (string.IsNullOrEmpty(Program._currentDeviceName) || Program._currentDeviceName == "None")
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine("❌ [ERROR]: Chưa chọn trạm HMI/SCADA để thiết lập kết nối. Hãy dùng 'CHOOSE_DEVICE' trước!");
+                        Console.ResetColor();
+                        break;
+                    }
+
+                    try
+                    {
+                        Console.ForegroundColor = ConsoleColor.Cyan;
+                        Console.WriteLine($"\n⚙️ [SYSTEM]: Đang tiến hành tạo kết nối truyền thông động cho [{Program._currentDeviceName}]...");
+                        Console.WriteLine($"👉 Cấu hình nạp: Driver={driver} | HMI_IP={hmiIpAddr} <-> PLC_IP={plcIpAddr} | AccessPoint={ap}");
+                        Console.ResetColor();
+
+                        // Gọi động cơ xử lý dynamic WinCC Unified Openness của bạn
+                        string connectionResult = tiaEngine.CreateUnifiedConnectionDynamic(
+                            Program._currentDeviceName,
+                            driver,
+                            hmiIpAddr,
+                            plcIpAddr,
+                            ap
+                        );
+
+                        if (connectionResult.StartsWith("[ERROR]"))
+                        {
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine($"❌ {connectionResult}");
+                            Console.ResetColor();
+                        }
+                        else
+                        {
+                            Console.ForegroundColor = ConsoleColor.Green;
+                            Console.WriteLine($"✅ [SUCCESS]: Khởi tạo dòng kết nối thành công -> Tên kết nối: [{connectionResult}]");
+                            Console.ResetColor();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine($"❌ [CRITICAL CONNECTION ERROR]: {ex.Message}");
+                        Console.ResetColor();
+                    }
+                    break;
+
+                case "CHANGE_IP":
+                    string targetIp = actionItem["ip"]?.ToString();
+                    string targetSubnet = actionItem["subnet"]?.ToString() ?? "255.255.255.0";
+                    string targetGateway = actionItem["gateway"]?.ToString() ?? "";
+
+                    // 🌟 KHÓA SHIELD BẢO VỆ NGỮ CẢNH: Kiểm tra thiết bị hiện hành
+                    if (string.IsNullOrEmpty(Program._currentDeviceName) || Program._currentDeviceName == "None")
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine("❌ [ERROR]: Bạn chưa chọn thiết bị nào để thực hiện cấu hình mạng! Chuỗi lệnh CHANGE_IP bị từ chối.");
+                        Console.WriteLine("👉 Vui lòng sử dụng lệnh 'CHOOSE_DEVICE' trước hoặc chỉ định tên thiết bị cụ thể trong câu lệnh.");
+                        Console.ResetColor();
+                        break;
+                    }
+
+                    try
+                    {
+                        Console.ForegroundColor = ConsoleColor.Cyan;
+                        Console.WriteLine($"\n⚙️ [SYSTEM]: Đang thực hiện thay đổi cấu hình IP Address cho thiết bị hiện hành: [{Program._currentDeviceName}]...");
+                        Console.WriteLine($"👉 Thông số mạng mới -> IP: {targetIp} | Subnet: {targetSubnet} | GW: {(string.IsNullOrEmpty(targetGateway) ? "None" : targetGateway)}");
+                        Console.ResetColor();
+
+                        // Gọi trực tiếp động cơ phần cứng Siemens Openness của bạn
+                        string ipUpdateResult = tiaEngine.UpdateNetworkSettings(
+                            Program._currentDeviceName,
+                            targetIp,
+                            targetSubnet,
+                            targetGateway
+                        );
+
+                        if (ipUpdateResult.Contains("SUCCESS"))
+                        {
+                            Console.ForegroundColor = ConsoleColor.Green;
+                            Console.WriteLine($"✅ {ipUpdateResult}");
+
+                            // CẬP NHẬT LẠI BIẾN BIẾN TOÀN CỤC: Đảm bảo IP mới được đồng bộ lên giao diện CLI
+                            Program._currentIp = targetIp;
+                        }
+                        else
+                        {
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine($"❌ {ipUpdateResult}");
+                        }
+                        Console.ResetColor();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine($"❌ [NETWORK ENGINE CRASH]: Lỗi hệ thống khi cập nhật IP: {ex.Message}");
+                        Console.ResetColor();
+                    }
+                    break;
+
+                case "COMPILE":
+                    string mode = actionItem["mode"]?.ToString() ?? "both";
+                    bool rebuildAttr = actionItem["rebuild"]?.ToObject<bool>() ?? false;
+
+                    // KIỂM TRA NGỮ CẢNH: Bắt buộc phải chọn thiết bị trước khi bấm nút Compile
+                    if (string.IsNullOrEmpty(Program._currentDeviceName) || Program._currentDeviceName == "None")
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine("❌ [ERROR]: Bạn chưa chọn thiết bị nào để biên dịch. Hãy dùng lệnh 'CHOOSE_DEVICE' trước!");
+                        Console.ResetColor();
+                        break;
+                    }
+
+                    try
+                    {
+                        Console.ForegroundColor = ConsoleColor.Cyan;
+                        Console.WriteLine(rebuildAttr
+                            ? $"\n⚙️ [SYSTEM]: Đang thực hiện REBUILD toàn bộ cấu trúc thiết bị: [{Program._currentDeviceName}]..."
+                            : $"\n⚙️ [SYSTEM]: Đang tiến hành COMPILE thiết bị hiện hành: [{Program._currentDeviceName}]...");
+                        Console.WriteLine($"👉 Chế độ: Mode={mode.ToUpper()} | Rebuild All={rebuildAttr}");
+                        Console.ResetColor();
+
+                        // Phân tích logic chế độ cứng/mềm từ chuỗi JSON của AI gửi về
+                        bool compileHw = (mode == "hw" || mode == "both");
+                        bool compileSw = (mode == "sw" || mode == "both");
+
+                        // Gọi trực tiếp động cơ biên dịch Siemens Openness của bạn
+                        // Vì hàm Compile có thể tốn thời gian chạy nền của TIA, ta bọc Task.Run chạy bất đồng bộ cho mượt
+                        string compileResult = await Task.Run(() =>
+                            tiaEngine.CompileSpecific(Program._currentDeviceName, compileHw, compileSw, rebuildAttr)
+                        );
+
+                        // In kết quả trả về từ TIA Portal ra màn hình Console
+                        if (compileResult.Contains("FAILED") || compileResult.Contains("Error"))
+                        {
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine($"❌ [COMPILE FAILED]: {compileResult}");
+                        }
+                        else
+                        {
+                            Console.ForegroundColor = ConsoleColor.Green;
+                            Console.WriteLine($"✅ [COMPILE COMPLETED]: {compileResult}");
+                        }
+                        Console.ResetColor();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine($"❌ [COMPILE ENGINE ERROR]: Lỗi tiến trình biên dịch Openness: {ex.Message}");
+                        Console.ResetColor();
+                    }
+                    break;
+
+                case "ADD_MODULE":
+                    string moduleModel = actionItem["model_name"]?.ToString();
+                    int targetSlot = actionItem["slot"]?.ToObject<int>() ?? 2;
+
+                    // 🌟 SHIELD BẢO VỆ NGỮ CẢNH: Bắt buộc phải chọn PLC đích trước
+                    if (string.IsNullOrEmpty(Program._currentDeviceName) || Program._currentDeviceName == "None")
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine("❌ [ERROR]: Bạn chưa chọn PLC nào để cắm Module mở rộng. Hãy dùng 'CHOOSE_DEVICE' trước!");
+                        Console.ResetColor();
+                        break;
+                    }
+
+                    try
+                    {
+                        // Dò tìm dòng họ PLC (S71200 hoặc S71500) để tra cứu chính xác mảng dữ liệu trong JSON
+                        string plcFamily = tiaEngine.GetDeviceFamily(Program._currentDeviceName);
+
+                        Console.ForegroundColor = ConsoleColor.Cyan;
+                        Console.WriteLine($"\n⚙️ [SYSTEM]: Đang tiến hành phân tích và gắn module [{moduleModel}] vào Slot [{targetSlot}] của thiết bị [{Program._currentDeviceName}] ({plcFamily})...");
+                        Console.ResetColor();
+
+                        // Gọi bộ dò Catalog tự động
+                        string computedIdentifier = LookUpModuleInCatalog(moduleModel, plcFamily);
+                        if (string.IsNullOrEmpty(plcFamily) || plcFamily.Equals("UNKNOWN", StringComparison.OrdinalIgnoreCase))
+                        {
+                            // Nếu thiết bị chứa mã 531-7NF (như trong log của bạn), tự động hiểu là họ S7-1500
+                            plcFamily = moduleModel.Contains("531-") || Program._currentDeviceName.Contains("1500") ? "S71500" : "S71200";
+                        }
+                        // Nếu tìm không thấy trong Catalog, kiểm tra xem AI có truyền thẳng mã MLFB bằng tay không
+                        if (string.IsNullOrEmpty(computedIdentifier))
+                        {
+                            // Nếu chuỗi nhập vào có định dạng giống mã Order Number (Chứa ký tự hoặc độ dài chuẩn)
+                            if (moduleModel.StartsWith("6ES7") || moduleModel.StartsWith("6GK7"))
+                            {
+                                computedIdentifier = $"OrderNumber:{moduleModel}/V2.2"; // Gán firmware mặc định dự phòng
+                                Console.WriteLine($"🔍 [INFO]: Không tìm thấy chuỗi '{moduleModel}' trong Catalog, chuyển sang chế độ nạp thủ công mã MLFB.");
+                            }
+                        }
+
+                        if (!string.IsNullOrEmpty(computedIdentifier))
+                        {
+                            Console.WriteLine($"🔍 [INFO]: Đúc mã định danh Openness thành công: {computedIdentifier}");
+
+                            // Gọi trực tiếp hàm Plug vật lý bất đồng bộ của bạn xuống Rack Openness
+                            string plugResult = await Task.Run(() => tiaEngine.PlugModule(Program._currentDeviceName, computedIdentifier, targetSlot)
+                            );
+
+                            if (plugResult.Contains("SUCCESS"))
+                            {
+                                Console.ForegroundColor = ConsoleColor.Green;
+                                Console.WriteLine($"✅ {plugResult}");
+                            }
+                            else
+                            {
+                                Console.ForegroundColor = ConsoleColor.Red;
+                                Console.WriteLine($"❌ {plugResult}");
+                            }
+                        }
+                        else
+                        {
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine($"❌ [CATALOG ERROR]: Không tìm thấy Module nào khớp với mô tả '{moduleModel}' trong tệp ModuleCatalog.json.");
+                            Console.ResetColor();
+                        }
+                        Console.ResetColor();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine($"❌ [HARDWARE CONFIG CRASH]: Lỗi tiến trình cấu hình phần cứng: {ex.Message}");
+                        Console.ResetColor();
+                    }
+                    break;
+            }
+        }
+
+        private static string LookUpModuleInCatalog(string modelName, string family)
+        {
+            string catalogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ModuleCatalog.json");
+            if (!File.Exists(catalogPath)) return null;
+
+            try
+            {
+                string jsonContent = File.ReadAllText(catalogPath);
+                JObject catalog = JObject.Parse(jsonContent);
+
+                // Chuẩn hóa tên đầu vào từ AI để tăng tỉ lệ khớp (Xóa khoảng trắng, chữ thường)
+                string normalizedInput = modelName.ToLower().Replace(" ", "").Replace("-", "");
+
+                // Xác định mảng module cần quét dựa trên Family của PLC đang chọn (S71200 hoặc S71500)
+                string arrayKey = (family == "S71200") ? "S71200_Modules" : "S71500_Modules";
+                if (!catalog.ContainsKey(arrayKey)) return null;
+
+                JArray modules = (JArray)catalog[arrayKey];
+                foreach (var mod in modules)
+                {
+                    string rawName = mod["Name"]?.ToString() ?? "";
+                    string orderNum = mod["OrderNumber"]?.ToString() ?? "";
+                    string version = mod["Version"]?.ToString() ?? "V1.0";
+
+                    string normalizedName = rawName.ToLower().Replace(" ", "").Replace("-", "");
+                    string normalizedOrder = orderNum.ToLower().Replace(" ", "").Replace("-", "");
+
+                    // Khớp thông minh: Kiểm tra nếu chuỗi AI gửi về trùng tên hoặc chứa mã Part Number
+                    if (normalizedName.Contains(normalizedInput) || normalizedOrder.Contains(normalizedInput) || normalizedInput.Contains(normalizedOrder))
+                    {
+                        return $"OrderNumber:{orderNum}/{version}";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"⚠️ [CATALOG LOG ERROR]: Lỗi đọc ModuleCatalog.json: {ex.Message}");
+            }
+            return null;
+        }
+
+        private static bool SetCurrentDevice(string devName, TIA_V20 tiaEngine)
+        {
+            if (string.IsNullOrWhiteSpace(devName)) return false;
+
+            // Lấy danh sách toàn bộ tên thiết bị (đã qua xử lý gộp tên từ GetPlcList)
+            var devs = tiaEngine.GetPlcList();
+            if (devs == null || devs.Count == 0) return false;
+
+            // Tìm kiếm thông minh: Chấp nhận khớp hoàn toàn hoặc khớp một phần (chứa từ khóa)
+            // Ví dụ: người dùng nhập "Syrup_scada" vẫn khớp với "Syrup_scada|HMI_RT_1"
+            string matchedDevice = devs.FirstOrDefault(d =>
+                d.Equals(devName, StringComparison.OrdinalIgnoreCase) ||
+                d.IndexOf(devName, StringComparison.OrdinalIgnoreCase) >= 0);
+
+            if (matchedDevice != null)
+            {
+                // Cập nhật trạng thái hệ thống CLI toàn cục
+                Program._currentDeviceName = matchedDevice;
+
+                // Truy vấn địa chỉ IP thực tế từ API phần cứng của Siemens
+                Program._currentIp = tiaEngine.GetDeviceIp(matchedDevice);
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private static string GetGeneratedFilesDirectory()
+        {
+            // Lấy thư mục chạy hiện tại (thường là ...\translator_cli\bin\Debug\net48)
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+
+            // Đi lùi ra khỏi bin\Debug\net48
+            // Lùi 3 cấp: net48 -> Debug -> bin
+            string projectRoot = Path.GetFullPath(Path.Combine(baseDir, @"..\..\..\"));
+
+            string generatedDir = Path.Combine(projectRoot, "Generated_Files");
+
+            // Kiểm tra xem folder có tồn tại không, nếu không thì tạo nó
+            if (!Directory.Exists(generatedDir))
+            {
+                Directory.CreateDirectory(generatedDir);
+            }
+
+            return generatedDir;
+        }
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         public static async Task HandleLoadTagsAsync(string tagFilePath)
         {
             Console.WriteLine($"\n🚀 [START] Starting to load I/O Tags from: {tagFilePath}");
