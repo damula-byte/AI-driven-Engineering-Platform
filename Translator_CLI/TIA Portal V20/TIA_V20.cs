@@ -510,9 +510,41 @@ namespace Middleware_console
         //         return device.Name;
         //     }
         // }
+<<<<<<< HEAD
+=======
 
+>>>>>>> 90e49461583fe66a77a7c74a888394924c12df9f
         private string GetCombinedDeviceName(Device device)
+{
+    // BẢO VỆ 1: Kiểm tra thiết bị null
+    if (device == null) return "Unknown Device";
+
+    try
+    {
+        // Nhận diện trạm PC Station (Unified / WinCC)
+        bool isPcStation = (device.TypeIdentifier ?? "").Contains("Simatic.PC") ||
+                           (device.TypeIdentifier ?? "").Contains("System:Device.PC");
+
+        if (isPcStation)
         {
+<<<<<<< HEAD
+            string stationName = device.Name;
+            string runtimeName = null;
+
+            if (device.DeviceItems != null)
+            {
+                // Duyệt qua tất cả DeviceItem để tìm phần mềm thực thi (Runtime)
+                foreach (DeviceItem item in device.DeviceItems)
+                {
+                    if (item == null) continue;
+
+                    // Ưu tiên tìm SoftwareContainer hợp lệ
+                    var swContainer = item.GetService<SoftwareContainer>();
+                    if (swContainer != null)
+                    {
+                        runtimeName = item.Name;
+                        break; 
+=======
             // BẢO VỆ 1: Kiểm tra thiết bị null
             if (device == null) return "Unknown Device";
 
@@ -562,16 +594,43 @@ namespace Middleware_console
                         {
                             return item.Name; // Trả về tên CPU (ví dụ: PLC_1)
                         }
+>>>>>>> 90e49461583fe66a77a7c74a888394924c12df9f
                     }
                 }
-
-                return device.Name;
             }
-            catch
+
+            // CHỈ TRẢ VỀ DẠNG GỘP khi runtimeName tồn tại VÀ KHÁC tên trạm (tránh Syrup_scada|Syrup_scada)
+            if (!string.IsNullOrEmpty(runtimeName) && !runtimeName.Equals(stationName, StringComparison.OrdinalIgnoreCase))
             {
+<<<<<<< HEAD
+                return $"{stationName}|{runtimeName}";
+            }
+            return stationName;
+        }
+
+        // XỬ LÝ CHO PLC (S7-1500 / S7-1200)
+        // Tìm Item đầu tiên có chứa SoftwareContainer (thường là CPU)
+        if (device.DeviceItems != null)
+        {
+            foreach (DeviceItem item in device.DeviceItems)
+            {
+                if (item != null && item.GetService<SoftwareContainer>() != null)
+                {
+                    return item.Name; // Trả về tên CPU (ví dụ: PLC_1)
+                }
+=======
                 return device?.Name ?? "Unknown Device";
+>>>>>>> 90e49461583fe66a77a7c74a888394924c12df9f
             }
         }
+
+        return device.Name;
+    }
+    catch
+    {
+        return device?.Name ?? "Unknown Device";
+    }
+}
         public static List<string> GetSystemNetworkAdapters()
         {
             List<string> adapterNames = new List<string>();
