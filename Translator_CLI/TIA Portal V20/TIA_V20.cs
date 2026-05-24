@@ -36,6 +36,10 @@ using Siemens.Engineering.HmiUnified.UI.Screens;
 using System.Windows.Forms;
 using Newtonsoft.Json;
 using DownloadConfig = Siemens.Engineering.Download.Configurations.DownloadConfiguration;
+using Microsoft.Win32;
+using System.Security.AccessControl;
+using System.Security.Cryptography;
+using System.Globalization;
 namespace Middleware_console
 {
     public delegate void MyDownloadConfigurationDelegate(Siemens.Engineering.Download.Configurations.DownloadConfiguration downloadConfiguration);
@@ -55,6 +59,7 @@ namespace Middleware_console
         // Connect TIA
         public void ConnectToTiaPortal()
         {
+            SetWhitelistForCurrentProcess();
             if (!ConnectToTIA())
             {
                 throw new Exception("No running TIA Portal instance found!");
@@ -88,6 +93,7 @@ namespace Middleware_console
 
         public bool CreateTIAproject(string path, string name, bool createNew) // (path: full path to project folder ; name: project's name ; createNew: true = create new project, false = open existing project)
         {
+            SetWhitelistForCurrentProcess();
             try
             {
                 if (_tiaPortal == null) CreateTIAinstance(true);
@@ -511,66 +517,66 @@ namespace Middleware_console
         //     }
         // }
         private string GetCombinedDeviceName(Device device)
-{
-    // BẢO VỆ 1: Kiểm tra thiết bị null
-    if (device == null) return "Unknown Device";
-
-    try
-    {
-        // Nhận diện trạm PC Station (Unified / WinCC)
-        bool isPcStation = (device.TypeIdentifier ?? "").Contains("Simatic.PC") ||
-                           (device.TypeIdentifier ?? "").Contains("System:Device.PC");
-
-        if (isPcStation)
         {
-            string stationName = device.Name;
-            string runtimeName = null;
+            // BẢO VỆ 1: Kiểm tra thiết bị null
+            if (device == null) return "Unknown Device";
 
-            if (device.DeviceItems != null)
+            try
             {
-                // Duyệt qua tất cả DeviceItem để tìm phần mềm thực thi (Runtime)
-                foreach (DeviceItem item in device.DeviceItems)
-                {
-                    if (item == null) continue;
+                // Nhận diện trạm PC Station (Unified / WinCC)
+                bool isPcStation = (device.TypeIdentifier ?? "").Contains("Simatic.PC") ||
+                                   (device.TypeIdentifier ?? "").Contains("System:Device.PC");
 
-                    // Ưu tiên tìm SoftwareContainer hợp lệ
-                    var swContainer = item.GetService<SoftwareContainer>();
-                    if (swContainer != null)
+                if (isPcStation)
+                {
+                    string stationName = device.Name;
+                    string runtimeName = null;
+
+                    if (device.DeviceItems != null)
                     {
-                        runtimeName = item.Name;
-                        break; 
+                        // Duyệt qua tất cả DeviceItem để tìm phần mềm thực thi (Runtime)
+                        foreach (DeviceItem item in device.DeviceItems)
+                        {
+                            if (item == null) continue;
+
+                            // Ưu tiên tìm SoftwareContainer hợp lệ
+                            var swContainer = item.GetService<SoftwareContainer>();
+                            if (swContainer != null)
+                            {
+                                runtimeName = item.Name;
+                                break;
+                            }
+                        }
+                    }
+
+                    // CHỈ TRẢ VỀ DẠNG GỘP khi runtimeName tồn tại VÀ KHÁC tên trạm (tránh Syrup_scada|Syrup_scada)
+                    if (!string.IsNullOrEmpty(runtimeName) && !runtimeName.Equals(stationName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return $"{stationName}|{runtimeName}";
+                    }
+                    return stationName;
+                }
+
+                // XỬ LÝ CHO PLC (S7-1500 / S7-1200)
+                // Tìm Item đầu tiên có chứa SoftwareContainer (thường là CPU)
+                if (device.DeviceItems != null)
+                {
+                    foreach (DeviceItem item in device.DeviceItems)
+                    {
+                        if (item != null && item.GetService<SoftwareContainer>() != null)
+                        {
+                            return item.Name; // Trả về tên CPU (ví dụ: PLC_1)
+                        }
                     }
                 }
-            }
 
-            // CHỈ TRẢ VỀ DẠNG GỘP khi runtimeName tồn tại VÀ KHÁC tên trạm (tránh Syrup_scada|Syrup_scada)
-            if (!string.IsNullOrEmpty(runtimeName) && !runtimeName.Equals(stationName, StringComparison.OrdinalIgnoreCase))
-            {
-                return $"{stationName}|{runtimeName}";
+                return device.Name;
             }
-            return stationName;
-        }
-
-        // XỬ LÝ CHO PLC (S7-1500 / S7-1200)
-        // Tìm Item đầu tiên có chứa SoftwareContainer (thường là CPU)
-        if (device.DeviceItems != null)
-        {
-            foreach (DeviceItem item in device.DeviceItems)
+            catch
             {
-                if (item != null && item.GetService<SoftwareContainer>() != null)
-                {
-                    return item.Name; // Trả về tên CPU (ví dụ: PLC_1)
-                }
+                return device?.Name ?? "Unknown Device";
             }
         }
-
-        return device.Name;
-    }
-    catch
-    {
-        return device?.Name ?? "Unknown Device";
-    }
-}
         public static List<string> GetSystemNetworkAdapters()
         {
             List<string> adapterNames = new List<string>();
@@ -4133,34 +4139,99 @@ namespace Middleware_console
                 File.WriteAllText(outputPath, "{\"FatalError\": \"" + ex.Message + "\"}");
             }
         }
-        #endregion
-    }
-    public class PlcCatalogItem
-    {
-        public string Name { get; set; }
-        public string OrderNumber { get; set; }
-        public string Version { get; set; }
-        public List<string> AvailableVersions { get; set; }
-        public string GetTypeIdentifier(string selectedVer = null)
+        
+
+            private void SetWhitelistForCurrentProcess()
         {
-            // Nếu người dùng chọn bản cụ thể thì lấy, không thì lấy bản mặc định
-            string ver = !string.IsNullOrEmpty(selectedVer) ? selectedVer : Version;
-
-            // Đảm bảo có chữ 'V' (TIA bắt buộc format: OrderNumber/V4.4)
-            if (!ver.StartsWith("V")) ver = "V" + ver;
-
-            return $"OrderNumber:{OrderNumber}/{ver}";
+            try
+            {
+                string appName = System.Diagnostics.Process.GetCurrentProcess().ProcessName;
+                string appPath = System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName;
+                SetWhitelist(appName, appPath);
+            }
+            catch (Exception ex)
+            {
+                // Non-fatal — log but continue. The connection attempt will
+                // surface the real error if whitelist is actually blocking.
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"[WARN] Could not auto-register Openness whitelist: {ex.Message}");
+                Console.WriteLine("  Run the application as Administrator if this persists.");
+                Console.ResetColor();
+            }
         }
-    }
-    public class PlcCatalogWrapper
+
+        private void SetWhitelist(string ApplicationName, string ApplicationStartupPath)
+        {
+            RegistryKey key = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
+            RegistryKey software;
+
+            try
+            {
+                software = key
+                    .OpenSubKey(@"SOFTWARE\Siemens\Automation\Openness")
+                    .OpenSubKey("20.0")
+                    .OpenSubKey("Whitelist")
+                    .OpenSubKey(ApplicationName + ".exe")
+                    .OpenSubKey("Entry", RegistryKeyPermissionCheck.ReadWriteSubTree,
+                                RegistryRights.FullControl);
+            }
+            catch
+            {
+                // Entry doesn't exist yet — create the full path
+                software = key
+                    .CreateSubKey(@"SOFTWARE\Siemens\Automation\Openness")
+                    .CreateSubKey("20.0")
+                    .CreateSubKey("Whitelist")
+                    .CreateSubKey(ApplicationName + ".exe")
+                    .CreateSubKey("Entry", RegistryKeyPermissionCheck.ReadWriteSubTree,
+                                  RegistryOptions.None);
+            }
+
+            // Compute SHA256 hash of the current .exe
+            using (HashAlgorithm sha = SHA256.Create())
+            using (FileStream stream = File.OpenRead(ApplicationStartupPath))
+            {
+                byte[] hash = sha.ComputeHash(stream);
+                string convertedHash = Convert.ToBase64String(hash);
+
+                DateTime lastWrite = new FileInfo(ApplicationStartupPath).LastWriteTimeUtc;
+                string lastWriteFormatted = lastWrite.ToString(
+                    @"yyyy/MM/dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
+
+                software.SetValue("FileHash", convertedHash);
+                software.SetValue("DateModified", lastWriteFormatted);
+                software.SetValue("Path", ApplicationStartupPath);
+            }
+        }
+        
+        #endregion
+}
+public class PlcCatalogItem
+{
+    public string Name { get; set; }
+    public string OrderNumber { get; set; }
+    public string Version { get; set; }
+    public List<string> AvailableVersions { get; set; }
+    public string GetTypeIdentifier(string selectedVer = null)
     {
-        public List<PlcCatalogItem> S71200 { get; set; }
-        public List<PlcCatalogItem> S71500 { get; set; }
-        public List<PlcCatalogItem> WinCC_Unified { get; set; }
+        // Nếu người dùng chọn bản cụ thể thì lấy, không thì lấy bản mặc định
+        string ver = !string.IsNullOrEmpty(selectedVer) ? selectedVer : Version;
+
+        // Đảm bảo có chữ 'V' (TIA bắt buộc format: OrderNumber/V4.4)
+        if (!ver.StartsWith("V")) ver = "V" + ver;
+
+        return $"OrderNumber:{OrderNumber}/{ver}";
     }
-    public class ModuleCatalogWrapper
-    {
-        public List<PlcCatalogItem> S71200_Modules { get; set; }
-        public List<PlcCatalogItem> S71500_Modules { get; set; }
-    }
+}
+public class PlcCatalogWrapper
+{
+    public List<PlcCatalogItem> S71200 { get; set; }
+    public List<PlcCatalogItem> S71500 { get; set; }
+    public List<PlcCatalogItem> WinCC_Unified { get; set; }
+}
+public class ModuleCatalogWrapper
+{
+    public List<PlcCatalogItem> S71200_Modules { get; set; }
+    public List<PlcCatalogItem> S71500_Modules { get; set; }
+}
 }
