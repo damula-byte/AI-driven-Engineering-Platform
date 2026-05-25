@@ -186,31 +186,32 @@ namespace TIA_Copilot_CLI
                     string dName = actionItem["name"]?.ToString();
                     string ip = actionItem["ip"]?.ToString();
                     string mName = actionItem["model_name"]?.ToString();
-                    string tid = LookUpInPlcCatalog(mName);
+                    string versionReq = actionItem.ContainsKey("version") ? actionItem["version"]?.ToString() : null;
+
+                    string tid = LookUpInPlcCatalog(mName, versionReq);
 
                     if (!string.IsNullOrEmpty(tid))
                     {
                         try
                         {
-                            Console.WriteLine($"🔍 [INFO]: Found model '{mName}' in catalog with TID: {tid}. Proceeding to create device '{dName}' with IP: {ip}.");
+                            Console.WriteLine($"🔍 [INFO]: Found TID '{tid}'. Creating '{dName}' with IP: {ip}.");
 
-                            // Chạy hàm tạo trên một luồng riêng để không nghẽn Openness
+                            // Chạy bất đồng bộ
                             await Task.Run(() => tiaEngine.CreateDev(dName, tid, ip));
-                            Console.WriteLine($"✅ [COMMAND SENT]: Create device command for '{dName}' has been sent to TIA.");
 
-                            // 🌟 SỬA QUAN TRỌNG: Thay Thread.Sleep bằng Task.Delay bất đồng bộ an toàn
+                            // Đợi TIA Portal phản hồi
                             await Task.Delay(2000);
 
-                            // Kiểm tra lại thiết bị đã thực sự tồn tại trong danh sách chưa
+                            // Kiểm tra kết quả
                             var devs = tiaEngine.GetPlcList();
                             if (devs.Any(d => d.Equals(dName, StringComparison.OrdinalIgnoreCase)))
                             {
                                 SetCurrentDevice(dName, tiaEngine);
-                                Console.WriteLine($"✅ [SUCCESS]: Thiết bị {dName} đã tạo và chọn thành công.");
+                                Console.WriteLine($"✅ [SUCCESS]: Thiết bị {dName} đã khởi tạo.");
                             }
                             else
                             {
-                                Console.WriteLine($"⚠️ [WARNING]: Thiết bị đã gửi lệnh tạo nhưng chưa xuất hiện trong danh sách!");
+                                Console.WriteLine($"⚠️ [WARNING]: Lệnh đã gửi nhưng thiết bị chưa xuất hiện!");
                             }
                         }
                         catch (Exception ex)
@@ -222,7 +223,7 @@ namespace TIA_Copilot_CLI
                     }
                     else
                     {
-                        Console.WriteLine($"❌ [CATALOG ERROR]: Không tìm thấy model '{mName}'!");
+                        Console.WriteLine($"❌ [CATALOG ERROR]: Không tìm thấy Model '{mName}' hoặc Version '{versionReq}' không khớp!");
                     }
                     break;
 
@@ -429,7 +430,7 @@ namespace TIA_Copilot_CLI
                     break;
 
                 case "CREATE_HMI_CONNECTION":
-                    string driver = actionItem["driver"]?.ToString() ?? "SIMATIC S7 1200/1500";
+                    string driver = GetStandardDriverName(actionItem["driver"]?.ToString());
                     string hmiIpAddr = actionItem["hmi_ip"]?.ToString() ?? "192.168.0.2";
                     string plcIpAddr = actionItem["plc_ip"]?.ToString() ?? "192.168.0.1";
                     string ap = actionItem["access_point"]?.ToString() ?? "S7ONLINE";
@@ -663,7 +664,7 @@ namespace TIA_Copilot_CLI
             }
         }
 
-        private static string LookUpInPlcCatalog(string modelName)
+        private static string LookUpInPlcCatalog(string modelName, string requestedVersion)
         {
             string catalogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PlcCatalog.json");
             if (!File.Exists(catalogPath)) return null;
@@ -673,42 +674,61 @@ namespace TIA_Copilot_CLI
                 string jsonContent = File.ReadAllText(catalogPath);
                 JObject catalog = JObject.Parse(jsonContent);
 
-                // Chuẩn hóa input: Chỉ xóa khoảng trắng, giữ nguyên các từ khóa quan trọng để phân biệt
+                // Chuẩn hóa từ khóa tìm kiếm (bỏ khoảng trắng, dấu gạch ngang)
                 string normalizedInput = modelName.ToLower().Replace(" ", "").Replace("-", "");
 
-                string bestMatch = null;
-                string bestTid = null;
+                List<JObject> matches = new List<JObject>();
 
+                // 1. Thu thập tất cả các thiết bị có tên khớp với từ khóa trong mọi danh mục
                 foreach (var property in catalog.Properties())
                 {
                     JArray devices = (JArray)property.Value;
                     foreach (var device in devices)
                     {
                         string rawName = device["Name"]?.ToString() ?? "";
-                        string orderNumber = device["OrderNumber"]?.ToString() ?? "";
-                        string version = device["Version"]?.ToString() ?? "V1.0";
-
-                        // Chuẩn hóa tên JSON: Chỉ xóa khoảng trắng, giữ nguyên cấu trúc để so khớp
                         string normalizedJsonName = rawName.ToLower().Replace(" ", "").Replace("-", "");
-                        string normalizedOrder = orderNumber.ToLower().Replace(" ", "").Replace("-", "");
 
-                        // Logic so khớp:
-                        // 1. Nếu khớp chính xác 100% OrderNumber -> Trả về ngay lập tức (Ưu tiên cao nhất)
-                        if (normalizedOrder == normalizedInput)
-                            return $"OrderNumber:{orderNumber}/{version}";
-
-                        // 2. Nếu tên khớp một phần, lưu lại để so sánh (Phòng trường hợp có nhiều kết quả)
-                        if (normalizedJsonName.Contains(normalizedInput) || normalizedInput.Contains(normalizedJsonName))
+                        if (normalizedJsonName.Contains(normalizedInput))
                         {
-                            bestMatch = $"OrderNumber:{orderNumber}/{version}";
+                            matches.Add((JObject)device);
                         }
                     }
                 }
-                return bestMatch; // Trả về kết quả khớp tốt nhất tìm được
+
+                if (matches.Count == 0) return null;
+
+                // 2. Logic ưu tiên: Nếu người dùng yêu cầu version cụ thể (vd: 4.5)
+                if (!string.IsNullOrEmpty(requestedVersion))
+                {
+                    string v = requestedVersion.ToUpper().StartsWith("V") ? requestedVersion : "V" + requestedVersion;
+
+                    // Tìm thiết bị nào trong các kết quả khớp có hỗ trợ phiên bản này
+                    var perfectMatch = matches.FirstOrDefault(m =>
+                        ((JArray)m["AvailableVersions"]).Any(ver => ver.ToString() == v));
+
+                    if (perfectMatch != null)
+                    {
+                        return $"OrderNumber:{perfectMatch["OrderNumber"]}/{v}";
+                    }
+                }
+
+                // 3. Nếu không có yêu cầu version hoặc không tìm thấy bản khớp hoàn hảo,
+                // chọn thiết bị có Version mới nhất (cao nhất) trong số các kết quả khớp
+                var bestDevice = matches.OrderByDescending(m => m["Version"].ToString()).FirstOrDefault();
+
+                if (bestDevice != null)
+                {
+                    string order = bestDevice["OrderNumber"]?.ToString();
+                    string ver = bestDevice["Version"]?.ToString();
+                    // Đảm bảo version có tiền tố V
+                    if (!ver.ToUpper().StartsWith("V")) ver = "V" + ver;
+
+                    return $"OrderNumber:{order}/{ver.ToUpper()}";
+                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"⚠️ [PLC CATALOG ERROR]: {ex.Message}");
+                Console.WriteLine($"❌ [PLC CATALOG ERROR]: {ex.Message}");
             }
             return null;
         }
@@ -784,19 +804,25 @@ namespace TIA_Copilot_CLI
 
         private static string GetGeneratedFilesDirectory()
         {
-            // Lấy thư mục chạy hiện tại (thường là ...\translator_cli\bin\Debug\net48)
+            // Lấy thư mục chứa file .exe đang chạy
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
 
-            // Đi lùi ra khỏi bin\Debug\net48
-            // Lùi 3 cấp: net48 -> Debug -> bin
-            string projectRoot = Path.GetFullPath(Path.Combine(baseDir, @"..\..\..\"));
+            // Kết hợp trực tiếp để tạo folder "Generated_Files" nằm ngay trong folder đó
+            string generatedDir = Path.Combine(baseDir, "Generated_Files");
 
-            string generatedDir = Path.Combine(projectRoot, "Generated_Files");
-
-            // Kiểm tra xem folder có tồn tại không, nếu không thì tạo nó
+            // Kiểm tra và tạo folder nếu chưa tồn tại
             if (!Directory.Exists(generatedDir))
             {
-                Directory.CreateDirectory(generatedDir);
+                try
+                {
+                    Directory.CreateDirectory(generatedDir);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"❌ [ERROR]: Không thể tạo thư mục tại {generatedDir}. Lỗi: {ex.Message}");
+                    // Nếu không thể tạo thư mục, trả về thư mục hiện tại để tránh crash chương trình
+                    return baseDir;
+                }
             }
 
             return generatedDir;
@@ -821,6 +847,29 @@ namespace TIA_Copilot_CLI
             }
         }
 
+        private static string GetStandardDriverName(string inputDriver)
+        {
+            if (string.IsNullOrWhiteSpace(inputDriver))
+                return "SIMATIC S7 1200/1500";
+
+            string normalized = inputDriver.ToLower().Replace(" ", "").Replace("-", "");
+
+            // Ép driver về danh mục chuẩn
+            switch (normalized)
+            {
+                // Nếu AI trả về tên này, hãy chấp nhận nó như một alias hợp lệ
+                case var s when s.Contains("s71200") || s.Contains("s71500") || s == "simatics71500":
+                    return "SIMATIC S7 1200/1500";
+
+                case var m when m.Contains("modbus"):
+                    return "Modbus TCP";
+
+                default:
+                    // Nếu không khớp, ghi log để bạn kiểm tra xem AI đang "ngáo" tên nào
+                    Console.WriteLine($"⚠️ [DEBUG]: AI trả về driver lạ: {inputDriver}");
+                    return "SIMATIC S7 1200/1500";
+            }
+        }
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         public static async Task HandleLoadTagsAsync(string tagFilePath)
