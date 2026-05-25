@@ -91,53 +91,136 @@ namespace Middleware_console
             catch { return false; }
         }
 
-        public bool CreateTIAproject(string path, string name, bool createNew) // (path: full path to project folder ; name: project's name ; createNew: true = create new project, false = open existing project)
+        // public bool CreateTIAproject(string path, string name, bool createNew) // (path: full path to project folder ; name: project's name ; createNew: true = create new project, false = open existing project)
+        // {
+        //     try
+        //     {
+        //         if (_tiaPortal == null) CreateTIAinstance(true);
+        //         if (createNew)
+        //             _project = _tiaPortal.Projects.Create(new DirectoryInfo(path), name);
+        //         else
+        //             _project = _tiaPortal.Projects.Open(new FileInfo(path));
+        //         return _project != null;
+        //     }
+        //     catch { return false; }
+        // }
+
+        public bool CreateTIAproject(string path, string name, bool createNew)
         {
             SetWhitelistForCurrentProcess();
             try
             {
                 if (_tiaPortal == null) CreateTIAinstance(true);
+
                 if (createNew)
+                {
                     _project = _tiaPortal.Projects.Create(new DirectoryInfo(path), name);
+                    
+                    // Tự động cấu hình mô phỏng sau khi tạo dự án mới
+                    ConfigureSimulationSettings(_project);
+                }
                 else
+                {
                     _project = _tiaPortal.Projects.Open(new FileInfo(path));
+                }
+                
                 return _project != null;
             }
-            catch { return false; }
+            catch (Exception ex) 
+            { 
+                Console.WriteLine($"[!] Lỗi tạo dự án: {ex.Message}");
+                return false; 
+            }
         }
 
+        private void ConfigureSimulationSettings(Siemens.Engineering.Project project)
+        {
+            try
+            {
+                // Gán giá trị trực tiếp lên đối tượng project đã xác nhận tồn tại qua debug
+                project.IsSimulationDuringBlockCompilationEnabled = true;
+                project.IsVirtualPlcDuringBlockCompilationEnabled = true;
+                
+                Console.WriteLine("[i] Simulation protection settings configured successfully.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[!] Warning: Could not configure simulation settings: {ex.Message}");
+            }
+        }
         public bool SaveProject()
         {
             try { _project?.Save(); return true; } catch { return false; }
         }
 
-        public void CloseTIA()
+        // public void CloseTIA()
+        // {
+        //     try
+        //     {
+        //         if (_project != null)
+        //         {
+        //             _project.Close();
+        //             _project = null;
+        //         }
+        //         if (_tiaPortal != null)
+        //         {
+        //             _tiaPortal.Dispose();
+        //             _tiaPortal = null;
+        //         }
+        //         foreach (var process in Process.GetProcessesByName("Siemens.Automation.Portal"))
+        //         {
+        //             try
+        //             {
+        //                 process.Kill();
+        //                 process.WaitForExit();
+        //             }
+        //             catch { }
+        //         }
+        //     }
+        //     catch { }
+        // }
+public void CloseTIA()
+{
+    try
+    {
+        if (_project != null)
+        {
+            // Kiểm tra trạng thái thay đổi của dự án
+            if (_project.IsModified)
+            {
+                Console.WriteLine("[i] Project unsaved. Project are saving...", ConsoleColor.Yellow);
+                _project.Save();
+                Console.WriteLine("[√] Project saved successfully.", ConsoleColor.Green);
+            }
+                  
+
+            _project.Close();
+            _project = null;
+        }
+
+        if (_tiaPortal != null)
+        {
+            _tiaPortal.Dispose();
+            _tiaPortal = null;
+        }
+
+        // Dọn dẹp tiến trình
+        foreach (var process in Process.GetProcessesByName("Siemens.Automation.Portal"))
         {
             try
             {
-                if (_project != null)
-                {
-                    _project.Close();
-                    _project = null;
-                }
-                if (_tiaPortal != null)
-                {
-                    _tiaPortal.Dispose();
-                    _tiaPortal = null;
-                }
-                foreach (var process in Process.GetProcessesByName("Siemens.Automation.Portal"))
-                {
-                    try
-                    {
-                        process.Kill();
-                        process.WaitForExit();
-                    }
-                    catch { }
-                }
+                process.Kill();
+                process.WaitForExit();
             }
             catch { }
-        }
-
+        }       
+        
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[!] Error during TIA Portal shutdown: {ex.Message}");
+    }
+}
         public string GetProjectName()
         {
             if (_project != null)
