@@ -19,6 +19,7 @@ using Siemens.Engineering.Library.MasterCopies;
 using Siemens.Engineering.HmiUnified.RuntimeSettings;
 
 using System;
+using System.Security;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -368,7 +369,7 @@ public void CloseTIA()
                     // Tạo PLC thông thường (S7-1200/1500)
                     newDevice = _project.Devices.CreateWithItem(typeIdentifier, devName, devName);
                 }
-
+                
                 // 2. CẤU HÌNH MẠNG NÂNG CAO (IP, Subnet, Gateway)
                 if (newDevice != null && !string.IsNullOrEmpty(ip))
                 {
@@ -383,10 +384,60 @@ public void CloseTIA()
                         Console.WriteLine($"   [Warning] Device created but Network Config failed: {exNetwork.Message}");
                     }
                 }
+                // 3. TÍCH HỢP CẤU HÌNH BẢO MẬT (Security)
+        if (newDevice != null)
+        {
+            ConfigureDeviceSecurity(newDevice);
+                
+        }
             }
-            catch (Exception ex) { throw new Exception($"Create Failed: {ex.Message}"); }
+            catch (Exception ex) { // Kiểm tra xem có lỗi gốc nằm bên trong không
+    string errorMessage = ex.Message;
+    if (ex.InnerException != null)
+    {
+        errorMessage = ex.InnerException.Message;
+    }
+    
+    // In ra chi tiết lỗi để biết tại sao Create thất bại
+    Console.WriteLine($"[FATAL ERROR] {errorMessage}");
+    throw new Exception($"Create Failed: {errorMessage}"); }
         }
 
+        public void ConfigureDeviceSecurity(Device newDevice)
+{
+    foreach (var item in newDevice.DeviceItems)
+    {
+        // Thử lấy service bảo mật (PlcAccessLevelProvider)
+        var accessProvider = item.GetService<Siemens.Engineering.HW.Features.PlcAccessLevelProvider>();
+        
+        if (accessProvider != null)
+        {
+            try
+            {
+                // Dùng Reflection để tránh lỗi CS0234 hoặc không tìm thấy Enum
+                var prop = accessProvider.GetType().GetProperty("PlcProtectionAccessLevel");
+                if (prop != null)
+                {
+                    // Lấy kiểu Enum của thuộc tính này
+                    var enumType = prop.PropertyType;
+                    
+                    // Thử set giá trị FullAccess (thường là 0 hoặc tên FullAccess)
+                    // Nếu lỗi, nó sẽ liệt kê danh sách các quyền hợp lệ cho bạn
+                    try {
+                        var fullAccess = Enum.Parse(enumType, "FullAccess");
+                        prop.SetValue(accessProvider, fullAccess);
+                        Console.WriteLine($"[i] Set FullAccess cho: {item.Name}");
+                    }
+                    catch {
+                        Console.WriteLine($"[!] Không tìm thấy tên 'FullAccess' trong Enum {enumType.Name}. Đang thử giá trị 0...");
+                        prop.SetValue(accessProvider, 0); // Giá trị 0 thường là No Protection
+                    }
+                }
+            }
+            catch (Exception ex) { Console.WriteLine($"[!] Lỗi set bảo mật: {ex.Message}"); }
+        }
+    }
+}
         // public string PlugModule(string deviceName, string moduleIdentifier, int slotNum)
         // {
         //     if (_project == null) CheckProject();
