@@ -192,7 +192,7 @@ def detect_model_from_key(api_key: str):
         os.environ["GOOGLE_API_KEY"] = key
         llm = ChatGoogleGenerativeAI(
             model="gemini-3.5-flash",
-            temperature=0.1,
+            temperature=0.5,
             convert_system_message_to_human=True,
             google_api_key=key,
             model_kwargs={"response_mime_type": "application/json"},
@@ -205,7 +205,7 @@ def detect_model_from_key(api_key: str):
         os.environ["ANTHROPIC_API_KEY"] = key
         llm = ChatAnthropic(
             model="claude-3-5-sonnet-20241022",
-            temperature=0.1,
+            temperature=0.5,
             api_key=key,
             max_tokens=8192,  # Claude requires explicit max_tokens
             max_retries=0,
@@ -771,7 +771,7 @@ def main():
                 llm = ChatGoogleGenerativeAI(
                     model="gemini-3.5-flash",
                     # model="gemini-2.5-flash",
-                    temperature=0.1,
+                    temperature=0.5,
                     convert_system_message_to_human=True,
                     # max_tokens=65535,
                     google_api_key=dev_key,
@@ -846,7 +846,7 @@ def main():
                         llm = ChatGoogleGenerativeAI(
                             model="gemini-3.5-flash",
                             # model="gemini-2.5-flash",
-                            temperature=0.1,
+                            temperature=0.5,
                             convert_system_message_to_human=True,
                             # max_tokens=65535,
                             google_api_key=dev_key,

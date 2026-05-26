@@ -575,13 +575,18 @@ def process_agent_query(user_query: str, api_key: str):
             "- {'action': 'OPEN_PROJECT', 'name': '...', 'path': '...'}: Mở dự án đã có sẵn.\n"
             "- {'action': 'SAVE_PROJECT'}: Lưu dự án hiện tại.\n"
             "- {'action': 'CLOSE_TIA'}: Đóng và tắt tiến trình TIA Portal.\n"
-            "- {'action': 'CREATE_DEVICE', 'name': '...', 'ip': '...', 'model_name': '...'}: Tạo mới một PLC/HMI.\n"
+            "- {'action': 'CREATE_DEVICE', 'name': '...', 'ip': '...', 'model_name': '...', 'version': '...'}: Tạo mới PLC hoặc HMI.\n"
+            "  + model_name: Tên hoặc mã OrderNumber của thiết bị (Ví dụ: '6ES7 513-1AL00-0AB0').\n"
+            "  + version: Phiên bản firmware mong muốn (Ví dụ: 'V2.2', 'V3.0'). Nếu người dùng không nói, hãy để trống hoặc trả về null.\n"                                                                                                                                                                                                  
+            "  + model_name: Cần gọi chính xác như trong catalog: 'Simatic WinCC Unified PC', 'MTP700 Unified Comfort Panel', hoặc các dòng PLC 'S7-1200 CPU...'.\n"
             "- {'action': 'CHOOSE_DEVICE', 'name': '...'}: Chọn thiết bị/trạm đích hiện hành để thao tác. Bắt buộc phải có trước khi thực hiện nạp hoặc đổi IP.\n"
             "- {'action': 'IMPORT_FB_FC', 'block_type': 'FB hoặc FC', 'file_names': '...'}: Nạp file SCL cho khối hàm FB/FC.\n"
             "- {'action': 'IMPORT_OB', 'file_names': '...'}: Nạp file SCL cho khối chức năng hệ thống OB.\n"
             "- {'action': 'IMPORT_PLC_TAGS', 'file_names': '...'}: Nạp bảng biến CSV vào PLC.\n"
             "- {'action': 'IMPORT_HMI_TAGS', 'file_names': '...'}: Nạp bảng biến CSV vào trạm WinCC Unified/HMI.\n"
             "- {'action': 'CREATE_HMI_CONNECTION', 'driver': '...', 'hmi_ip': '...', 'plc_ip': '...', 'access_point': '...'}: Tạo kết nối truyền thông HMI-PLC. Luôn đặt trước import_hmi_tags_tool.\n"
+            "  + driver: BẮT BUỘC chọn 1 trong các giá trị sau: 'SIMATIC S7 1200/1500', 'Modbus TCP', 'PROFINET', 'OPC UA'.\n"
+            "  + KHÔNG ĐƯỢC tự ý viết tắt hoặc viết sai tên driver."
             "- {'action': 'DRAW_SCADA', 'file_names': '...'}: Dựng màn hình SCADA/HMI từ file JSON.\n"
             "- {'action': 'CHANGE_IP', 'ip': '...', 'subnet': '...', 'gateway': '...'}: Thay đổi thông số IP mạng của thiết bị.\n"
             "- {'action': 'COMPILE', 'mode': '...', 'rebuild': bool}: Biên dịch thiết bị đang chọn.\n"
@@ -598,9 +603,21 @@ def process_agent_query(user_query: str, api_key: str):
             "4. Đuôi .json → DRAW_SCADA | Đuôi .scl → IMPORT_OB (nếu tên chứa OB) hoặc IMPORT_FB_FC.\n"
             "5. Nếu thiếu Subnet Mask → mặc định '255.255.255.0'. Nếu thiếu Gateway → mặc định ''.\n\n"
 
+            "VÍ DỤ TẠO HMI:\n"
+            "Yêu cầu: 'create wincc system named HMI_1'\n"
+            "JSON: [{\"action\": \"CONNECT_TIA\"}, {\"action\": \"CREATE_DEVICE\", \"name\": \"HMI_1\", \"ip\": \"192.168.0.2\", \"model_name\": \"Simatic WinCC Unified PC\"}]\n"
+
             "VÍ DỤ:\n"
             "Yêu cầu: 'connect and compile software for PLC_1'\n"
             "JSON: [{\"action\": \"CONNECT_TIA\"}, {\"action\": \"CHOOSE_DEVICE\", \"name\": \"PLC_1\"}, {\"action\": \"COMPILE\", \"mode\": \"sw\", \"rebuild\": false}]\n"
+        
+            "VÍ DỤ (TẠO THIẾT BỊ VỚI PHIÊN BẢN CỤ THỂ):\n"
+            "Yêu cầu: 'create a cpu 1212C DC/DC/Rly with version 4.5'\n"
+            "JSON: [{\"action\": \"CONNECT_TIA\"}, {\"action\": \"CREATE_DEVICE\", \"name\": \"PLC_1\", \"ip\": \"192.168.0.1\", \"model_name\": \"S7-1200 CPU 1212C DC/DC/Rly\", \"version\": \"V4.5\"}]\n\n"
+
+            "VÍ DỤ (TẠO THIẾT BỊ TỰ ĐỘNG CHỌN PHIÊN BẢN MỚI NHẤT):\n"
+            "Yêu cầu: 'create a cpu 1212C DC/DC/Rly for PLC_2'\n"
+            "JSON: [{\"action\": \"CONNECT_TIA\"}, {\"action\": \"CREATE_DEVICE\", \"name\": \"PLC_2\", \"ip\": \"192.168.0.2\", \"model_name\": \"S7-1200 CPU 1212C DC/DC/Rly\"}]"
         )
 
         llm_with_tools = llm.bind_tools(AGENT_TOOLS)
