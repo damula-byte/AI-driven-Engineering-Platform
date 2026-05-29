@@ -599,9 +599,10 @@ def process_agent_query(user_query: str, api_key: str):
             "QUY TẮC:\n"
             "1. Khi nạp/đổi IP cho thiết bị cụ thể → tự động chèn CHOOSE_DEVICE trước.\n"
             "2. Khi COMPILE hoặc ADD_MODULE cho thiết bị cụ thể → tự động chèn CHOOSE_DEVICE trước.\n"
-            "3. Đuôi .csv của PLC → IMPORT_PLC_TAGS | Đuôi .csv của HMI → IMPORT_HMI_TAGS.\n"
-            "4. Đuôi .json → DRAW_SCADA | Đuôi .scl → IMPORT_OB (nếu tên chứa OB) hoặc IMPORT_FB_FC.\n"
-            "5. Nếu thiếu Subnet Mask → mặc định '255.255.255.0'. Nếu thiếu Gateway → mặc định ''.\n\n"
+            "3. Khi tạo kết nối HMI-PLC → tự động chèn CHOOSE_DEVICE trước. Phải đặt CREATE_HMI_CONNECTION trước khi import HMI tags.\n"
+            "4. Đuôi .csv của PLC → IMPORT_PLC_TAGS | Đuôi .csv của HMI → IMPORT_HMI_TAGS.\n"
+            "5. Đuôi .json → DRAW_SCADA | Đuôi .scl → IMPORT_OB (nếu tên chứa OB) hoặc IMPORT_FB_FC.\n"
+            "6. Nếu thiếu Subnet Mask → mặc định '255.255.255.0'. Nếu thiếu Gateway → mặc định ''.\n\n"
 
             "VÍ DỤ TẠO HMI:\n"
             "Yêu cầu: 'create wincc system named HMI_1'\n"
@@ -646,6 +647,3 @@ def process_agent_query(user_query: str, api_key: str):
 
     except Exception as e:
         return json.dumps({"status": "error", "message": f"Agent Error: {str(e)}"}, ensure_ascii=False)
-            
-    except Exception as e:
-        return json.dumps({"status": "error", "message": f"Agent Error: {str(e)}"})

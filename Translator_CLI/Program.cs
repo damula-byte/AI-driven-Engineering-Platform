@@ -650,10 +650,12 @@ namespace TIA_Copilot_CLI
                 // --- GROUP 3: LOGIC & DATA ---
                 case "fb":
                 case "fc":
+                case "db":
                     {
                         string blockType = "";
                         if (action == "fb") blockType = "FB";
                         else if (action == "fc") blockType = "FC";
+                        else if (action == "db") blockType = "DB";
                         Stopwatch ImportLogicPLC = new Stopwatch();
                         ImportLogicPLC.Start();
                         // string sclPath = GetPathOrOpenDialog(args, 2, "SCL Files (*.scl)|*.scl");

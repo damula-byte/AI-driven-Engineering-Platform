@@ -642,3 +642,60 @@ CRITICAL RULE: DO NOT use the # prefix for the Global DB name.
           ET => #temp_ElapsedTime);
 ```
 **JSON OUTPUT RULE**: If you instantiate any new Global Timers (IEC_TIMER) in your `body_code`, you MUST list their exact names (without quotes) in the "global_timers" JSON array. Example: "global_timers": ["T10s", "T_Delay"]. If none are used, return an empty array [].
+
+## STRATEGY: PID_COMPACT TUNING HEURISTICS (DOMAIN EXPERTISE)
+When populating the `"tuning"` and `"limits"` parameters in the `"pid_configure"` JSON object, you MUST apply realistic industrial control heuristics based on the requested `controller_type`. Do NOT generate random or overly aggressive tuning values.
+
+**1. HEURISTICS FOR "tuning" PARAMETERS:**
+Use these baseline rules of thumb if the user does not specify exact PID values:
+- **Temperature Control (Slow dynamics):**
+  - `gain` (Kp): 2.0 to 5.0
+  - `ti` (Integral Time): 20.0 to 120.0 seconds
+  - `td` (Derivative Time): 0.0 to 10.0 seconds (often 0.0 unless specified)
+- **Flow Control (Fast, noisy dynamics):**
+  - `gain` (Kp): 0.5 to 1.5
+  - `ti` (Integral Time): 1.0 to 5.0 seconds
+  - `td` (Derivative Time): 0.0 (Strictly zero to avoid noise amplification)
+- **Pressure / General Control (Medium dynamics):**
+  - `gain` (Kp): 1.0 to 2.0
+  - `ti` (Integral Time): 2.0 to 10.0 seconds
+  - `td` (Derivative Time): 0.0
+- **Mandatory System Constants:**
+  - `td_filt_ratio`: 0.2 (Standard Siemens noise filter)
+  - `d_weighting`: 0.0
+  - `cycle`: 0.1 (MUST match the 100ms OB30 Cyclic Interrupt time)
+
+**2. HEURISTICS FOR "limits" AND "pwm_settings":**
+- **input_lower / input_upper:** Set these based on the physical sensor range described by the user (e.g., 0.0 to 100.0 °C). If not specified, default to 0.0 and 100.0.
+- **input_scaling_lower / input_scaling_upper:** MUST exactly match `input_lower` and `input_upper` to ensure 1:1 scaling from the sensor.
+- **pwm_settings (minimum_on_time / minimum_off_time):** Default to 0.1 for fast switching (valves) or 10.0 for slow switching (heaters/SSR).
+
+## STRATEGY: PID_COMPACT BLOCK I/Os
+When wiring the `PID_Compact` block in SCL, you MUST use the exact pin names and data types listed below. Do NOT hallucinate custom pin names (e.g., do not use `Out` or `OutputValue`, use `Output`).
+
+**1. INPUT PINS (VAR_INPUT):**
+* **Setpoint** (`REAL`): Receives the desired setpoint value for the system.
+* **Input** (`REAL`): Receives the actual process value as a floating-point number.
+* **Input_PER** (`INT`): Receives the actual process value directly from the analog input of the hardware module.
+* **Disturbance** (`REAL`): Receives the feedforward disturbance variable.
+* **ManualEnable** (`BOOL`): Activates the transition of the controller to manual mode.
+* **ManualValue** (`REAL`): Sets the manual control value when the system operates in manual mode.
+* **errorAck** (`BOOL`): Receives the signal to acknowledge/clear pending error or warning messages.
+* **Reset** (`BOOL`): Receives the signal (rising edge) to reset and restart the controller when an error occurs.
+* **ModeActivate** (`BOOL`): Activates (rising edge) the transition to the operating mode specified at the `Mode` pin.
+
+**2. OUTPUT PINS (VAR_OUTPUT):**
+* **ScaledInput** (`REAL`): Outputs the actual process value after it has been scaled.
+* **Output** (`REAL`): The control output value as a floating-point number.
+* **Output_PER** (`INT`): The control output value formatted as an analog signal (to write directly to a raw Output Module).
+* **Output_PWM** (`BOOL`): The control output value formatted as a pulse width modulated (PWM) voltage signal.
+* **SetpointLimit_H** (`BOOL`): Bit indicating that the `Setpoint` value is currently limited at the upper limit.
+* **SetpointLimit_L** (`BOOL`): Bit indicating that the `Setpoint` value is currently limited at the lower limit.
+* **InputWarning_H** (`BOOL`): Indicates that the actual `Input` value has exceeded the upper warning limit.
+* **InputWarning_L** (`BOOL`): Indicates that the actual `Input` value has dropped below the lower warning limit.
+* **State** (`INT`): Displays the current operating state/mode of the PID controller (0 = Inactive, 1 = Pretuning/SUT, 2 = Fine tuning/TIR, 3 = Automatic mode, 4 = Manual mode).
+* **Error** (`BOOL`): Indicates that at least one error is currently pending within the block.
+* **ErrorBits** (`DWORD`): A detailed bit-code of the pending error messages.
+
+**3. IN/OUT PINS (VAR_IN_OUT):**
+* **Mode** (`INT`): Used to specify the desired operating mode for the controller (value assignments correspond to the `State` pin).

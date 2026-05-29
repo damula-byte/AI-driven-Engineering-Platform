@@ -388,6 +388,218 @@ namespace TIA_Copilot_CLI
 
     public static class SCLGenerator
     {
+        // public static void GenerateAndSave(BlockData data)
+        // {
+        //     try
+        //     {
+        //         var (correctedData, report) = SclSyntaxCorrector.Correct(data);
+        //         data = correctedData;
+        //         StringBuilder sb = new StringBuilder();
+        //         string blockType = string.IsNullOrEmpty(data.Type) ? "FUNCTION_BLOCK" : data.Type.ToUpper().Trim();
+        //         if (blockType == "FB") blockType = "FUNCTION_BLOCK";
+        //         if (blockType == "FC") blockType = "FUNCTION";
+        //         if (blockType == "OB") blockType = "ORGANIZATION_BLOCK";
+        //         if (blockType == "DB") blockType = "DATA_BLOCK";
+
+        //         if (blockType == "DATA_BLOCK")
+        //         {
+        //             sb.AppendLine($"DATA_BLOCK \"{data.Name}\"");
+        //             sb.AppendLine("{ S7_Optimized_Access := 'TRUE' }");
+        //             sb.AppendLine("VERSION : 0.1");
+        //             sb.AppendLine("NON_RETAIN");
+
+        //             // Bắt tín hiệu từ AI: Nếu là Timer thì đổ khuôn IEC_TIMER
+        //             if (data.Description != null && data.Description.Trim().ToUpper() == "IEC_TIMER")
+        //             {
+        //                 sb.AppendLine("IEC_TIMER");
+        //                 sb.AppendLine("BEGIN");
+        //                 sb.AppendLine("END_DATA_BLOCK");
+        //             }
+        //             else
+        //             {
+        //                 // Đổ khuôn Global DB thường (chứa biến)
+        //                 if (data.Variables != null && data.Variables.Count > 0)
+        //                 {
+        //                     sb.AppendLine("   VAR ");
+        //                     foreach (var v in data.Variables)
+        //                     {
+        //                         string comment = string.IsNullOrWhiteSpace(v.Description) ? "" : $"   // {v.Description}";
+        //                         sb.AppendLine($"      {v.Name} : {v.DataType};{comment}");
+        //                     }
+        //                     sb.AppendLine("   END_VAR");
+        //                 }
+
+        //                 sb.AppendLine();
+        //                 sb.AppendLine("BEGIN");
+        //                 // In giá trị khởi tạo (nếu có)
+        //                 if (!string.IsNullOrWhiteSpace(data.BodyCode))
+        //                 {
+        //                     var lines = data.BodyCode.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        //                     foreach (var line in lines) sb.AppendLine($"   {line}");
+        //                 }
+        //                 sb.AppendLine("END_DATA_BLOCK");
+        //             }
+        //         }
+        //         else
+        //         {
+        //             // --- HEADER KHỐI CHÍNH ---
+        //             if (blockType == "FUNCTION")
+        //             {
+        //                 sb.AppendLine($"FUNCTION \"{data.Name}\" : Void");
+        //             }
+        //             else if (blockType == "ORGANIZATION_BLOCK")
+        //             {
+        //                 if (!string.IsNullOrEmpty(data.Name) && data.Name.StartsWith("OB3"))
+        //                 {
+        //                     // Cyclic Interrupt: KHÔNG dùng ngoặc kép
+        //                     sb.AppendLine($"ORGANIZATION_BLOCK {data.Name}");
+        //                 }
+        //                 else
+        //                 {
+        //                     // Program Cycle (OB1) hoặc OB thường: CÓ ngoặc kép
+        //                     sb.AppendLine($"ORGANIZATION_BLOCK \"{data.Name}\"");
+        //                     sb.AppendLine("TITLE = \"Main Program Sweep (Cycle)\"");
+        //                 }
+        //             }
+        //             else
+        //             {
+        //                 blockType = "FUNCTION_BLOCK";
+        //                 sb.AppendLine($"FUNCTION_BLOCK \"{data.Name}\"");
+        //             }
+
+        //             sb.AppendLine("{ S7_Optimized_Access := 'TRUE' }");
+        //             sb.AppendLine("VERSION : 0.1");
+
+        //             // --- BỘ LỌC BIẾN (VARIABLE FILTER) CỰC NGHIÊM NGẶT ---
+        //             if (data.Variables != null && data.Variables.Count > 0)
+        //             {
+        //                 var validVariables = data.Variables;
+        //                 if (blockType == "ORGANIZATION_BLOCK")
+        //                 {
+        //                     validVariables = data.Variables.Where(v => v.Direction == "VAR_TEMP" || v.Direction == "VAR CONSTANT").ToList();
+        //                 }
+        //                 else if (blockType == "FUNCTION")
+        //                 {
+        //                     validVariables = data.Variables.Where(v => v.Direction != "VAR").ToList();
+        //                 }
+
+        //                 var order = new List<string> { "VAR_INPUT", "VAR_OUTPUT", "VAR_IN_OUT", "VAR", "VAR_TEMP", "VAR CONSTANT" };
+        //                 var groupedVars = validVariables.GroupBy(v => string.IsNullOrEmpty(v.Direction) ? "VAR" : v.Direction.ToUpper().Trim()).OrderBy(g => order.IndexOf(g.Key) != -1 ? order.IndexOf(g.Key) : 99);
+
+        //                 foreach (var group in groupedVars)
+        //                 {
+        //                     sb.AppendLine($"   {group.Key}");
+        //                     foreach (var v in group)
+        //                     {
+        //                         string comment = string.IsNullOrWhiteSpace(v.Description) ? "" : $"   // {v.Description}";
+        //                         sb.AppendLine($"      {v.Name} : {v.DataType};{comment}");
+        //                     }
+        //                     sb.AppendLine($"   END_VAR\n");
+        //                 }
+        //             }
+
+        //             // --- BODY CODE ---
+        //             sb.AppendLine("BEGIN");
+        //             if (!string.IsNullOrWhiteSpace(data.BodyCode))
+        //             {
+        //                 var lines = data.BodyCode.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        //                 foreach (var line in lines) sb.AppendLine($"\t{line}");
+        //             }
+        //             sb.AppendLine($"END_{blockType}");
+        //         }
+
+        //         // ==========================================================
+        //         // SCAN AND GENERATE DB FOR FB INSTANCES CALLED IN OB
+        //         // ALSO SCAN FC INSTANCES (NO DB GENERATION)
+        //         // ==========================================================
+        //         if (blockType == "ORGANIZATION_BLOCK" && !string.IsNullOrWhiteSpace(data.BodyCode))
+        //         {
+        //             // Pattern 1: FB instances with name pattern "Inst_FB_TênKhuôn__HậuTố"
+        //             // Example: "Inst_FB_MainConveyor__01" -> Match 1: Full instance name, Match 2: FB_MainConveyor
+        //             string fbPattern = @"\""(Inst_(FB_[a-zA-Z0-9_]+)__([a-zA-Z0-9_]+))\""\s*\(";
+        //             MatchCollection fbMatches = Regex.Matches(data.BodyCode, fbPattern);
+
+        //             HashSet<string> generatedDBs = new HashSet<string>();
+
+        //             foreach (Match match in fbMatches)
+        //             {
+        //                 string dbName = match.Groups[1].Value; // VD: Inst_FB_MainConveyor_01
+        //                 string fbType = match.Groups[2].Value; // VD: FB_MainConveyor
+
+        //                 // Use HashSet to prevent duplicate DB declarations
+        //                 if (!generatedDBs.Contains(dbName))
+        //                 {
+        //                     generatedDBs.Add(dbName);
+        //                     sb.AppendLine();
+        //                     sb.AppendLine($"DATA_BLOCK \"{dbName}\"");
+        //                     sb.AppendLine("{ S7_Optimized_Access := 'TRUE' }");
+        //                     sb.AppendLine("VERSION : 0.1");
+        //                     sb.AppendLine($"\"{fbType}\"");
+        //                     sb.AppendLine("BEGIN");
+        //                     sb.AppendLine("END_DATA_BLOCK");
+        //                 }
+        //             }
+
+        //             // Pattern 2: FC instances - exact name match, NO DB generation
+        //             // Example: "FC_MyFunction"(...  or "Inst_FC_MyFunction"(...
+        //             // FC naming must match previously created FC exactly (no pattern applied)
+        //             string fcPattern = @"\""((?:Inst_)?FC_[a-zA-Z0-9_]+)\""\s*\(";
+        //             MatchCollection fcMatches = Regex.Matches(data.BodyCode, fcPattern);
+
+        //             // FC instances are validated but no DB is generated
+        //             // The FC name must match an existing FC block definition
+        //             foreach (Match match in fcMatches)
+        //             {
+        //                 string fcName = match.Groups[1].Value; // VD: FC_MyFunction or Inst_FC_MyFunction
+        //                 // FC instances do not generate DBs - they require the FC to be pre-created
+        //                 // Validation would be done at compile time in TIA Portal
+        //             }
+        //         }
+
+        //         // ==========================================================
+        //         // THUẬT TOÁN TỰ SINH DB CHO GLOBAL TIMERS (IEC_TIMER)
+        //         // ==========================================================
+        //         if (data.GlobalTimers != null && data.GlobalTimers.Count > 0)
+        //         {
+        //             foreach (string timerName in data.GlobalTimers)
+        //             {
+        //                 sb.AppendLine();
+        //                 sb.AppendLine($"DATA_BLOCK \"{timerName}\"");
+        //                 sb.AppendLine("{ S7_Optimized_Access := 'TRUE' }");
+        //                 sb.AppendLine("VERSION : 1.0");
+        //                 sb.AppendLine("NON_RETAIN");
+        //                 sb.AppendLine("IEC_TIMER");
+        //                 sb.AppendLine("BEGIN");
+        //                 sb.AppendLine("END_DATA_BLOCK");
+        //             }
+        //         }
+
+        //         if (data.PidConfig != null)
+        //         {
+        //             GeneratePidDataBlock(data.PidConfig, sb);
+        //         }
+
+        //         // --- LƯU FILE SCL ---
+        //         string safeName = string.IsNullOrWhiteSpace(data.Name) ? "AI_Generated_Block" : data.Name;
+        //         string fileName = $"{safeName}.scl";
+        //         string fullPath = Path.Combine(OutputPaths.GetGeneratedDir(), fileName);
+        //         File.WriteAllText(fullPath, sb.ToString(), Encoding.UTF8);
+
+        //         Console.ForegroundColor = ConsoleColor.Cyan;
+        //         Console.WriteLine($"\n[SUCCESS] Exported successfully: {fileName}");
+        //         Console.ResetColor();
+
+
+
+        //         // Extract global tags if it's an OB
+        //         if (data.Type != null && data.Type.ToUpper() == "ORGANIZATION_BLOCK" && data.GlobalTags.Count > 0)
+        //         {
+        //             ExtractAndSaveTagsToCSV(data);
+        //         }
+        //     }
+        //     catch (Exception ex) { Console.WriteLine($"Error saving file: {ex.Message}"); }
+        // }
+
         public static void GenerateAndSave(BlockData data)
         {
             try
@@ -509,24 +721,22 @@ namespace TIA_Copilot_CLI
                 }
 
                 // ==========================================================
-                // SCAN AND GENERATE DB FOR FB INSTANCES CALLED IN OB
-                // ALSO SCAN FC INSTANCES (NO DB GENERATION)
+                // BỘ QUÉT TẠO DB TỰ ĐỘNG (FB, TIMERS, PID COMPACT)
+                // Sử dụng HashSet để đảm bảo không bị tạo trùng lặp DB
                 // ==========================================================
+                HashSet<string> generatedDBs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
                 if (blockType == "ORGANIZATION_BLOCK" && !string.IsNullOrWhiteSpace(data.BodyCode))
                 {
-                    // Pattern 1: FB instances with name pattern "Inst_FB_TênKhuôn__HậuTố"
-                    // Example: "Inst_FB_MainConveyor__01" -> Match 1: Full instance name, Match 2: FB_MainConveyor
+                    // 1. SCAN TẠO DB CHO CÁC KHỐI FB THÔNG THƯỜNG
                     string fbPattern = @"\""(Inst_(FB_[a-zA-Z0-9_]+)__([a-zA-Z0-9_]+))\""\s*\(";
                     MatchCollection fbMatches = Regex.Matches(data.BodyCode, fbPattern);
-
-                    HashSet<string> generatedDBs = new HashSet<string>();
 
                     foreach (Match match in fbMatches)
                     {
                         string dbName = match.Groups[1].Value; // VD: Inst_FB_MainConveyor_01
                         string fbType = match.Groups[2].Value; // VD: FB_MainConveyor
 
-                        // Use HashSet to prevent duplicate DB declarations
                         if (!generatedDBs.Contains(dbName))
                         {
                             generatedDBs.Add(dbName);
@@ -540,37 +750,76 @@ namespace TIA_Copilot_CLI
                         }
                     }
 
-                    // Pattern 2: FC instances - exact name match, NO DB generation
-                    // Example: "FC_MyFunction"(...  or "Inst_FC_MyFunction"(...
-                    // FC naming must match previously created FC exactly (no pattern applied)
+                    // Pattern FC instances - Không sinh DB nhưng vẫn quét để hợp lệ hóa
                     string fcPattern = @"\""((?:Inst_)?FC_[a-zA-Z0-9_]+)\""\s*\(";
                     MatchCollection fcMatches = Regex.Matches(data.BodyCode, fcPattern);
-
-                    // FC instances are validated but no DB is generated
-                    // The FC name must match an existing FC block definition
-                    foreach (Match match in fcMatches)
-                    {
-                        string fcName = match.Groups[1].Value; // VD: FC_MyFunction or Inst_FC_MyFunction
-                        // FC instances do not generate DBs - they require the FC to be pre-created
-                        // Validation would be done at compile time in TIA Portal
-                    }
                 }
 
-                // ==========================================================
-                // THUẬT TOÁN TỰ SINH DB CHO GLOBAL TIMERS (IEC_TIMER)
-                // ==========================================================
+                // 2. SINH DB CHO GLOBAL TIMERS (IEC_TIMER)
                 if (data.GlobalTimers != null && data.GlobalTimers.Count > 0)
                 {
                     foreach (string timerName in data.GlobalTimers)
                     {
-                        sb.AppendLine();
-                        sb.AppendLine($"DATA_BLOCK \"{timerName}\"");
-                        sb.AppendLine("{ S7_Optimized_Access := 'TRUE' }");
-                        sb.AppendLine("VERSION : 1.0");
-                        sb.AppendLine("NON_RETAIN");
-                        sb.AppendLine("IEC_TIMER");
-                        sb.AppendLine("BEGIN");
-                        sb.AppendLine("END_DATA_BLOCK");
+                        if (!generatedDBs.Contains(timerName))
+                        {
+                            generatedDBs.Add(timerName);
+                            sb.AppendLine();
+                            sb.AppendLine($"DATA_BLOCK \"{timerName}\"");
+                            sb.AppendLine("{ S7_Optimized_Access := 'TRUE' }");
+                            sb.AppendLine("VERSION : 1.0");
+                            sb.AppendLine("NON_RETAIN");
+                            sb.AppendLine("IEC_TIMER");
+                            sb.AppendLine("BEGIN");
+                            sb.AppendLine("END_DATA_BLOCK");
+                        }
+                    }
+                }
+
+                // 3. ƯU TIÊN 1: SINH KHỐI PID CHUẨN NẾU AI CUNG CẤP JSON CẤU HÌNH (pid_configure)
+                if (data.PidConfig != null)
+                {
+                    if (!generatedDBs.Contains(data.PidConfig.Name))
+                    {
+                        generatedDBs.Add(data.PidConfig.Name);
+                        GeneratePidDataBlock(data.PidConfig, sb);
+                    }
+                }
+
+                // 4. ƯU TIÊN 2 (VÉT CẠN): QUÉT CÁC HÀM PID TRONG MÃ MÀ BỊ AI QUÊN KHÔNG CẤP JSON CẤU HÌNH
+                if (blockType == "ORGANIZATION_BLOCK" && !string.IsNullOrWhiteSpace(data.BodyCode))
+                {
+                    // Quét các hàm có chứa chữ PID (VD: "PID_Compact_1"(... hoặc "PID_Heater"(... )
+                    string pidPattern = @"\""([a-zA-Z0-9_]*PID[a-zA-Z0-9_]*)\""\s*\(";
+                    MatchCollection pidMatches = Regex.Matches(data.BodyCode, pidPattern, RegexOptions.IgnoreCase);
+
+                    foreach (Match match in pidMatches)
+                    {
+                        string pidName = match.Groups[1].Value;
+
+                        // Chỉ đẻ ra khuôn trắng cơ bản nếu khối này CHƯA được sinh ra bởi cục JSON ở bước 3
+                        if (!generatedDBs.Contains(pidName))
+                        {
+                            generatedDBs.Add(pidName);
+                            sb.AppendLine();
+                            sb.AppendLine($"DATA_BLOCK \"{pidName}\"");
+                            sb.AppendLine("{InstructionName := 'PID_Compact';");
+                            sb.AppendLine(" LibVersion := '2.4';");
+                            sb.AppendLine(" S7_Optimized_Access := 'TRUE' }");
+                            sb.AppendLine("AUTHOR : SIMATIC");
+                            sb.AppendLine("FAMILY : COMPPID");
+                            sb.AppendLine("NAME : PID_Cmpt");
+                            sb.AppendLine("VERSION : 2.4");
+                            sb.AppendLine("NON_RETAIN");
+                            sb.AppendLine("PID_Compact");
+                            sb.AppendLine("");
+                            sb.AppendLine("BEGIN");
+                            sb.AppendLine("");
+                            sb.AppendLine("END_DATA_BLOCK");
+                            
+                            Console.ForegroundColor = ConsoleColor.Yellow;
+                            Console.WriteLine($"[CẢNH BÁO] Sinh khối PID Mặc định (Trắng) cho '{pidName}' do thiếu JSON cấu hình.");
+                            Console.ResetColor();
+                        }
                     }
                 }
 
@@ -722,6 +971,50 @@ namespace TIA_Copilot_CLI
                 Console.ResetColor();
             }
         }
+
+        private static string FmtReal(double value)
+        {
+            return value.ToString("0.0#######", System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        public static void GeneratePidDataBlock(PidConfig pid, StringBuilder sb)
+        {
+            // Hàm hỗ trợ format kiểu Real chuẩn Siemens
+            Func<double, string> FmtReal = (double value) => value.ToString("0.0#######", System.Globalization.CultureInfo.InvariantCulture);
+            sb.AppendLine(); 
+            sb.AppendLine($"DATA_BLOCK \"{pid.Name}\"");
+            sb.AppendLine($"{{InstructionName := 'PID_Compact';");
+            sb.AppendLine($" LibVersion := '2.4';");
+            sb.AppendLine($" S7_Optimized_Access := 'TRUE' }}");
+            sb.AppendLine("AUTHOR : SIMATIC");
+            sb.AppendLine("FAMILY : COMPPID");
+            sb.AppendLine("NAME : PID_Cmpt");
+            sb.AppendLine("VERSION : 2.4");
+            sb.AppendLine("NON_RETAIN");
+            sb.AppendLine("PID_Compact");
+            sb.AppendLine("");
+            sb.AppendLine("BEGIN");
+            sb.AppendLine($"   Mode := {pid.StartupMode}; // 0: Inactive; 1:Pretuning ; 2:Fine tuning; 3: Automode; 4: Manual");
+            sb.AppendLine($"   SetSubstituteOutput := {(pid.SetSubstituteOutput ? "TRUE" : "FALSE")};");
+            sb.AppendLine($"   ESData_1 := 16#0{pid.OutputSelection}; // 00: Ouput PER ; 01: output ; 02: output PWWM");
+            sb.AppendLine($"   Config.InvertControl := {(pid.InvertControl ? "TRUE" : "FALSE")};");
+
+            sb.AppendLine($"   Config.InputUpperLimit := {FmtReal(pid.Limits.InputUpper)};");
+            sb.AppendLine($"   Config.InputLowerLimit := {FmtReal(pid.Limits.InputLower)};");
+            sb.AppendLine($"   Config.MinimumOnTime := {FmtReal(pid.PwmSettings.MinimumOnTime)};");
+            sb.AppendLine($"   Config.MinimumOffTime := {FmtReal(pid.PwmSettings.MinimumOffTime)};");
+            sb.AppendLine($"   Config.InputScaling.UpperPointOut := {FmtReal(pid.Limits.InputScalingUpper)};");
+            sb.AppendLine($"   Config.InputScaling.LowerPointOut := {FmtReal(pid.Limits.InputScalingLower)};");
+
+            sb.AppendLine($"   \"Retain\".CtrlParams.Gain := {FmtReal(pid.Tuning.Gain)};");
+            sb.AppendLine($"   \"Retain\".CtrlParams.Ti := {FmtReal(pid.Tuning.Ti)};");
+            sb.AppendLine($"   \"Retain\".CtrlParams.Td := {FmtReal(pid.Tuning.Td)};");
+            sb.AppendLine($"   \"Retain\".CtrlParams.TdFiltRatio := {FmtReal(pid.Tuning.TdFiltRatio)};");
+            sb.AppendLine($"   \"Retain\".CtrlParams.DWeighting := {FmtReal(pid.Tuning.DWeighting)};");
+            sb.AppendLine($"   \"Retain\".CtrlParams.Cycle := {FmtReal(pid.Tuning.Cycle)};");
+            sb.AppendLine("");
+            sb.AppendLine("END_DATA_BLOCK");
+        }
     }
 
 
@@ -805,6 +1098,43 @@ namespace TIA_Copilot_CLI
                 }
             }
 
+            if (root.ContainsKey("pid_configure") && root["pid_configure"] != null && root["pid_configure"].Type != JTokenType.Null)
+            {
+                var pidJson = root["pid_configure"];
+                data.PidConfig = new PidConfig
+                {
+                    Name = pidJson["name"]?.ToString() ?? "PID_Compact_1",
+                    StartupMode = pidJson["startup_mode"]?.ToObject<int>() ?? 3,
+                    SetSubstituteOutput = pidJson["set_substitute_output"]?.ToObject<bool>() ?? false,
+                    OutputSelection = pidJson["output_selection"]?.ToObject<int>() ?? 0,
+                    InvertControl = pidJson["invert_control"]?.ToObject<bool>() ?? false
+                };
+
+                if (pidJson["limits"] != null)
+                {
+                    data.PidConfig.Limits.InputUpper = pidJson["limits"]["input_upper"]?.ToObject<double>() ?? 100.0;
+                    data.PidConfig.Limits.InputLower = pidJson["limits"]["input_lower"]?.ToObject<double>() ?? 0.0;
+                    data.PidConfig.Limits.InputScalingUpper = pidJson["limits"]["input_scaling_upper"]?.ToObject<double>() ?? 100.0;
+                    data.PidConfig.Limits.InputScalingLower = pidJson["limits"]["input_scaling_lower"]?.ToObject<double>() ?? 0.0;
+                }
+
+                if (pidJson["pwm_settings"] != null)
+                {
+                    data.PidConfig.PwmSettings.MinimumOnTime = pidJson["pwm_settings"]["minimum_on_time"]?.ToObject<double>() ?? 0.0;
+                    data.PidConfig.PwmSettings.MinimumOffTime = pidJson["pwm_settings"]["minimum_off_time"]?.ToObject<double>() ?? 0.0;
+                }
+
+                if (pidJson["tuning"] != null)
+                {
+                    data.PidConfig.Tuning.Gain = pidJson["tuning"]["gain"]?.ToObject<double>() ?? 1.0;
+                    data.PidConfig.Tuning.Ti = pidJson["tuning"]["ti"]?.ToObject<double>() ?? 20.0;
+                    data.PidConfig.Tuning.Td = pidJson["tuning"]["td"]?.ToObject<double>() ?? 0.0;
+                    data.PidConfig.Tuning.TdFiltRatio = pidJson["tuning"]["td_filt_ratio"]?.ToObject<double>() ?? 0.2;
+                    data.PidConfig.Tuning.DWeighting = pidJson["tuning"]["d_weighting"]?.ToObject<double>() ?? 0.0;
+                    data.PidConfig.Tuning.Cycle = pidJson["tuning"]["cycle"]?.ToObject<double>() ?? 0.1;
+                }
+            }
+
             return data;
         }
         private static string SanitizeBodyCode(string raw)
@@ -849,6 +1179,44 @@ namespace TIA_Copilot_CLI
 
         public List<GlobalTag> GlobalTags { get; set; } = new List<GlobalTag>();
         public List<string> GlobalTimers { get; set; } = new List<string>();
+        public PidConfig PidConfig { get; set; } = null;
+    }
+
+    public class PidLimits
+    {
+        public double InputUpper { get; set; } = 50.0;
+        public double InputLower { get; set; } = 0.0;
+        public double InputScalingUpper { get; set; } = 50.0;
+        public double InputScalingLower { get; set; } = 0.0;
+    }
+
+    public class PidPwmSettings
+    {
+        public double MinimumOnTime { get; set; } = 10.0;
+        public double MinimumOffTime { get; set; } = 10.0;
+    }
+
+    public class PidTuning
+    {
+        public double Gain { get; set; } = 1.0;
+        public double Ti { get; set; } = 20.0;
+        public double Td { get; set; } = 0.0;
+        public double TdFiltRatio { get; set; } = 0.2;
+        public double DWeighting { get; set; } = 0.0;
+        public double Cycle { get; set; } = 0.1;
+    }
+
+    public class PidConfig
+    {
+        public string Name { get; set; } = "PID_Compact_1";
+        public int StartupMode { get; set; } = 3;
+        public bool SetSubstituteOutput { get; set; } = false;
+        public int OutputSelection { get; set; } = 0;
+        public bool InvertControl { get; set; } = false;
+
+        public PidLimits Limits { get; set; } = new PidLimits();
+        public PidPwmSettings PwmSettings { get; set; } = new PidPwmSettings();
+        public PidTuning Tuning { get; set; } = new PidTuning();
     }
 }
 
@@ -2132,7 +2500,7 @@ namespace TIA_Copilot_CLI
                             {
                                 scripts["KeyUp"] = $"HMIRuntime.UI.SysFct.ChangeScreen('{item.NavigateTo}', null);";
                             }
-                            else 
+                            else
                             {
                                 if (item.KeydownWrite != null)
                                     scripts["KeyDown"] = $"Tags(\"{item.KeydownWrite.Tag}\").Write({item.KeydownWrite.Value});";
@@ -2153,14 +2521,14 @@ namespace TIA_Copilot_CLI
                             props["Top"] = switchY;
                             props["Width"] = 80;  // Kích thước tùy chỉnh riêng cho Toggle Switch
                             props["Height"] = 40;
-                            
+
                             // 2. Cấu hình màu sắc hiển thị và Bind Tag, State thay đổi
                             props["BackColor"] = !string.IsNullOrEmpty(item.BackColor) ? item.BackColor : "242, 244, 255";
                             props["AlternateBackColor"] = !string.IsNullOrEmpty(item.AlternateBackColor) ? item.AlternateBackColor : "0, 200, 80";
                             props["TagColor"] = item.BindTag ?? "";
-                            props["Events"] = new JObject 
-                            { 
-                                ["OnStateChanged"] = !string.IsNullOrEmpty(item.BindTag) ? $"Tags(\"{item.BindTag}\").Write(item.IsAlternateState);" : "" 
+                            props["Events"] = new JObject
+                            {
+                                ["OnStateChanged"] = !string.IsNullOrEmpty(item.BindTag) ? $"Tags(\"{item.BindTag}\").Write(item.IsAlternateState);" : ""
                             };
 
                             buttonSlot++; // Tăng slot cho phần tử tiếp theo
@@ -2175,7 +2543,7 @@ namespace TIA_Copilot_CLI
                             props["Top"] = ioY;
                             props["Width"] = 120; // Kích thước tùy chỉnh riêng cho IOField
                             props["Height"] = 40;
-                            
+
                             // 2. Cấu hình Format hiển thị và liên kết Tag giám sát dữ liệu
                             props["Format"] = item.Format ?? "{0}";
                             props["StatusTag"] = item.BindTag ?? "";
@@ -2192,7 +2560,7 @@ namespace TIA_Copilot_CLI
                             props["Top"] = clockY;
                             props["Width"] = 200; // Kích thước tùy chỉnh riêng cho Clock
                             props["Height"] = 50;
-                            
+
                             // 2. Cấu hình định dạng thời gian và chế độ hiển thị
                             props["Format"] = item.Format ?? "{P, hh:mm:ss}";
                             props["ClockMode"] = item.ClockMode ?? "LocalTime";
