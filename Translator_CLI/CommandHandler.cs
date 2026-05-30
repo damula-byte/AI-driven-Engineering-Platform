@@ -140,7 +140,7 @@ namespace TIA_Copilot_CLI
                     .Where(p => File.Exists(p)).ToArray();
             };
             Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine($"\n⚙️ [SYSTEM]: Đang thực hiện -> [{action}]");
+            Console.WriteLine($"\n⚙️ [SYSTEM]: Processing -> [{action}]");
             Console.ResetColor();
 
             switch (action)
@@ -152,9 +152,9 @@ namespace TIA_Copilot_CLI
                     Console.WriteLine($"[i] Processing path: {pathc}");
 
                     if (tiaEngine.CreateTIAproject(pathc, namec, true))
-                        Console.WriteLine($"✅ [SUCCESS] {action} {namec} thành công!");
+                        Console.WriteLine($"✅ [SUCCESS] {action} {namec} successful!");
                     else
-                        Console.WriteLine($"❌ [FAILED] Không thể {action}.");
+                        Console.WriteLine($"❌ [FAILED] Could not {action}.");
                     break;
 
                 case "OPEN_PROJECT":
@@ -163,14 +163,14 @@ namespace TIA_Copilot_CLI
                     Console.WriteLine($"[i] Processing path: {patho}");
 
                     if (tiaEngine.CreateTIAproject(patho, nameo, false))
-                        Console.WriteLine($"✅ [SUCCESS] {action} {nameo} thành công!");
+                        Console.WriteLine($"✅ [SUCCESS] {action} {nameo} successful!");
                     else
-                        Console.WriteLine($"❌ [FAILED] Không thể {action}.");
+                        Console.WriteLine($"❌ [FAILED] Could not{action}.");
                     break;
 
                 case "CONNECT_TIA":
-                    if (tiaEngine.ConnectToTIA()) Console.WriteLine("✅ Đã kết nối TIA.");
-                    else Console.WriteLine("❌ Không tìm thấy TIA.");
+                    if (tiaEngine.ConnectToTIA()) Console.WriteLine("✅ TIA has been connected.");
+                    else Console.WriteLine("❌ TIA not found.");
                     break;
 
                 case "SAVE_PROJECT":
@@ -179,7 +179,7 @@ namespace TIA_Copilot_CLI
 
                 case "CLOSE_TIA":
                     tiaEngine.CloseTIA();
-                    Console.WriteLine("✅ TIA đã đóng.");
+                    Console.WriteLine("✅ TIA has been closed.");
                     break;
 
                 case "CREATE_DEVICE":
@@ -207,11 +207,11 @@ namespace TIA_Copilot_CLI
                             if (devs.Any(d => d.Equals(dName, StringComparison.OrdinalIgnoreCase)))
                             {
                                 SetCurrentDevice(dName, tiaEngine);
-                                Console.WriteLine($"✅ [SUCCESS]: Thiết bị {dName} đã khởi tạo.");
+                                Console.WriteLine($"✅ [SUCCESS]: Device {dName} has been initialized.");
                             }
                             else
                             {
-                                Console.WriteLine($"⚠️ [WARNING]: Lệnh đã gửi nhưng thiết bị chưa xuất hiện!");
+                                Console.WriteLine($"⚠️ [WARNING]: Command sent but device not yet appeared!");
                             }
                         }
                         catch (Exception ex)
@@ -223,27 +223,27 @@ namespace TIA_Copilot_CLI
                     }
                     else
                     {
-                        Console.WriteLine($"❌ [CATALOG ERROR]: Không tìm thấy Model '{mName}' hoặc Version '{versionReq}' không khớp!");
+                        Console.WriteLine($"❌ [CATALOG ERROR]: No model found for '{mName}' or version '{versionReq}' does not match!");
                     }
                     break;
 
                 case "CHOOSE_DEVICE":
                     string targetName = actionItem["name"]?.ToString();
 
-                    Console.WriteLine($"🔍 [INFO]: Hệ thống đang tiến hành chuyển đổi ngữ cảnh sang thiết bị: '{targetName}'...");
+                    Console.WriteLine($"🔍 [INFO]: Transfering to: '{targetName}'...");
 
                     bool chooseSuccess = SetCurrentDevice(targetName, tiaEngine);
 
                     if (chooseSuccess)
                     {
                         Console.ForegroundColor = ConsoleColor.Green;
-                        Console.WriteLine($"✅ [SUCCESS]: Đã chuyển ngữ cảnh làm việc thành công!");
-                        Console.WriteLine($"👉 Thiết bị hiện tại: {Program._currentDeviceName} | IP cấu hình: {Program._currentIp}");
+                        Console.WriteLine($"✅ [SUCCESS]: Successfully transferred to device '{targetName}'!");
+                        Console.WriteLine($"👉 Current device: {Program._currentDeviceName} | Configured IP: {Program._currentIp}");
                     }
                     else
                     {
                         Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine($"❌ [FAILED]: Không tìm thấy thiết bị nào khớp với từ khóa '{targetName}' trong cấu trúc dự án TIA Portal.");
+                        Console.WriteLine($"❌ [FAILED]: No device found matching the keyword '{targetName}' in the TIA Portal project structure.");
                     }
                     Console.ResetColor();
                     break;
@@ -257,13 +257,61 @@ namespace TIA_Copilot_CLI
 
                 case "IMPORT_FB_FC":
                     string bType = actionItem["block_type"]?.ToString();
-                    string[] fbPaths = GetValidPaths(actionItem["file_names"]?.ToString());
-                    if (fbPaths.Length > 0) Program.TiaImportLogic(bType.ToUpper(), fbPaths);
+                    string rawFbFiles = actionItem["file_names"]?.ToString();
+
+                    // TỰ ĐỘNG GẮN ĐUÔI .scl NẾU THIẾU
+                    if (!string.IsNullOrWhiteSpace(rawFbFiles))
+                    {
+                        rawFbFiles = string.Join(", ", rawFbFiles.Split(',')
+                            .Select(f => f.Trim())
+                            .Select(f => f.EndsWith(".scl", StringComparison.OrdinalIgnoreCase) ? f : f + ".scl"));
+                    }
+
+                    string[] fbPaths = GetValidPaths(rawFbFiles);
+
+                    if (fbPaths.Length > 0)
+                    {
+                        Console.WriteLine($"[i] Found {fbPaths.Length} file valid in '{generatedDir}':");
+                        foreach (var p in fbPaths) Console.WriteLine($"    -> {Path.GetFileName(p)}");
+
+                        // Truyền các đường dẫn TUYỆT ĐỐI vào hàm
+                        Program.TiaImportLogic(bType.ToUpper(), fbPaths);
+                    }
+                    else
+                    {
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine($"⚠️ [WARNING] No valid files found for: '{rawFbFiles}' at {generatedDir}");
+                        Console.ResetColor();
+                    }
                     break;
 
                 case "IMPORT_OB":
-                    string[] obPaths = GetValidPaths(actionItem["file_names"]?.ToString());
-                    if (obPaths.Length > 0) Program.TiaOBImportLogic("OB", obPaths);
+                    string rawObFiles = actionItem["file_names"]?.ToString();
+
+                    // TỰ ĐỘNG GẮN ĐUÔI .scl NẾU THIẾU
+                    if (!string.IsNullOrWhiteSpace(rawObFiles))
+                    {
+                        rawObFiles = string.Join(", ", rawObFiles.Split(',')
+                            .Select(f => f.Trim())
+                            .Select(f => f.EndsWith(".scl", StringComparison.OrdinalIgnoreCase) ? f : f + ".scl"));
+                    }
+
+                    string[] obPaths = GetValidPaths(rawObFiles);
+
+                    if (obPaths.Length > 0)
+                    {
+                        Console.WriteLine($"[i] Found {obPaths.Length} file valid in '{generatedDir}':");
+                        foreach (var p in obPaths) Console.WriteLine($"    -> {Path.GetFileName(p)}");
+
+                        // Truyền các đường dẫn TUYỆT ĐỐI vào hàm
+                        Program.TiaOBImportLogic("OB", obPaths);
+                    }
+                    else
+                    {
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine($"⚠️ [WARNING] No valid files found for: '{rawObFiles}' at {generatedDir}");
+                        Console.ResetColor();
+                    }
                     break;
 
                 case "IMPORT_PLC_TAGS":
@@ -274,7 +322,7 @@ namespace TIA_Copilot_CLI
                     if (string.IsNullOrEmpty(Program._currentDeviceName) || Program._currentDeviceName == "None")
                     {
                         Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine("❌ [ERROR]: Bạn chưa chọn thiết bị (PLC/SCADA) nào để nạp Tags. Hãy dùng 'CHOOSE_DEVICE' trước!");
+                        Console.WriteLine("❌ [ERROR]:You have not selected any (PLC/SCADA) device to import Tags. Please use 'CHOOSE_DEVICE' first!");
                         Console.ResetColor();
                         break;
                     }
@@ -297,21 +345,21 @@ namespace TIA_Copilot_CLI
                                 tiaEngine.ImportPlcTagsFromCsv(Program._currentDeviceName, fullPath);
 
                                 Console.ForegroundColor = ConsoleColor.Green;
-                                Console.WriteLine($"✅ [SUCCESS]: Đã nạp Tags từ {fileName} vào thiết bị {Program._currentDeviceName}");
+                                Console.WriteLine($"✅ [SUCCESS]: Loaded {fileName} into device {Program._currentDeviceName}");
                                 Console.ResetColor();
                             }
                             catch (Exception ex)
                             {
                                 Console.ForegroundColor = ConsoleColor.Red;
                                 // Log chi tiết lỗi từ Siemens API để debug
-                                Console.WriteLine($"❌ [ERROR]: Lỗi Siemens Openness khi nạp {fileName}: {ex.Message}");
+                                Console.WriteLine($"❌ [ERROR]: Error loading {fileName}: {ex.Message}");
                                 Console.ResetColor();
                             }
                         }
                         else
                         {
                             Console.ForegroundColor = ConsoleColor.Yellow;
-                            Console.WriteLine($"⚠️ [WARNING]: Không tìm thấy file: {fileName} tại đường dẫn: {fullPath}");
+                            Console.WriteLine($"⚠️ [WARNING]: File not found: {fileName} at path: {fullPath}");
                             Console.ResetColor();
                         }
                     }
@@ -325,7 +373,7 @@ namespace TIA_Copilot_CLI
                     if (string.IsNullOrEmpty(Program._currentDeviceName) || Program._currentDeviceName == "None")
                     {
                         Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine("❌ [ERROR]: Chưa chọn thiết bị đích (HMI/SCADA) để vẽ giao diện. Hãy dùng 'CHOOSE_DEVICE' trước!");
+                        Console.WriteLine("❌ [ERROR]: You have not selected any (HMI/SCADA) device to draw the interface. Please use 'CHOOSE_DEVICE' first!");
                         Console.ResetColor();
                         break;
                     }
@@ -347,7 +395,7 @@ namespace TIA_Copilot_CLI
                             try
                             {
                                 Console.ForegroundColor = ConsoleColor.Cyan;
-                                Console.WriteLine($"⚙️ [SYSTEM]: Đang tiến hành vẽ màn hình từ tệp: {fileName}...");
+                                Console.WriteLine($"⚙️ [SYSTEM]: Loading screen from file: {fileName}...");
                                 Console.ResetColor();
 
                                 // Đọc nội dung file JSON và Deserialize cấu trúc đối tượng đồ họa
@@ -358,20 +406,20 @@ namespace TIA_Copilot_CLI
                                 tiaEngine.GenerateScadaProject(jsonScreen, Program._currentDeviceName);
 
                                 Console.ForegroundColor = ConsoleColor.Green;
-                                Console.WriteLine($"✅ [SUCCESS]: Đã vẽ hoàn tất giao diện từ file {fileName} vào {Program._currentDeviceName}");
+                                Console.WriteLine($"✅ [SUCCESS]: Finished drawing interface from file {fileName} into {Program._currentDeviceName}");
                                 Console.ResetColor();
                             }
                             catch (Exception ex)
                             {
                                 Console.ForegroundColor = ConsoleColor.Red;
-                                Console.WriteLine($"❌ [DRAWING ERROR] Lỗi khi xử lý file {fileName}: {ex.Message}");
+                                Console.WriteLine($"❌ [DRAWING ERROR] Error processing file {fileName}: {ex.Message}");
                                 Console.ResetColor();
                             }
                         }
                         else
                         {
                             Console.ForegroundColor = ConsoleColor.Yellow;
-                            Console.WriteLine($"⚠️ [WARNING]: Không tìm thấy file đồ họa: {fileName} tại đường dẫn: {fullPath}");
+                            Console.WriteLine($"⚠️ [WARNING]: File not found: {fileName} at path: {fullPath}");
                             Console.ResetColor();
                         }
                     }
@@ -385,7 +433,7 @@ namespace TIA_Copilot_CLI
                     if (string.IsNullOrEmpty(Program._currentDeviceName) || Program._currentDeviceName == "None")
                     {
                         Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine("❌ [ERROR]: Bạn chưa chọn trạm HMI/SCADA đích để nạp Tags. Hãy dùng 'CHOOSE_DEVICE' trước!");
+                        Console.WriteLine("❌ [ERROR]: You have not selected any (HMI/SCADA) device to import tags. Please use 'CHOOSE_DEVICE' first!");
                         Console.ResetColor();
                         break;
                     }
@@ -407,7 +455,7 @@ namespace TIA_Copilot_CLI
                             try
                             {
                                 Console.ForegroundColor = ConsoleColor.Cyan;
-                                Console.WriteLine($"⚙️ [SYSTEM]: Đang tiến hành nạp bảng biến HMI từ tệp: {fileName} vào {Program._currentDeviceName}...");
+                                Console.WriteLine($"⚙️ [SYSTEM]: Loading HMI tag table from file: {fileName} into {Program._currentDeviceName}...");
                                 Console.ResetColor();
 
                                 // Gọi trực tiếp API TIA Portal Openness xử lý tên gộp của bạn
@@ -416,14 +464,14 @@ namespace TIA_Copilot_CLI
                             catch (Exception ex)
                             {
                                 Console.ForegroundColor = ConsoleColor.Red;
-                                Console.WriteLine($"❌ [HMI TAG ERROR] Lỗi khi nạp file {fileName}: {ex.Message}");
+                                Console.WriteLine($"❌ [HMI TAG ERROR] Error loading file {fileName}: {ex.Message}");
                                 Console.ResetColor();
                             }
                         }
                         else
                         {
                             Console.ForegroundColor = ConsoleColor.Yellow;
-                            Console.WriteLine($"⚠️ [WARNING]: Không tìm thấy file dữ liệu: {fileName} tại đường dẫn: {fullPath}");
+                            Console.WriteLine($"⚠️ [WARNING]: File not found: {fileName} at path: {fullPath}");
                             Console.ResetColor();
                         }
                     }
@@ -439,7 +487,7 @@ namespace TIA_Copilot_CLI
                     if (string.IsNullOrEmpty(Program._currentDeviceName) || Program._currentDeviceName == "None")
                     {
                         Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine("❌ [ERROR]: Chưa chọn trạm HMI/SCADA để thiết lập kết nối. Hãy dùng 'CHOOSE_DEVICE' trước!");
+                        Console.WriteLine("❌ [ERROR]: You have not selected any (HMI/SCADA) device to create connection. Please use 'CHOOSE_DEVICE' first!");
                         Console.ResetColor();
                         break;
                     }
@@ -447,8 +495,8 @@ namespace TIA_Copilot_CLI
                     try
                     {
                         Console.ForegroundColor = ConsoleColor.Cyan;
-                        Console.WriteLine($"\n⚙️ [SYSTEM]: Đang tiến hành tạo kết nối truyền thông động cho [{Program._currentDeviceName}]...");
-                        Console.WriteLine($"👉 Cấu hình nạp: Driver={driver} | HMI_IP={hmiIpAddr} <-> PLC_IP={plcIpAddr} | AccessPoint={ap}");
+                        Console.WriteLine($"\n⚙️ [SYSTEM]: Creating dynamic communication connection for [{Program._currentDeviceName}]...");
+                        Console.WriteLine($"👉 Configuration: Driver = {driver} | HMI_IP = {hmiIpAddr} <-> PLC_IP = {plcIpAddr} | AccessPoint = {ap}");
                         Console.ResetColor();
 
                         // Gọi động cơ xử lý dynamic WinCC Unified Openness của bạn
@@ -469,7 +517,7 @@ namespace TIA_Copilot_CLI
                         else
                         {
                             Console.ForegroundColor = ConsoleColor.Green;
-                            Console.WriteLine($"✅ [SUCCESS]: Khởi tạo dòng kết nối thành công -> Tên kết nối: [{connectionResult}]");
+                            Console.WriteLine($"✅ [SUCCESS]: Dynamic connection created successfully -> Connection Name: [{connectionResult}]");
                             Console.ResetColor();
                         }
                     }
@@ -490,8 +538,8 @@ namespace TIA_Copilot_CLI
                     if (string.IsNullOrEmpty(Program._currentDeviceName) || Program._currentDeviceName == "None")
                     {
                         Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine("❌ [ERROR]: Bạn chưa chọn thiết bị nào để thực hiện cấu hình mạng! Chuỗi lệnh CHANGE_IP bị từ chối.");
-                        Console.WriteLine("👉 Vui lòng sử dụng lệnh 'CHOOSE_DEVICE' trước hoặc chỉ định tên thiết bị cụ thể trong câu lệnh.");
+                        Console.WriteLine("❌ [ERROR]: You have not selected any device! The CHANGE_IP command is rejected.");
+                        Console.WriteLine("👉 Please use the 'CHOOSE_DEVICE' command first or specify a device name in the command.");
                         Console.ResetColor();
                         break;
                     }
@@ -499,8 +547,8 @@ namespace TIA_Copilot_CLI
                     try
                     {
                         Console.ForegroundColor = ConsoleColor.Cyan;
-                        Console.WriteLine($"\n⚙️ [SYSTEM]: Đang thực hiện thay đổi cấu hình IP Address cho thiết bị hiện hành: [{Program._currentDeviceName}]...");
-                        Console.WriteLine($"👉 Thông số mạng mới -> IP: {targetIp} | Subnet: {targetSubnet} | GW: {(string.IsNullOrEmpty(targetGateway) ? "None" : targetGateway)}");
+                        Console.WriteLine($"\n⚙️ [SYSTEM]: Loading IP configuration for the current device: [{Program._currentDeviceName}]...");
+                        Console.WriteLine($"👉 New network settings -> IP: {targetIp} | Subnet: {targetSubnet} | GW: {(string.IsNullOrEmpty(targetGateway) ? "None" : targetGateway)}");
                         Console.ResetColor();
 
                         // Gọi trực tiếp động cơ phần cứng Siemens Openness của bạn
@@ -529,7 +577,7 @@ namespace TIA_Copilot_CLI
                     catch (Exception ex)
                     {
                         Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine($"❌ [NETWORK ENGINE CRASH]: Lỗi hệ thống khi cập nhật IP: {ex.Message}");
+                        Console.WriteLine($"❌ [NETWORK ENGINE CRASH]: System error while updating IP: {ex.Message}");
                         Console.ResetColor();
                     }
                     break;
@@ -542,7 +590,7 @@ namespace TIA_Copilot_CLI
                     if (string.IsNullOrEmpty(Program._currentDeviceName) || Program._currentDeviceName == "None")
                     {
                         Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine("❌ [ERROR]: Bạn chưa chọn thiết bị nào để biên dịch. Hãy dùng lệnh 'CHOOSE_DEVICE' trước!");
+                        Console.WriteLine("❌ [ERROR]: You have not selected any device to compile. Please use the 'CHOOSE_DEVICE' command first!");
                         Console.ResetColor();
                         break;
                     }
@@ -551,9 +599,9 @@ namespace TIA_Copilot_CLI
                     {
                         Console.ForegroundColor = ConsoleColor.Cyan;
                         Console.WriteLine(rebuildAttr
-                            ? $"\n⚙️ [SYSTEM]: Đang thực hiện REBUILD toàn bộ cấu trúc thiết bị: [{Program._currentDeviceName}]..."
-                            : $"\n⚙️ [SYSTEM]: Đang tiến hành COMPILE thiết bị hiện hành: [{Program._currentDeviceName}]...");
-                        Console.WriteLine($"👉 Chế độ: Mode={mode.ToUpper()} | Rebuild All={rebuildAttr}");
+                            ? $"\n⚙️ [SYSTEM]: Performing REBUILD on the entire device structure: [{Program._currentDeviceName}]..."
+                            : $"\n⚙️ [SYSTEM]: Compiling the current device: [{Program._currentDeviceName}]...");
+                        Console.WriteLine($"👉 Mode: Mode={mode.ToUpper()} | Rebuild All={rebuildAttr}");
                         Console.ResetColor();
 
                         // Phân tích logic chế độ cứng/mềm từ chuỗi JSON của AI gửi về
@@ -582,7 +630,7 @@ namespace TIA_Copilot_CLI
                     catch (Exception ex)
                     {
                         Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine($"❌ [COMPILE ENGINE ERROR]: Lỗi tiến trình biên dịch Openness: {ex.Message}");
+                        Console.WriteLine($"❌ [COMPILE ENGINE ERROR]: System error while compiling Openness: {ex.Message}");
                         Console.ResetColor();
                     }
                     break;
@@ -595,7 +643,7 @@ namespace TIA_Copilot_CLI
                     if (string.IsNullOrEmpty(Program._currentDeviceName) || Program._currentDeviceName == "None")
                     {
                         Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine("❌ [ERROR]: Bạn chưa chọn PLC nào để cắm Module mở rộng. Hãy dùng 'CHOOSE_DEVICE' trước!");
+                        Console.WriteLine("❌ [ERROR]: You have not selected any PLC to install the expansion module. Please use the 'CHOOSE_DEVICE' command first!");
                         Console.ResetColor();
                         break;
                     }
@@ -606,7 +654,7 @@ namespace TIA_Copilot_CLI
                         string plcFamily = tiaEngine.GetDeviceFamily(Program._currentDeviceName);
 
                         Console.ForegroundColor = ConsoleColor.Cyan;
-                        Console.WriteLine($"\n⚙️ [SYSTEM]: Đang tiến hành phân tích và gắn module [{moduleModel}] vào Slot [{targetSlot}] của thiết bị [{Program._currentDeviceName}] ({plcFamily})...");
+                        Console.WriteLine($"\n⚙️ [SYSTEM]: Loading module [{moduleModel}] for installation in Slot [{targetSlot}] of device [{Program._currentDeviceName}] ({plcFamily})...");
                         Console.ResetColor();
 
                         // Gọi bộ dò Catalog tự động
@@ -623,13 +671,13 @@ namespace TIA_Copilot_CLI
                             if (moduleModel.StartsWith("6ES7") || moduleModel.StartsWith("6GK7"))
                             {
                                 computedIdentifier = $"OrderNumber:{moduleModel}/V2.2"; // Gán firmware mặc định dự phòng
-                                Console.WriteLine($"🔍 [INFO]: Không tìm thấy chuỗi '{moduleModel}' trong Catalog, chuyển sang chế độ nạp thủ công mã MLFB.");
+                                Console.WriteLine($"🔍 [INFO]: No module found for '{moduleModel}' in the catalog, switching to manual MLFB loading mode.");
                             }
                         }
 
                         if (!string.IsNullOrEmpty(computedIdentifier))
                         {
-                            Console.WriteLine($"🔍 [INFO]: Đúc mã định danh Openness thành công: {computedIdentifier}");
+                            Console.WriteLine($"🔍 [INFO]: Successfully generated Openness identifier: {computedIdentifier}");
 
                             // Gọi trực tiếp hàm Plug vật lý bất đồng bộ của bạn xuống Rack Openness
                             string plugResult = await Task.Run(() => tiaEngine.PlugModule(Program._currentDeviceName, computedIdentifier, targetSlot)
@@ -649,7 +697,7 @@ namespace TIA_Copilot_CLI
                         else
                         {
                             Console.ForegroundColor = ConsoleColor.Red;
-                            Console.WriteLine($"❌ [CATALOG ERROR]: Không tìm thấy Module nào khớp với mô tả '{moduleModel}' trong tệp ModuleCatalog.json.");
+                            Console.WriteLine($"❌ [CATALOG ERROR]: No module found matching the description '{moduleModel}' in the ModuleCatalog.json file.");
                             Console.ResetColor();
                         }
                         Console.ResetColor();
@@ -657,7 +705,7 @@ namespace TIA_Copilot_CLI
                     catch (Exception ex)
                     {
                         Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine($"❌ [HARDWARE CONFIG CRASH]: Lỗi tiến trình cấu hình phần cứng: {ex.Message}");
+                        Console.WriteLine($"❌ [HARDWARE CONFIG CRASH]: System error while configuring hardware: {ex.Message}");
                         Console.ResetColor();
                     }
                     break;

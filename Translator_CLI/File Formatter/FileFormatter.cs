@@ -803,12 +803,12 @@ namespace TIA_Copilot_CLI
                             sb.AppendLine();
                             sb.AppendLine($"DATA_BLOCK \"{pidName}\"");
                             sb.AppendLine("{InstructionName := 'PID_Compact';");
-                            sb.AppendLine(" LibVersion := '3.0';");
+                            sb.AppendLine(" LibVersion := '2.4';");
                             sb.AppendLine(" S7_Optimized_Access := 'TRUE' }");
                             sb.AppendLine("AUTHOR : SIMATIC");
                             sb.AppendLine("FAMILY : COMPPID");
                             sb.AppendLine("NAME : PID_Cmpt");
-                            sb.AppendLine("VERSION : 3.0");
+                            sb.AppendLine("VERSION : 2.4");
                             sb.AppendLine("NON_RETAIN");
                             sb.AppendLine("PID_Compact");
                             sb.AppendLine("");
