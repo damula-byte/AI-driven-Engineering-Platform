@@ -712,6 +712,7 @@ namespace TIA_Copilot_CLI
             }
         }
 
+        // 
         private static string LookUpInPlcCatalog(string modelName, string requestedVersion)
         {
             string catalogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PlcCatalog.json");
@@ -722,21 +723,24 @@ namespace TIA_Copilot_CLI
                 string jsonContent = File.ReadAllText(catalogPath);
                 JObject catalog = JObject.Parse(jsonContent);
 
-                // Chuẩn hóa từ khóa tìm kiếm (bỏ khoảng trắng, dấu gạch ngang)
+                // Chuẩn hóa từ khóa tìm kiếm
                 string normalizedInput = modelName.ToLower().Replace(" ", "").Replace("-", "");
-
                 List<JObject> matches = new List<JObject>();
 
-                // 1. Thu thập tất cả các thiết bị có tên khớp với từ khóa trong mọi danh mục
+                // 1. Tìm kiếm trong cả 'Name' VÀ 'OrderNumber'
                 foreach (var property in catalog.Properties())
                 {
                     JArray devices = (JArray)property.Value;
                     foreach (var device in devices)
                     {
                         string rawName = device["Name"]?.ToString() ?? "";
-                        string normalizedJsonName = rawName.ToLower().Replace(" ", "").Replace("-", "");
+                        string rawOrderNumber = device["OrderNumber"]?.ToString() ?? "";
 
-                        if (normalizedJsonName.Contains(normalizedInput))
+                        string normalizedJsonName = rawName.ToLower().Replace(" ", "").Replace("-", "");
+                        string normalizedJsonOrder = rawOrderNumber.ToLower().Replace(" ", "").Replace("-", "");
+
+                        // Nếu từ khóa khớp với Name HOẶC OrderNumber thì đưa vào list
+                        if (normalizedJsonName.Contains(normalizedInput) || normalizedJsonOrder.Contains(normalizedInput))
                         {
                             matches.Add((JObject)device);
                         }
@@ -745,14 +749,20 @@ namespace TIA_Copilot_CLI
 
                 if (matches.Count == 0) return null;
 
-                // 2. Logic ưu tiên: Nếu người dùng yêu cầu version cụ thể (vd: 4.5)
+                // 2. Logic ưu tiên Version linh hoạt hơn
                 if (!string.IsNullOrEmpty(requestedVersion))
                 {
-                    string v = requestedVersion.ToUpper().StartsWith("V") ? requestedVersion : "V" + requestedVersion;
+                    // Đảm bảo requestedVersion có chữ V
+                    string v = requestedVersion.ToUpper().StartsWith("V") ? requestedVersion.ToUpper() : "V" + requestedVersion.ToUpper();
 
-                    // Tìm thiết bị nào trong các kết quả khớp có hỗ trợ phiên bản này
                     var perfectMatch = matches.FirstOrDefault(m =>
-                        ((JArray)m["AvailableVersions"]).Any(ver => ver.ToString() == v));
+                        ((JArray)m["AvailableVersions"]).Any(ver =>
+                        {
+                            // Chuẩn hóa version trong JSON trước khi so sánh
+                            string verStr = ver.ToString().ToUpper();
+                            if (!verStr.StartsWith("V")) verStr = "V" + verStr;
+                            return verStr == v;
+                        }));
 
                     if (perfectMatch != null)
                     {
@@ -760,18 +770,14 @@ namespace TIA_Copilot_CLI
                     }
                 }
 
-                // 3. Nếu không có yêu cầu version hoặc không tìm thấy bản khớp hoàn hảo,
-                // chọn thiết bị có Version mới nhất (cao nhất) trong số các kết quả khớp
+                // 3. Nếu không tìm thấy version hoàn hảo, lấy version cao nhất
                 var bestDevice = matches.OrderByDescending(m => m["Version"].ToString()).FirstOrDefault();
-
                 if (bestDevice != null)
                 {
                     string order = bestDevice["OrderNumber"]?.ToString();
-                    string ver = bestDevice["Version"]?.ToString();
-                    // Đảm bảo version có tiền tố V
-                    if (!ver.ToUpper().StartsWith("V")) ver = "V" + ver;
-
-                    return $"OrderNumber:{order}/{ver.ToUpper()}";
+                    string ver = bestDevice["Version"]?.ToString().ToUpper() ?? "";
+                    if (!ver.StartsWith("V")) ver = "V" + ver;
+                    return $"OrderNumber:{order}/{ver}";
                 }
             }
             catch (Exception ex)
