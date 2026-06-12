@@ -17,8 +17,6 @@
 
 <br/>
 
-![Architecture Overview](https://via.placeholder.com/860x320/0d1117/58a6ff?text=Architecture+Diagram+%E2%80%94+Replace+with+actual+screenshot)
-
 </div>
 
 ---
