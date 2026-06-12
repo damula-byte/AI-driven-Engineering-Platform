@@ -3,7 +3,7 @@
 # 🏭 TIA Portal Copilot
 ### AI-Driven Engineering Platform for Industrial Automation
 
-*An autonomous middleware that bridges Natural Language to the Siemens TIA Portal Openness API — generating SCL logic, hardware configurations, and HMI screens from plain text.*
+*AI-powered autonomous middleware for TIA Portal: Translating plain text into seamless project configuration, logic generation, and automated execution.*
 
 <br/>
 
