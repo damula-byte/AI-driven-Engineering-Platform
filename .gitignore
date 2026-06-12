@@ -661,7 +661,7 @@ FodyWeavers.xsd
 Generated_Files/
 Translator_CLI/bin/
 Translator_CLI/obj/
-app_secrets.py
+app_secrets_keys.py
 Translator_CLI/chat_memory.db
 AI_Backend/chat_memory.db
 AI_Backend/__pycache__/
