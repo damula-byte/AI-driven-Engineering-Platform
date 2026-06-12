@@ -348,7 +348,7 @@ tia run               # set PLC to RUN mode
 
 ```bash
 # Execute a full multi-step workflow autonomously
-tia agent "Connect to TIA Portal, create a CPU 1515-2 PN at 192.168.0.1,
+agent "Connect to TIA Portal, create a CPU 1515-2 PN at 192.168.0.1,
            generate FB_PumpControl and OB1, import all files, compile
            software, and save the project"
 ```
