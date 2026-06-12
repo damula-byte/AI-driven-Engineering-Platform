@@ -13,7 +13,6 @@
 ![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector_Store-FF6B35?style=for-the-badge)
 ![SQLite](https://img.shields.io/badge/SQLite-Session_Memory-003B57?style=for-the-badge&logo=sqlite&logoColor=white)
 ![TIA Portal](https://img.shields.io/badge/TIA_Portal-V20-009999?style=for-the-badge&logo=siemens&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 ![Platform](https://img.shields.io/badge/Platform-Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white)
 
 <br/>
